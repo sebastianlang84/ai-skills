@@ -22,7 +22,7 @@ Treat the skill itself as the durable artifact. Agent-specific wiring, discovery
 
 Default to the shared skill stores:
 
-- global: `~/.agents/skills/<skill-name>/`
+- global: `~/.pi/agent/skills/<skill-name>/`
 - repo-local: `<repo>/.agents/skills/<skill-name>/`
 
 If another agent needs a different entrypoint such as a symlink, config file, or metadata file, treat that as adapter glue. Do not make agent-specific locations the primary source of truth unless the user explicitly asks for that.
@@ -127,7 +127,7 @@ Assume the skill may be consumed by multiple agents.
 
 That means:
 
-- store the canonical skill in `~/.agents/skills` or `<repo>/.agents/skills`
+- store the canonical skill in `~/.pi/agent/skills` or `<repo>/.agents/skills`
 - avoid describing one agent's discovery mechanism as if it were universal
 - avoid runtime-specific defaults unless the user names a target runtime
 - keep adapter-specific instructions behind an explicit label such as `Claude adapter`, `Codex adapter`, or `Cursor adapter`

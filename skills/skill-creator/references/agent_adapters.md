@@ -6,7 +6,7 @@
 
 Keep the canonical skill in:
 
-- `~/.agents/skills/<skill-name>/`
+- `~/.pi/agent/skills/<skill-name>/`
 - `<repo>/.agents/skills/<skill-name>/`
 
 Anything else is adapter glue.

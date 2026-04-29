@@ -2,17 +2,14 @@
 name: newsletter-delivery
 description: Fetch, audit, and deliver the daily Market Digest newsletter via Telegram.
 metadata:
-  {
-    "openclaw":
-      {
-        "emoji": "🦞",
-        "requires":
-          {
-            "config": ["channels.telegram.botToken"],
-          },
-      },
-  }
-allowed-tools: ["message", "fetch"]
+  openclaw:
+    emoji: "🦞"
+    requires:
+      config:
+        - channels.telegram.botToken
+allowed-tools:
+  - message
+  - fetch
 ---
 
 # newsletter-delivery

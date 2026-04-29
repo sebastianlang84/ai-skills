@@ -1,0 +1,42 @@
+# Example config for ~/.config/tool-update-checker/tools.toml
+#
+# Optional per-tool field:
+# groups = ["pi", "core", "extensions"]
+# Then run:
+#   python3 ~/.pi/agent/skills/tool-update-checker/scripts/check_updates.py --group pi
+
+[[tool]]
+name = "pi-coding-agent"
+kind = "npm-global"
+package = "@mariozechner/pi-coding-agent"
+groups = ["pi", "core"]
+
+[[tool]]
+name = "pi-bash-live-view"
+kind = "npm-global"
+package = "pi-bash-live-view"
+groups = ["pi", "extensions"]
+
+[[tool]]
+name = "openclaw"
+kind = "git-repo"
+path = "/home/wasti/openclaw"
+remote = "origin"
+branch = "main"
+groups = ["core", "repos"]
+
+[[tool]]
+name = "hermes"
+kind = "git-repo"
+path = "/home/wasti/hermes"
+remote = "origin"
+branch = "main"
+groups = ["core", "repos"]
+
+# Remote-only GitHub example
+[[tool]]
+name = "some-github-extension"
+kind = "github-release"
+repo = "owner/repo"
+current = "v1.2.3"
+groups = ["extensions"]

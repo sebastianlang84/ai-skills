@@ -1,144 +1,92 @@
 ---
 name: git-workflow
-description: Operative Git-Workflow-Anleitung fuer ai_stack. Verwende diesen Skill bei allen Git-Entscheidungen: neuer Branch, Worktree, Commit, Merge, Push, Rebase, Sub-Agent-Isolation. Gilt fuer alle Tasks in diesem Repo.
+description: "Use this skill for Git workflow and task closeout: branch/worktree choice, commits, merges, pushes, rebases, sub-agent isolation, verification, handoff, and repo-policy checks."
 ---
 
-# Git-Workflow — ai_stack
+# Git Workflow
 
-Operative Handlungsanleitung. Normquelle ist `AGENTS.md`; dieser Skill ergaenzt die Trigger-Matrix.
+Portable default for Git decisions and task closeout. Repository-local policy (`AGENTS.md`, contribution docs, maintainer instructions) always wins.
 
----
+## Core rules
 
-## Branch-Entscheidung (vor Task-Start)
+- Check branch and working-tree state before writing, committing, merging, rebasing, or pushing.
+- Do not mix unrelated changes in one commit or handoff.
+- Stop and ask when the current branch, target branch, ownership, or merge/push policy is unclear.
+- Prefer small, verified, reviewable checkpoints over large unverified batches.
 
-**Default: direkt auf `main` arbeiten** (Trunk-Based Development, Solo-Operator-Variante).
+## Branch vs current branch
 
-**Neuer Branch nur wenn mindestens eines gilt:**
-- parallele Tasks sollen gleichzeitig offen bleiben
-- Sub-Agent arbeitet isoliert mit eigenem Schreibkontext
-- High-Risk: DB-Migration, Secrets-Rotation, Netzwerk/Security-Exposure
-- WIP soll ueber Session-Grenzen erhalten bleiben (kein sofortiger Merge moeglich)
-- explizit experimentelle Arbeit mit wahrscheinlichem Rollback
+Stay on the current branch when all are true:
+- the task is small and self-contained
+- no parallel work needs independent history
+- the change is low-risk and easy to review
+- repo policy allows direct work there
 
-**Branch-Namensformat:** `<type>/<scope>/<topic>`
-- `type`: `fix`, `feat`, `docs`, `chore`, `ops`, `refactor`, `test`, `wip`
-- Fuer `ai_stack` sind `feat/*`, `fix/*`, `wip/*` die Standardpfade; weitere Typen nur wenn sie den Task klarer benennen
-- `scope`: echter Service- oder Repo-Bereichsname (z. B. `newsletter-writer`, `transcript-miner`, `repo`, `docs`)
-- `topic`: 2-5 Woerter, kebab-case, konkret
+Create or switch to a branch when any apply:
+- work is risky, experimental, or rollback-prone
+- work must survive across sessions before integration
+- parallel tasks, collaborators, or sub-agents need isolation
+- repo policy forbids direct work on the current branch
 
-Beispiele:
-```
-fix/newsletter-writer/delivery-lock-timeout
-feat/transcript-miner/fetch-backoff
-docs/repo/git-workflow-policy
-chore/repo/plan-cleanup
-ops/scheduler/evening-split
-```
+Follow repo naming rules. If none exist, use `<type>/<scope>/<topic>`.
 
----
+## Worktree choice
 
-## Worktree-Entscheidung
+Use the current worktree when it is clean enough and only one write task is active.
 
-**Branch im aktuellen Worktree reicht**, wenn:
-- nur ein Task aktiv bearbeitet wird
-- kein weiterer Branch parallel offen gehalten werden muss
-- keine Sub-Agents mit eigenem Schreibkontext laufen
+Create a separate worktree when:
+- the current worktree has unrelated dirty changes
+- multiple write tasks or agents run in parallel
+- merge/rebase/conflict work needs isolation
+- you need clean reviewable output from a sub-agent
 
-**Separater Worktree ist Pflicht**, wenn mindestens eines gilt:
-- zwei Tasks sollen parallel offen bleiben
-- Sub-Agent soll isoliert in eigenem Schreibkontext arbeiten
-- temporaerer Integrationsbranch fuer Merge/Rebase/Conflict-Aufloesung noetig
-- aktueller Worktree ist dirty, aber anderer Task soll parallel sauber weiterlaufen
-- WIP-Kontext soll erhalten bleiben ohne sofortigen Commit
+Rule of thumb: branch separates history; worktree separates active workspace.
 
-Leitregel: **Branch trennt Historie. Worktree trennt gleichzeitige Arbeitskontexte.**
+## Commits
 
----
+Commit when a coherent slice is complete, testable, and worth preserving.
 
-## Commit-Trigger
+Before committing:
+- inspect `git status`
+- ensure only intended files are included
+- run the smallest relevant verification
+- use the repo's commit style if defined
 
-**Committen**, wenn mindestens eines gilt:
-- ein klarer Teil der Arbeit ist inhaltlich abgeschlossen
-- der Zustand ist sinnvoll pruefbar und isolierbar
-- Kontext, Task oder Arbeitsmodus wechselt danach
-- Sub-Agent-Ergebnis soll integriert oder eingefroren werden
+Avoid commits for random snapshots, mixed unrelated changes, or known-broken states unless explicitly requested.
 
-**Nicht committen** fuer:
-- zufaellige Mini-Zwischenstaende ohne klare Aussage
-- offensichtlich kaputte oder unzusammenhaengende Zustaende
+## Sync, rebase, merge, push
 
-Leitregel: **Commit on meaningful checkpoint.**
+Rebase only when policy allows it and it will not surprise other users of the branch.
 
-Commit-Format: `type(scope): beschreibung`
-type ∈ {docs, fix, feat, chore, ops, refactor, test}
+Merge only when:
+- the source work is complete enough to integrate
+- relevant verification passed or skipped verification is explicitly stated
+- the target branch and merge strategy are clear
 
----
+Push according to repo policy:
+- push primary branches only after required verification
+- push working branches when backup, review, or handoff matters
+- never push from a side context if ownership or target is unclear
 
-## Merge-Regeln
+## Sub-agent isolation
 
-**Mergen**, wenn alles gilt:
-- Arbeitseinheit auf dem Branch ist inhaltlich abgeschlossen
-- noetige Verifikation ist gelaufen
-- klar ist, wohin integriert wird
+Read-only sub-agents usually do not need Git isolation.
 
-**Immer `--no-ff`** bei lokaler Branch-Integration nach `main`.
-Kein Merge aus Neben-Kontexten direkt nach `origin/main`.
+For write-capable sub-agents, decide before dispatch:
+- allowed files and scope
+- branch/worktree ownership
+- how their output will be reviewed and integrated
 
-Leitregel: **Merge = abgeschlossene, verifizierte Arbeitseinheit wird integriert.**
+Use a separate worktree when scopes overlap, multiple writers run in parallel, or clean review boundaries matter.
 
----
+## Task closeout
 
-## Push-Regeln
+Before declaring a coding or documentation task complete:
 
-**`main` (Normalfall bei Trunk-Based):**
-- Push nach jedem abgeschlossenen Task
-- Push vor Session-Ende / Shutdown / Kontextwechsel
-- Nur von lokalem `main`, nach lokaler Verifikation
-- Nie aus Neben-Kontexten (Sub-Agent-Worktree, temporaerer Merge-Branch) nach `origin/main`
+1. Re-check branch and `git status`.
+2. Update continuity docs when affected (`MEMORY.md`, `TODO.md`, `CHANGELOG.md`, ADRs, plans, runbooks).
+3. Run the smallest relevant tests/checks and state what passed or was not run.
+4. Commit if the task changed files and repo policy expects commits.
+5. Merge or push only when policy, target, and verification are clear.
 
-**Neben-Kontext** = jeder Git-Kontext ausser dem primaeren Arbeitszweig.
-
-**Arbeitsbranches** (`fix/*`, `feat/*`, etc. — wenn Branch ausnahmsweise angelegt):
-- push early, push often (backup-orientiert)
-- Typische Trigger: nach erstem sinnvollen Commit, vor Kontextwechsel, vor Session-Ende
-
-Leitregel: **`main`: push after task. Branches: push early.**
-
----
-
-## Rebase-Regeln
-
-**Erlaubt**, wenn:
-- Branch noch nicht gepusht (kein Remote-Tracking)
-- oder Branch ist gepusht, aber ausschliesslich vom eigenen Operator benutzt
-
-Typischer Anwendungsfall: Commit-History saeubern vor Merge nach `main` (squash, fixup).
-
-**Verboten**, wenn:
-- Branch liegt in `origin` und koennte von anderen Kontexten benutzt werden
-- Ziel-Branch ist `main` oder `origin/main`
-- Rebase wuerde publizierte History umschreiben
-
-Integration nach `main` immer via Merge `--no-ff`, nicht Rebase.
-
-Leitregel: **Rebase = lokales Aufraeumen. Merge --no-ff = Integration, immer.**
-
----
-
-## Sub-Agent-Isolation
-
-**Read-only Sub-Agents:** kein eigener Worktree noetig.
-
-**Write-capable Sub-Agents:** vor Start Scope-Pruefung:
-- Welche Dateien gehoeren dem Sub-Agenten?
-- Gibt es Beruehrungspunkte mit Hauptagent oder anderen Sub-Agents?
-
-**Kein eigener Worktree noetig**, wenn:
-- Write-Scope klar abgegrenzt, keine Ueberlappung, Patch klein bis mittel
-
-**Eigener Worktree noetig**, wenn:
-- Write-Scopes unklar oder potenziell ueberlappend
-- Hauptagent und Sub-Agent parallel an verwandten Bereichen arbeiten
-- mehrere Sub-Agents parallel schreiben
-
-Leitregel: **Erst Scope bewerten, dann Isolationstiefe waehlen.**
+Final handoff should state: changed files, verification, commit/merge/push status, and remaining risks or next steps.
