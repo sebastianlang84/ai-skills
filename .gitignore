@@ -1,0 +1,8 @@
+# Generated/cache files
+__pycache__/
+*.py[cod]
+
+# Local runtime state
+.DS_Store
+*.log
+*.tmp
