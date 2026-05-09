@@ -11,16 +11,34 @@ This repository is the source/archive for portable skills. It is separate from:
 ## Layout
 
 ```text
-skills/<skill-name>/SKILL.md
+skills/<skill-name>/
+  SKILL.md        # required entry point
+  assets/         # optional templates/resources
+  references/     # optional deeper guidance
+  scripts/        # optional deterministic helpers
 ```
 
-Install or copy selected skills from this repo into the target agent's runtime-specific skill directory. On this machine, the canonical global Pi skill store is:
+Treat each `skills/<skill-name>/` directory as the portable artifact. Install or copy selected skills into the target agent's runtime-specific skill directory. On this machine, the canonical global Pi skill store is:
 
 ```text
 ~/.pi/agent/skills/
 ```
 
+Example Pi install/update:
+
+```bash
+cp -a skills/manage-agent-context ~/.pi/agent/skills/
+```
+
+Validate a skill after edits:
+
+```bash
+python3 ~/.pi/agent/skills/skill-creator/scripts/quick_validate.py skills/<skill-name>
+```
+
 ## Current skills
+
+This list should match the immediate subdirectories under `skills/`.
 
 - `audit-manager`
 - `browser-use`
