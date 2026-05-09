@@ -1,72 +1,42 @@
 ---
 name: git-workflow
-description: "Use this skill for Git workflow and task closeout: branch/worktree choice, commits, merges, pushes, rebases, sub-agent isolation, verification, handoff, and repo-policy checks."
+description: Use for Git safety, branch/worktree choice, commits, version/changelog impact, merge/push approval, and task closeout.
 ---
 
 # Git Workflow
 
-Portable default for Git decisions and task closeout. Keep this as the single global source for detailed Git lifecycle mechanics. Repository-local policy (`AGENTS.md`, contribution docs, maintainer instructions) selects the workflow model and records local overrides; this skill explains how to execute the selected model. Use `manage-agent-context` for designing or auditing the context system itself.
+Portable default for Git decisions and task closeout. Follow repository-local policy first; use this skill for safe execution when policy is absent or incomplete.
 
-## Core rules
+## Core safety rules
 
 - Check branch and working-tree state before writing, committing, merging, rebasing, or pushing.
 - Without explicit user approval, run only read-only Git commands such as `git status`, `git diff`, `git log`, branch listing, and remote inspection.
 - Never run mutating Git commands without explicit approval: commit, push, merge, rebase, checkout/switch, branch/tag creation or deletion, reset, restore, stash, pull, or similar state-changing operations.
-- Do not mix unrelated changes in one commit or handoff.
+- Treat `git pull` as mutating and approval-gated.
 - Stop and ask when the current branch, target branch, ownership, or merge/push policy is unclear.
-- Treat push and merge decisions as SemVer 2.0.0-gated release/integration actions: classify the change as patch, minor, major, or no bump before pushing or merging.
-- Ensure `CHANGELOG.md` or equivalent release notes are correct before pushing release-relevant changes; if no changelog update is needed, state why.
-- When work changes files, proactively propose the next Git operation: commit message, push target, SemVer impact, and changelog/version action. Do not merely say that nothing was committed or pushed.
+- Do not mix unrelated changes in one commit, branch, push, or handoff.
 - Prefer small, verified, reviewable checkpoints over large unverified batches.
+- When work changes files, proactively propose the next Git operation instead of only saying nothing was committed or pushed.
 
-## Repository policy selection
+## Repository policy
 
-Each repo should declare its Git method in `AGENTS.md` or contribution policy. If no method is declared, infer conservatively from existing branches, tags, CI/release docs, and package layout; stop and ask before creating integration branches, rebasing shared branches, or pushing.
+Each repo should declare its Git method in `AGENTS.md` or contribution policy. If no method is declared, infer conservatively from branches, tags, CI/release docs, and package layout; stop and ask before creating integration branches, rebasing shared branches, or pushing.
 
-Common declarations:
+Policy should define: primary branch, integration branch if any, allowed branch types, merge/rebase style, version/tag convention, changelog location, and required verification before push.
 
-- **Trunk-based**: one primary branch, usually `main`; short-lived feature/fix branches; releases cut from trunk or tags.
-- **GitFlow**: `main` holds releases, `develop` is integration, `feature/*` branches merge to `develop`, `release/*` stabilizes releases, `hotfix/*` branches from `main`.
-- **Monorepo scoped workflow**: one repository contains multiple packages/services; branch, version, changelog, test, and tag decisions are scoped to affected packages unless repo policy says releases are lockstep.
-- **Protected-primary direct flow**: work may happen on the current primary branch only when policy allows it and the change is small, verified, and explicitly approved.
+Common models:
 
-Repo policy should define at least: primary branch, integration branch if any, allowed branch types, merge/rebase style, version/tag convention, changelog location, and required verification before push.
+- **Trunk-based**: short-lived feature/fix branches merge to the primary branch after verification; releases usually come from trunk or tags.
+- **GitFlow**: use declared `develop`, `release/*`, and `hotfix/*` rules; never invent missing GitFlow branches.
+- **Monorepo scoped**: scope branch, checks, version, changelog, and tags to affected packages/services unless releases are lockstep.
+- **Protected-primary direct flow**: direct work on the primary branch only when policy allows it, the change is small, verified, and explicitly approved.
 
-## Workflow models
-
-### Trunk-based
-
-- Keep branches short-lived and regularly synced with `main` or the declared trunk.
-- Prefer feature flags or small vertical slices over long-running branches.
-- Merge only verified, reviewable slices to trunk.
-- Before pushing trunk: close/update TODO or memory state, classify SemVer impact, update changelog/release notes when release-relevant, run required checks, and state the push target.
-- Release from trunk using the repo's tag/version process; create and push tags only after explicit approval.
-
-### GitFlow
-
-- Branch from the correct base: `feature/*` from `develop`, `release/*` from `develop`, `hotfix/*` from `main` unless repo policy differs.
-- Merge `feature/*` into `develop` after verification.
-- Use `release/*` for stabilization, version/changelog finalization, and release-only fixes.
-- Finish releases by merging `release/*` to `main` and back to `develop` when policy requires it; tag the release commit only after explicit approval.
-- Use `hotfix/*` for urgent production fixes from `main`; merge/tag back into `main` and propagate to `develop`.
-- Never invent missing GitFlow branches; ask if `develop`, `release/*`, or `hotfix/*` expectations are unclear.
-
-### Monorepos
-
-- Identify affected packages/services before choosing checks, version bumps, changelog entries, or tags.
-- Follow the repo's release mode: independent package versions, lockstep versions, or path/service-scoped deployments.
-- Prefer scoped branch names when useful, e.g. `fix/api/auth-timeout` or `feat/web/onboarding`.
-- Run the smallest relevant package/service checks plus shared checks affected by the change.
-- Update the correct changelog(s): root changelog for repo-wide changes, package/service changelog for scoped releases, or release notes generated by the repo's release tooling.
-- Use scoped tags such as `<package>-vX.Y.Z` when unscoped `vX.Y.Z` would be ambiguous, unless repo policy defines another convention.
-- Do not push unrelated package changes together just because they share a repository.
-
-## Branch vs current branch
+## Branch and worktree choice
 
 Stay on the current branch when all are true:
-- the task is small and self-contained
+- task is small and self-contained
 - no parallel work needs independent history
-- the change is low-risk and easy to review
+- change is low-risk and easy to review
 - repo policy allows direct work there
 
 Create or switch to a branch when any apply:
@@ -75,87 +45,50 @@ Create or switch to a branch when any apply:
 - parallel tasks, collaborators, or sub-agents need isolation
 - repo policy forbids direct work on the current branch
 
-Follow repo naming rules. If none exist, use `<type>/<scope>/<topic>`.
-
-## Worktree choice
-
 Use the current worktree when it is clean enough and only one write task is active.
 
 Create a separate worktree when:
 - the current worktree has unrelated dirty changes
 - multiple write tasks or agents run in parallel
 - merge/rebase/conflict work needs isolation
-- you need clean reviewable output from a sub-agent
+- clean review boundaries matter
 
-Rule of thumb: branch separates history; worktree separates active workspace.
+Follow repo naming rules. If none exist, use `<type>/<scope>/<topic>`. Rule of thumb: branch separates history; worktree separates active workspace.
 
-## Commits
-
-Commit when a coherent slice is complete, testable, and worth preserving.
-
-Before committing:
-- inspect `git status`
-- ensure only intended files are included
-- run the smallest relevant verification
-- use the repo's commit style if defined
-- decide which SemVer 2.0.0 version line the change belongs to: patch, minor, major, or no version bump
-- update the relevant version metadata and changelog when the commit is release-relevant, or record why it is no-bump/not release-relevant
-
-Avoid commits for random snapshots, mixed unrelated changes, or known-broken states unless explicitly requested.
-
-When file changes are complete but not yet committed, recommend a concrete next step instead of staying passive:
-
-- `Commit now?` with a proposed commit message and included files.
-- `Push after commit?` with the branch/remote target.
-- SemVer impact: `no bump`, `patch`, `minor`, or `major`.
-- Changelog/version action: updated, not needed with reason, or still required before push.
-
-## Versioning and tags
+## Release impact checklist
 
 Use Semantic Versioning 2.0.0 unless repository policy explicitly overrides it.
 
-For every commit and merge, consider and state the version impact:
-- `patch` for backward-compatible bug fixes, docs/operator fixes tied to existing behavior, or small hardening changes
-- `minor` for backward-compatible features or meaningful new operator/user capabilities
-- `major` for breaking API/config/data/operational behavior, migrations, or removed compatibility
-- `no bump` for purely internal, unreleased, or non-user-facing changes when the repo policy allows it
+For each commit, merge, or push decision, state one impact:
+- `patch`: backward-compatible bug fix, docs/operator fix tied to existing behavior, or small hardening change
+- `minor`: backward-compatible feature or meaningful new operator/user capability
+- `major`: breaking API/config/data/operational behavior, migration, or removed compatibility
+- `no bump`: internal, unreleased, or non-user-facing change when repo policy allows it
 
-When a version is bumped:
-- update all canonical version sources for the affected package/service
-- update the changelog or release notes
-- create an annotated Git tag for the release commit only after explicit user approval, using the repo's tag convention; in monorepos prefer scoped tags such as `<service>-vX.Y.Z` when unscoped `vX.Y.Z` would be ambiguous
-- never push tags without explicit push approval
+When release-relevant:
+- update canonical version source(s) for the affected package/service
+- update `CHANGELOG.md`, scoped changelog, or equivalent release notes
+- use the repo's tag convention; in monorepos prefer scoped tags like `<service>-vX.Y.Z` when unscoped tags are ambiguous
+- create annotated release tags only after explicit user approval
+- never push tags without explicit tag-push approval
 
-## Sync, rebase, merge, push
+If no version or changelog update is needed, state why.
+
+## Commit, merge, rebase, push
+
+Commit only when a coherent slice is complete, testable, and worth preserving. Before committing, inspect `git status`, ensure only intended files are included, run the smallest relevant verification, follow the repo's commit style, and apply the release impact checklist.
+
+Avoid commits for random snapshots, mixed unrelated changes, or known-broken states unless explicitly requested.
 
 Rebase only when policy allows it and it will not surprise other users of the branch.
 
-Merge only after explicit user approval and only when:
-- the source work is complete enough to integrate
-- the SemVer 2.0.0 impact is known and compatible with the target branch/release line
-- required version metadata, changelog/release notes, and tags are updated when the merge is release-relevant
-- relevant verification passed or skipped verification is explicitly stated
-- the target branch and merge strategy are clear
+Merge only after explicit user approval and only when source, target, strategy, verification, and release impact are clear.
 
-Fetch/pull note: treat `git pull` as mutating and approval-gated. Use read-only inspection first; ask before syncing if it may affect local refs, working tree, or branch state.
-
-Push only after explicit user approval and according to repo policy:
-- classify the push as patch, minor, major, or no bump before pushing
-- push primary branches only after required verification and any SemVer-required version/changelog/tag work is complete
-- push working branches when backup, review, or handoff matters; still state the SemVer impact or no-bump rationale
-- never push from a side context if ownership or target is unclear
-- never push tags unless the user explicitly approved pushing tags
+Push only after explicit user approval and according to repo policy. Before pushing, state: target remote/branch/tags, verification result, release impact, changelog/version decision, and whether push approval has been given. Never push from a side context if ownership or target is unclear.
 
 ## Sub-agent isolation
 
-Read-only sub-agents usually do not need Git isolation.
-
-For write-capable sub-agents, decide before dispatch:
-- allowed files and scope
-- branch/worktree ownership
-- how their output will be reviewed and integrated
-
-Use a separate worktree when scopes overlap, multiple writers run in parallel, or clean review boundaries matter.
+Read-only sub-agents usually need no Git isolation. For write-capable or parallel agents, define allowed files, branch/worktree ownership, and review/integration path before dispatch. Use a separate worktree when scopes overlap or clean review boundaries matter.
 
 ## Task closeout
 
@@ -163,16 +96,11 @@ Before declaring a coding or documentation task complete:
 
 1. Re-check branch and `git status`.
 2. Protect unrelated changes; stop if ownership, branch, or target is unsafe.
-3. Update continuity state when affected: close/remove completed `TODO.md` items, archive completed memory todos with pi-memory tools, and update ADRs/plans/runbooks only when their file roles require it. Do not create or update repo-local `MEMORY.md` unless explicitly required by repo policy/user instruction.
-4. Decide and record version impact: patch / minor / major / no bump.
-5. Update `CHANGELOG.md`, release notes, and version metadata when the change is release-relevant, or state why no changelog/version edit is needed.
-6. Run the smallest relevant tests/checks and state what passed or was not run.
-7. Commit if the task changed files and repo policy expects commits.
-8. If a version was bumped, create the local annotated release tag only after explicit user approval.
-9. If changes remain uncommitted, propose a commit with message, file scope, SemVer impact, and changelog/version decision.
-10. If commits are local and ready, propose the exact push target and any tag push needed.
-11. Merge or push only when policy, target, verification, and explicit user approval are clear.
+3. Update repo task-tracking or planning artifacts only when their file roles require it. Do not create or update repo-local memory files unless explicitly required by repo policy/user instruction.
+4. Run the smallest relevant tests/checks and state what passed or was not run.
+5. Apply the release impact checklist: patch / minor / major / no bump, changelog/release notes, version metadata, and tags.
+6. If changes remain uncommitted, propose a commit message, included files, SemVer impact, and changelog/version decision.
+7. If commits are local and ready, propose the exact push target and any tag push needed.
+8. Merge, push, tag, branch-switch, or other mutating Git operations only when policy, target, verification, and explicit user approval are clear.
 
-Before push, state: TODO/memory cleanup result, CHANGELOG/SemVer decision, verification, target branch/remote/tags, and whether explicit push approval has been given.
-
-Final handoff should state: changed files, verification, version impact/tag, commit/merge/push status, and remaining risks or next steps. If work is intentionally left uncommitted or unpushed, include the recommended commit/push command or approval prompt rather than only noting that no commit/push happened.
+Final handoff should state: changed files, verification, version impact/tag, commit/merge/push status, and remaining risks or next steps.
