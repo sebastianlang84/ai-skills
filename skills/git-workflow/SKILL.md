@@ -15,6 +15,7 @@ Portable default for Git decisions and task closeout. Keep this as the single gl
 - Stop and ask when the current branch, target branch, ownership, or merge/push policy is unclear.
 - Treat push and merge decisions as SemVer 2.0.0-gated release/integration actions: classify the change as patch, minor, major, or no bump before pushing or merging.
 - Ensure `CHANGELOG.md` or equivalent release notes are correct before pushing release-relevant changes; if no changelog update is needed, state why.
+- When work changes files, proactively propose the next Git operation: commit message, push target, SemVer impact, and changelog/version action. Do not merely say that nothing was committed or pushed.
 - Prefer small, verified, reviewable checkpoints over large unverified batches.
 
 ## Repository policy selection
@@ -101,6 +102,13 @@ Before committing:
 
 Avoid commits for random snapshots, mixed unrelated changes, or known-broken states unless explicitly requested.
 
+When file changes are complete but not yet committed, recommend a concrete next step instead of staying passive:
+
+- `Commit now?` with a proposed commit message and included files.
+- `Push after commit?` with the branch/remote target.
+- SemVer impact: `no bump`, `patch`, `minor`, or `major`.
+- Changelog/version action: updated, not needed with reason, or still required before push.
+
 ## Versioning and tags
 
 Use Semantic Versioning 2.0.0 unless repository policy explicitly overrides it.
@@ -158,8 +166,10 @@ Before declaring a coding or documentation task complete:
 6. Run the smallest relevant tests/checks and state what passed or was not run.
 7. Commit if the task changed files and repo policy expects commits.
 8. If a version was bumped, create the local annotated release tag only after explicit user approval.
-9. Merge or push only when policy, target, verification, and explicit user approval are clear.
+9. If changes remain uncommitted, propose a commit with message, file scope, SemVer impact, and changelog/version decision.
+10. If commits are local and ready, propose the exact push target and any tag push needed.
+11. Merge or push only when policy, target, verification, and explicit user approval are clear.
 
 Before push, state: TODO/memory cleanup result, CHANGELOG/SemVer decision, verification, target branch/remote/tags, and whether explicit push approval has been given.
 
-Final handoff should state: changed files, verification, version impact/tag, commit/merge/push status, and remaining risks or next steps.
+Final handoff should state: changed files, verification, version impact/tag, commit/merge/push status, and remaining risks or next steps. If work is intentionally left uncommitted or unpushed, include the recommended commit/push command or approval prompt rather than only noting that no commit/push happened.
