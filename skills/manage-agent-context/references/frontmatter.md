@@ -1,6 +1,6 @@
 # Frontmatter Conventions
 
-Use compact YAML frontmatter on maintained Markdown files so file role and update triggers are visible when the file is opened.
+Use compact YAML frontmatter on maintained Markdown files, except `README.md`, so file role and update triggers are visible when useful. Do not add frontmatter to README files; their purpose is already widely understood.
 
 ## Required fields
 
@@ -66,6 +66,7 @@ Avoid:
 ## Rules of thumb
 
 - Frontmatter is not a replacement for reading the file.
+- Do not add frontmatter to `README.md` files.
 - Do not add frontmatter to generated files unless it will be preserved.
 - Do not use frontmatter to store secrets, owners, credentials, or volatile status.
 - If the frontmatter becomes long, the file role is probably unclear.

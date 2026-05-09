@@ -22,7 +22,6 @@ Install or copy selected skills from this repo into the target agent's runtime-s
 
 ## Current skills
 
-- `agentic-repo`
 - `audit-manager`
 - `browser-use`
 - `claude-api`
@@ -32,6 +31,7 @@ Install or copy selected skills from this repo into the target agent's runtime-s
 - `executing-plans`
 - `git-workflow`
 - `macrolens`
+- `manage-agent-context`
 - `mcp-builder`
 - `newsletter-delivery`
 - `pdf`

@@ -36,7 +36,7 @@ Do not blindly delete. Options:
 
 ### Existing memory/session logs
 
-Do not import diaries into `MEMORY.md`. Extract only stable current truth and durable non-normative context. Active work goes to `TODO.md`; history remains in git or archive if needed.
+Do not import diaries into durable memory. Extract only stable current truth and durable non-normative context into the agent/harness memory system (Pi: pi-memory tools). Active work goes to `TODO.md`; history remains in git or archive if needed.
 
 ### Existing policy docs
 
@@ -59,7 +59,7 @@ Example:
 ```markdown
 # CLAUDE.md
 
-Follow `AGENTS.md` for repo rules. Read `MEMORY.md` and `TODO.md` as instructed there.
+Follow `AGENTS.md` for repo rules. Use the agent/harness memory tools for durable context and read `TODO.md` as instructed there.
 ```
 
 Only use this pattern if the tool actually reads that adapter file.

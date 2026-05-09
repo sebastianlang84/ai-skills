@@ -26,12 +26,12 @@ write-when: A behavior rule, gate, guardrail, or document-role summary changes
 
 ## 2) Rules
 
-[Hard constraints that always apply.]
+[Repo-specific hard constraints. Adapt these defaults instead of copying blindly.]
 
-- One technical goal per task.
-- No speculative features, abstractions, or configurability.
+- One technical goal per task unless the user explicitly asks for a broader pass.
+- Avoid speculative features, abstractions, or configurability.
 - Change only what is needed; keep diffs small.
-- No unrelated refactors, reformatting, or cleanup.
+- Avoid unrelated refactors, reformatting, or cleanup.
 - Match existing style unless asked otherwise.
 - Remove only unused code created by your change.
 - Stop and ask when facts are unclear and risk is non-trivial.
@@ -43,7 +43,9 @@ write-when: A behavior rule, gate, guardrail, or document-role summary changes
 
 [Read order for every new agent session.]
 
-On session start: read `MEMORY.md` first, then `TODO.md`. Everything else is read on demand.
+On session start: use the agent/harness memory tools for durable context, then read `TODO.md` if it exists. Everything else is read on demand.
+
+Load the relevant global/repo skill instead of copying long procedures here: use `git-workflow` for branch, commit, merge, push, tag, and release mechanics; use `manage-agent-context` for document routing and context-system changes.
 
 ## 4) Document Roles
 
@@ -51,7 +53,7 @@ On session start: read `MEMORY.md` first, then `TODO.md`. Everything else is rea
 
 | File | Role | Write when |
 | --- | --- | --- |
-| `MEMORY.md` | Stable current truth and reset-resilient handoff | Stable truth or durable context changes; review every task |
+| agent/harness memory (Pi: pi-memory tools) | Stable current truth and reset-resilient handoff | Stable truth, durable context, or handoff state changes |
 | `TODO.md` | Active open work only | Work or priorities change |
 | `CHANGELOG.md` | Outward-facing change history | User/operator-relevant change introduced |
 | `README.md` | Human/operator guide | Setup, usage, operation, or troubleshooting changes |
@@ -68,6 +70,8 @@ On session start: read `MEMORY.md` first, then `TODO.md`. Everything else is rea
 - Diagnose: inspect files/config/tool output before editing.
 - Implement: keep changes minimal and scoped.
 - Verify: check results after changes; update routed docs only when their triggers are met.
+- Closeout: inspect status, protect unrelated changes, close completed `TODO.md`/memory todos, decide SemVer impact, update `CHANGELOG.md` when release-relevant, and run the smallest relevant checks.
+- Commit/merge/push/tag only after explicit approval. Before push, state: TODO cleanup result, CHANGELOG/SemVer decision, verification result, and target branch/remote/tags.
 
 ## 6) Repo
 
