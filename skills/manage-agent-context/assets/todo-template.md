@@ -1,19 +1,24 @@
----
-role: Active open work backlog
-contains: Open tasks with priority and status
-not-contains: Completed history, detailed implementation plans
-write-when: Active work or priorities change
----
-
 # TODO / Active Backlog
 
-Purpose: Active work only.
-Rule: Do not use checkboxes. Remove completed items.
-Rule: Link detailed items to `docs/plans/*`.
+Purpose: active open work only, grouped by priority.
 
-Choose exactly one structure:
+Rules:
+- Do not use checked-off items as history; remove/close completed work.
+- Link detailed items to `docs/plans/*` when detail is needed.
+- If an external issue tracker is the source of truth, do not create `TODO.md` unless it adds clear local value.
 
-- Use `todo-roadmap-template.md` when active work is grouped by future SemVer releases.
-- Use `todo-priority-template.md` for CalVer, no-version, or priority-driven repos.
+## P0 (Now)
 
-Do not keep both structures in the final `TODO.md` unless the repo has an explicit reason and clear separation.
+<!-- Immediate/blocking work. -->
+
+## P1 (Next)
+
+<!-- Important next work. -->
+
+## P2 (Later)
+
+<!-- Lower-priority or deferred work. -->
+
+<!-- Optional item format:
+- [ ] Short task title — owner/date/link if useful.
+-->

@@ -1,38 +1,30 @@
----
-role: Pi-memory capture checklist for follow-up agent sessions
-contains: Suggested durable facts, decisions, preferences, todos, and handoff fields for pi-memory tools
-not-contains: Repo-local memory file content, diary-style history, procedural how-tos, rules, secrets
-write-when: The pi-memory capture policy or field guidance changes
----
+# Memory capture checklist
 
-# Pi-memory capture checklist
+Choose one memory system of record for durable agent context. Do not maintain parallel harness and repo-local memory unless the user explicitly accepts that cost.
 
-Use pi-memory tools instead of creating or expanding repo-local memory files.
+Never store secrets, raw logs/diaries, backlog/history, or binding rules in memory.
 
-## Durable fact / decision / preference
+## Save durable memory only for
 
-- Kind: fact | decision | preference
+- Stable fact: current truth useful in future sessions.
+- Decision: chosen direction plus brief rationale.
+- Preference: durable user/project preference.
+- Handoff: current task state across context loss.
+
+## Minimal fields
+
+- Kind: fact | decision | preference | handoff
 - Scope: repo | project | global | session
-- Title: [short searchable title]
-- Summary: [stable current truth; no secrets]
-- Tags: [repo/project/topic]
+- Title: short searchable title
+- Summary: stable current truth; no secrets
+- Cleanup/update trigger: when this should change or expire
 
-## Active todo
-
-- Kind: todo
-- Scope: repo | project | session
-- Summary: [open work only; link files/issues if useful]
-
-## Handoff
-
-Use `memory_handoff_save` with:
+## Handoff fields
 
 - Goal
 - Current state
 - Next steps
 - Done
-- Changed/relevant files
+- Relevant files
 - Verification
 - Blockers/open questions/risks
-
-Do not store rules here; put normative behavior in `AGENTS.md`.

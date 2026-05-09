@@ -14,6 +14,12 @@
 [first useful command]
 ```
 
+## Verify
+
+```bash
+[test/check command]
+```
+
 ## License
 
 [License name or "No license file currently present".]

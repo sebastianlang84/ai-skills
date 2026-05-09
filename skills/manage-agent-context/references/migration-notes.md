@@ -22,44 +22,42 @@ You may encounter:
 
 ## Recommended handling
 
-### Existing `AGENTS.md`
+### Existing agent instruction files
 
 Align in place. Preserve repo-specific guardrails. Remove duplication only when safe.
 
-### Existing `CLAUDE.md` or runtime-specific files
+### Runtime-specific instruction files
 
-Do not blindly delete. Options:
+Do not blindly delete. Keep runtime-specific adapter files only when the runtime actually reads them or users rely on them. Options:
 
-1. keep as a thin adapter pointing to `AGENTS.md`,
-2. merge durable rules into `AGENTS.md` and ask before deletion,
+1. keep as a thin adapter pointing to the canonical agent instruction file (`AGENTS.md`, `CLAUDE.md`, or equivalent),
+2. merge durable rules into the canonical agent instruction file and ask before deletion,
 3. leave untouched if the runtime requires it.
 
 ### Existing memory/session logs
 
-Do not import diaries into durable memory. Extract only stable current truth and durable non-normative context into the agent/harness memory system (Pi: pi-memory tools). Active work goes to `TODO.md`; history remains in git or archive if needed.
+Do not import diaries wholesale. Extract only stable current truth; do not copy secrets, credentials, raw chat logs, or personal notes.
 
 ### Existing policy docs
 
-If a policy is short and operational, it may belong in `AGENTS.md`. If it is long reference material, keep it under `docs/` with frontmatter and link only when useful. Avoid making every policy file mandatory-read.
-
-### Existing ADR trees
-
-Prefer `docs/adr/*` as the durable ADR location. If another ADR tree exists, ask before moving. Do not create a second tree.
+If a policy is short and operational, it may belong in the agent instruction file. If it is long reference material, keep it under `docs/` and link only when useful. Avoid making every policy file mandatory-read. If linked from the agent instruction file, state whether the policy is mandatory, advisory, or reference-only.
 
 ### Existing task files
 
-Consolidate active work into `TODO.md`. Do not keep completed checklists as active TODOs. Preserve detailed active plans under `docs/plans/*` if useful.
+Consolidate active work into the repo's chosen TODO system or issue tracker. Preserve detailed active plans under `docs/plans/*` if useful.
 
 ## Adapter pattern
 
-When a tool requires a special file, keep it tiny and point to the canonical source.
+When a tool requires a special file, keep it tiny and point to the canonical source. Keep runtime-specific adapter files only when the runtime actually reads them or users rely on them.
 
 Example:
 
 ```markdown
 # CLAUDE.md
 
-Follow `AGENTS.md` for repo rules. Use the agent/harness memory tools for durable context and read `TODO.md` as instructed there.
+This repo uses `AGENTS.md` as the canonical agent instruction file.
+
+Read and follow `AGENTS.md` for repo rules. Use the repo's chosen memory and TODO systems only when needed.
 ```
 
 Only use this pattern if the tool actually reads that adapter file.
