@@ -23,6 +23,7 @@ write-when: A behavior rule, gate, guardrail, or document-role summary changes
 - Push back when simpler or safer is better.
 - Define success criteria early and verify before calling work complete.
 - Treat durable behavior changes as repo file changes, not chat promises.
+- Do not rely on unstored chat preferences as policy; standing behavior belongs in AGENTS.md, skills, tools/extensions, hooks/CI, or memory according to role.
 
 ## 2) Rules
 
@@ -45,7 +46,7 @@ write-when: A behavior rule, gate, guardrail, or document-role summary changes
 
 On session start: use the agent/harness memory tools for durable context, then read `TODO.md` if it exists. Everything else is read on demand.
 
-Load the relevant global/repo skill instead of copying long procedures here: use `git-workflow` for branch, commit, merge, push, tag, and release mechanics; use `manage-agent-context` for document routing and context-system changes.
+Load the relevant global/repo skill instead of copying long procedures here: use `git-workflow` for branch, commit, merge, push, tag, and release mechanics; use `manage-agent-context` for document routing and context-system changes. Repo-local skills live under `.agents/skills/*`; global Pi skills live under `~/.pi/agent/skills/*`.
 
 ## 4) Document Roles
 
@@ -75,9 +76,13 @@ Load the relevant global/repo skill instead of copying long procedures here: use
 
 ## 6) Repo
 
-[Short repo-specific summary.]
+[Short repo-specific summary and local overrides. Keep detailed procedures in global/repo skills.]
 
 - Purpose: [what this repository exists to do]
 - In scope: [what belongs here]
 - Out of scope: [what does not belong here]
 - Main components: [key services, apps, packages, or directories]
+- Git workflow: [trunk-based | GitFlow | monorepo scoped | protected-primary direct | other]
+- Primary branch: [main/master/etc.]
+- Integration branch: [develop/none/etc.]
+- Release/changelog policy: [where version and changelog decisions are recorded]
