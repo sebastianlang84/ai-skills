@@ -10,7 +10,8 @@ Portable default for Git decisions and task closeout. Keep this as the single gl
 ## Core rules
 
 - Check branch and working-tree state before writing, committing, merging, rebasing, or pushing.
-- Never commit, merge, create release tags, push, or push tags without explicit user approval for that action.
+- Without explicit user approval, run only read-only Git commands such as `git status`, `git diff`, `git log`, branch listing, and remote inspection.
+- Never run mutating Git commands without explicit approval: commit, push, merge, rebase, checkout/switch, branch/tag creation or deletion, reset, restore, stash, pull, or similar state-changing operations.
 - Do not mix unrelated changes in one commit or handoff.
 - Stop and ask when the current branch, target branch, ownership, or merge/push policy is unclear.
 - Treat push and merge decisions as SemVer 2.0.0-gated release/integration actions: classify the change as patch, minor, major, or no bump before pushing or merging.
@@ -135,6 +136,8 @@ Merge only after explicit user approval and only when:
 - required version metadata, changelog/release notes, and tags are updated when the merge is release-relevant
 - relevant verification passed or skipped verification is explicitly stated
 - the target branch and merge strategy are clear
+
+Fetch/pull note: treat `git pull` as mutating and approval-gated. Use read-only inspection first; ask before syncing if it may affect local refs, working tree, or branch state.
 
 Push only after explicit user approval and according to repo policy:
 - classify the push as patch, minor, major, or no bump before pushing
