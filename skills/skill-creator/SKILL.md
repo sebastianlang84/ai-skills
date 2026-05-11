@@ -1,320 +1,185 @@
 ---
 name: skill-creator
-description: Create new skills and improve existing ones in an agent-agnostic way. Use this skill when the user wants to design, rewrite, review, validate, or simplify a SKILL.md, improve a skill's trigger description or structure, add or refine scripts, references, or assets, or make an existing skill more portable across agents. Do not use this skill just to list, locate, install, update, or remove skills.
+description: Create, audit, validate, repair, and improve portable agent skills. Use when designing a new skill, reviewing or simplifying a SKILL.md, improving trigger metadata, restructuring scripts/references/assets, or making a skill less runtime-specific. Do not use for unrelated package management or routine local inventory unless skill quality is the task.
 ---
 
 # Skill Creator
 
-Use this skill to author and improve skills as portable artifacts, not as one-off prompts for a single runtime.
+Use this skill to create and improve skills as durable, portable artifacts. Keep `SKILL.md` concise: it should route, instruct, and point to deeper files instead of becoming a knowledge dump.
 
-## Core model
+Do not read the large best-practice references by default. Read them only for `skill-creator` self-edits, deep audits, or when the user explicitly asks for their extra rigor.
 
-A skill is a folder that teaches an agent how to perform a class of tasks through:
+When editing `skill-creator` itself, first read these ground-truth references from this skill folder and use them as the quality bar:
 
-- a required `SKILL.md`
-- optional `scripts/`
-- optional `references/`
-- optional `assets/`
+- `references/anthropic_skill_best_practices.md`
+- `references/progressive_skill_best_practices_supabase_workshop.md`
 
-Treat the skill itself as the durable artifact. Agent-specific wiring, discovery hooks, and trigger tests are secondary adapters.
-
-Use this mental model:
+## Mental model
 
 ```text
-SKILL.md      = operational index: routing, workflow, safety checks
-references/   = deeper guidance, examples, and domain detail
+SKILL.md      = operational index: trigger, workflow, safety checks, links
+references/   = deeper guidance, examples, domain detail
 scripts/      = deterministic local helpers and validators
 MCP/tools     = external access, remote APIs, authenticated actions
 AGENTS.md     = stable project policy and routing rules
 ```
 
-`SKILL.md` should instruct and route, not become a knowledge dump. Large material is acceptable in bundled references because it is read only when needed.
+A skill folder contains:
 
-## Storage model
+- required `SKILL.md`
+- optional `scripts/`
+- optional `references/`
+- optional `assets/`
 
-Default to the shared skill stores:
+Use the smallest structure that solves the recurring task.
+
+## Canonical locations
+
+Default to:
 
 - global: `~/.pi/agent/skills/<skill-name>/`
 - repo-local: `<repo>/.agents/skills/<skill-name>/`
 
-If another agent needs a different entrypoint such as a symlink, config file, or metadata file, treat that as adapter glue. Do not make agent-specific locations the primary source of truth unless the user explicitly asks for that.
+Treat other runtime-specific entrypoints, symlinks, metadata files, or discovery hooks as adapter glue unless the user explicitly chooses them as source of truth.
 
-## When to use this skill
+## When to use
 
 Use this skill when the user wants to:
 
 - create a new skill
-- rewrite or review an existing `SKILL.md`
-- improve a skill's triggering language
-- simplify or restructure a skill
-- add or remove `scripts/`, `references/`, or `assets/`
+- audit, validate, repair, simplify, or restructure an existing skill
+- rewrite or review `SKILL.md`
+- improve trigger/frontmatter language
+- add, remove, or reorganize `scripts/`, `references/`, or `assets/`
 - make a skill more portable across agents
-- validate that a skill folder is coherent and maintainable
+- decide whether guidance belongs in a skill, script, MCP/tool, AGENTS.md, or memory
 
-Do not use this skill when the task is only to:
+For simple inventory or installation checks, inspect files directly; do not invent a large workflow.
 
-- discover which skills exist
-- install, update, or remove a skill
-- identify where a skill was installed from
+Useful local inventory commands:
 
-Those belong to a skill inventory or lifecycle workflow such as `skill-manager`.
-
-## Working style
-
-Prefer the smallest change that makes the skill clearer, more reusable, and less runtime-specific.
-
-Bias toward:
-
-- concise frontmatter
-- explicit scope
-- clear trigger language
-- lean instructions in `SKILL.md`
-- detailed material moved into `references/`
-- deterministic repeated actions moved into `scripts/`
-
-Avoid:
-
-- runtime-specific assumptions in the core skill unless required
-- giant monolithic `SKILL.md` files
-- duplicating the same guidance in `SKILL.md` and `references/`
-- extra docs like `README.md`, `CHANGELOG.md`, or process diaries inside the skill folder
-
-## Default workflow
-
-### 1. Understand the skill's job
-
-Clarify:
-
-- what task family the skill should cover
-- what user wording should trigger it
-- what should not trigger it
-- what outputs or artifacts matter
-- whether the skill should stay general or target a specific environment
-
-If there is already a draft skill, read it before proposing changes.
-
-### 2. Choose the simplest useful structure
-
-Every skill needs `SKILL.md`.
-
-For non-trivial operational skills, prefer this shape unless a smaller structure is enough:
-
-```markdown
-# Purpose
-# Required workflow
-# Safety checks
-# Tool usage
-# Do not
-# References
+```bash
+find ~/.pi/agent/skills .agents/skills -maxdepth 2 -name SKILL.md 2>/dev/null
+rg '^name:|^description:' ~/.pi/agent/skills .agents/skills 2>/dev/null
 ```
 
-Keep `SKILL.md` compact enough to be useful after loading. If it approaches a few hundred lines, move details into directly linked reference files.
+Optional third-party discovery commands may help when requested and trusted; `npx` can fetch/execute external code, so get user approval before running it:
 
-Add `scripts/` when:
+```bash
+npx skills find <term>
+npx skills list
+npx skills check
+npx skills update
+```
 
-- the same code would otherwise be rewritten repeatedly
-- reliability matters more than improvisation
-- a deterministic helper is cheaper than prompt tokens
+On this machine the canonical global store is `~/.pi/agent/skills/`; if tooling writes to `~/.agents/skills/`, relocate rather than maintain two global stores.
 
-Add `references/` when:
+## Required workflow
 
-- the skill needs large domain material
-- only some use cases need the details
-- the material would bloat `SKILL.md`
+### 1. Audit before changing existing skills
 
-Add `assets/` when:
+Inspect the skill folder first. Check:
 
-- the skill needs templates, fonts, images, starter projects, or other output resources
+- trigger accuracy and likely false positives/negatives
+- role and scope boundaries
+- portability versus runtime lock-in
+- whether `SKILL.md` is an index or a knowledge dump
+- whether repeated fragile steps should be scripts
+- whether referenced files exist and are directly discoverable
+- whether validation exists for meaningful edits
 
-Do not create empty directories just because they are available.
+Prefer targeted repairs over rewrites unless the structure is unsalvageable.
 
-Keep bundled files easy to navigate:
+### 2. Clarify the job
 
-- link important references directly from `SKILL.md`; avoid deep reference chains even if nested links are technically possible
-- give long references a short table of contents
-- use descriptive file names, not `misc.md` or `doc1.md`
-- use forward-slash paths in examples
+Identify:
 
-### 3. Write or rewrite `SKILL.md`
+- task family covered by the skill
+- user wording that should trigger it
+- nearby tasks that should not trigger it
+- required outputs or artifacts
+- target runtime, if any
+- risk level and needed strictness
 
-The frontmatter is the trigger surface. Be precise.
+### 3. Choose structure by need
 
-Required fields:
+Use only what the skill needs:
 
-- `name`: lowercase letters, numbers, and hyphens only; max 64 characters
-- `description`: non-empty; max 1024 characters
+- `SKILL.md` for compact workflow, safety rules, and routing
+- `references/` for long guidance, schemas, examples, or domain notes
+- `scripts/` for deterministic checks, transformations, validators, or repeated commands
+- `assets/` for templates, starter files, fonts, images, or other output resources
 
-Avoid XML tags in frontmatter values. For Pi skills, use `SKILL.md` as the canonical file name even when imported references mention `skill.md`.
+Avoid empty directories. Link important references directly from `SKILL.md`; avoid deep reference chains. Give long references a short table of contents.
 
-Write `description` so it captures:
+### 4. Write `SKILL.md`
 
-- what the skill helps with
-- which user intents should trigger it
-- important file types or contexts
-- nearby cases that should not trigger it, when confusion is likely
+Frontmatter requirements:
 
-The body should tell another agent how to use the skill well after it triggers. Keep runtime-neutral guidance in the body. Put agent-specific details in clearly marked adapter notes or references.
+- `name`: lowercase letters, numbers, and hyphens only; max 64 characters; no XML tags; avoid reserved runtime names such as `anthropic` or `claude`
+- `description`: non-empty; max 1024 characters; no XML tags
 
-Set the right degree of freedom:
+For Pi skills, use `SKILL.md` as the canonical file name even when imported references mention `skill.md`.
 
-- high freedom for judgment-heavy tasks where many approaches are valid
-- medium freedom for preferred patterns, templates, and configurable workflows
-- low freedom for fragile, security-sensitive, destructive, or order-dependent tasks
+The description should say what the skill does and when to use it, using concrete trigger terms without becoming a catalog of every example.
 
-When including scripts, state whether the agent should run them or read them. Prefer running utility scripts over loading their source when execution is the point.
+In the body:
 
-### 4. Keep the skill agent-agnostic by default
+- assume the agent is capable; include only reusable task-specific guidance
+- state required order for fragile or destructive work
+- put large or conditional detail in references
+- state whether scripts should be executed or read as reference
+- isolate runtime-specific instructions under clear adapter labels
 
-Assume the skill may be consumed by multiple agents.
+### 5. Keep the core portable
 
-That means:
+Default to agent-agnostic guidance. If the user targets Claude, Codex, Cursor, Pi, or another runtime, add adapter notes without making them the universal workflow.
 
-- store the canonical skill in `~/.pi/agent/skills` or `<repo>/.agents/skills`
-- avoid describing one agent's discovery mechanism as if it were universal
-- avoid runtime-specific defaults unless the user names a target runtime
-- keep adapter-specific instructions behind an explicit label such as `Claude adapter`, `Codex adapter`, or `Cursor adapter`
+Read `references/agent_adapters.md` when adding runtime-specific adapters or deciding portability trade-offs.
 
-If the user explicitly targets one runtime, you may add adapter-specific instructions, but keep the core skill understandable without them.
+### 6. Validate after meaningful edits
 
-See `references/agent_adapters.md` for the current adapter policy in this skill.
-
-### 5. Validate
-
-Run the basic validator after meaningful changes from this skill folder, or use an absolute path when working elsewhere:
+Run:
 
 ```bash
 python3 /home/wasti/.pi/agent/skills/skill-creator/scripts/quick_validate.py <path/to/skill-folder>
 ```
 
-Validation here means:
+This checks structure and frontmatter; it does not prove the skill is useful. For important skills, also test realistic tasks and compare behavior before/after the skill.
 
-- frontmatter parses
-- required fields exist
-- naming rules are sane
-- the folder layout is coherent
+## Quality bar
 
-This is structural validation, not proof that the skill works well.
+A good skill has precise trigger metadata, a compact operational body, progressive disclosure for detail, explicit safety checks when risk is high, scripts for repeated deterministic work, adapter separation, and structural validation.
 
-### 6. Improve using realistic tasks
+Avoid giant `SKILL.md` files, duplicate guidance, vague “be careful” rules, runtime assumptions in the core, optional tooling presented as mandatory, and extra README/CHANGELOG/process diary files unless explicitly needed.
 
-The best improvement loop is usually:
+## Layer boundary
 
-1. identify real gaps or repeated guidance the skill should capture
-2. choose at least three realistic user requests or failure scenarios
-3. establish what happens without the skill when practical
-4. test with the skill and inspect whether the agent loads the right files, uses the right tools, avoids known hazards, and verifies output
-5. adjust the smallest part of the skill that explains the failure
-6. validate again
+Use the right layer: skills for reusable workflow and safety rules; `scripts/` for deterministic local helpers; MCP/tools for remote services or authenticated actions; AGENTS.md for stable policy visible before skills trigger. A skill may explain when to use a tool, but the tool should provide the capability.
 
-Use deterministic checks first: structural validation, grep, tests, linters, typechecks, expected files, or expected command usage. Use LLM-as-judge only for softer qualities such as explanation quality or completeness.
+## Self-improvement loop
 
-Use lightweight manual review by default. Only reach for heavier benchmark or trigger-eval tooling when the user wants that rigor or the skill is important enough to justify it.
+For substantial changes, identify real failures, choose realistic scenarios, compare behavior with/without the skill when practical, adjust the smallest failing part, and validate again. Prefer deterministic checks first; use LLM-as-judge only for softer qualities.
 
-## Review checklist
+## Bundled resources
 
-When reviewing a skill, check:
+Read extra resources only when the task needs them. Do not load the large best-practice references for routine skill creation or light edits. For `skill-creator` self-edits, the first two references are mandatory:
 
-- Is the `description` broad enough to trigger when useful but narrow enough to avoid obvious false positives?
-- Does the body teach reusable behavior rather than narrate one example?
-- Does `SKILL.md` act as an operational index instead of a knowledge dump?
-- Are required workflows, safety checks, tool order, and `Do not` rules explicit when the task is risky or repeatable?
-- Is the degree of freedom appropriate for the task's fragility?
-- Are scripts only included when they save real repeated effort or improve reliability?
-- Do script instructions clearly say whether to execute the script or read it as reference?
-- Are references discoverable from `SKILL.md`, directly linked, descriptively named, and not nested behind other references?
-- Do long references include a short contents section?
-- Are large schemas, API dumps, examples, or domain notes kept out of `SKILL.md` unless always needed?
-- Are agent-specific assumptions clearly separated from the core guidance?
-- Is the skill small enough that another agent can actually use it reliably?
-- Are critical skills tested or explicitly loaded when implicit discovery would be too risky?
+- `references/anthropic_skill_best_practices.md`: structure, descriptions, progressive disclosure, scripts, evaluation loops
+- `references/progressive_skill_best_practices_supabase_workshop.md`: Skill vs MCP/CLI boundaries, production/security-sensitive skills, progressive context strategy, eval-driven improvement; translate examples to Pi conventions
+- `references/agent_adapters.md`: adapter policy and portability trade-offs
+- `references/schemas.md`: JSON shapes used by bundled evaluation tools
+- `scripts/quick_validate.py`: neutral structural validator; execute it after meaningful edits
+- other `scripts/`, `agents/`, and `eval-viewer/`: optional or legacy adapter/evaluation tooling; use only for explicit adapter or evaluation work
 
-## Skill, script, MCP, and policy boundary
-
-Choose the right layer before adding content:
-
-- use a skill for reusable workflows, safety rules, tool-use strategy, and operational checklists
-- use `scripts/` for deterministic local checks, transformations, validators, and repeated commands
-- use MCP or other tools for remote services, authenticated APIs, databases, SaaS, or structured external actions
-- use `AGENTS.md` for stable project policy, routing, and standing rules that should be visible before any skill triggers
-
-Do not turn a skill into a substitute for an integration tool. A good skill can explain when and how to use an MCP tool or CLI, but the tool should provide the actual external capability.
-
-## Trigger-description guidance
-
-Good descriptions usually:
-
-- name the task family first
-- mention concrete triggers or contexts
-- mention important file types if relevant
-- use direct language such as "Use this skill when..."
-- stay comfortably under length limits
-
-Bad descriptions usually:
-
-- read like marketing copy
-- describe implementation details instead of user intent
-- enumerate dozens of examples
-- rely on body sections for trigger logic
-
-## Optional adapter tooling
-
-Some workflows need runtime-specific tooling such as trigger evaluation, metadata generation, or discovery hooks. Treat those as optional adapters, not as the definition of the skill itself.
-
-Current bundled scripts in this skill folder include some legacy Claude-oriented evaluation helpers. They are still useful when the target runtime is Claude, but they are not the default workflow for general skill authoring.
-
-Use adapter-specific tooling only when one of these is true:
-
-- the user explicitly targets that runtime
-- the bug only appears in that runtime's discovery or trigger behavior
-- the user asks for runtime-specific benchmarking
-
-## Bundled resources in this skill
-
-Read bundled references only when their extra detail is useful:
-
-- `references/schemas.md`: JSON shapes used by the bundled evaluation tools
-- `references/agent_adapters.md`: read when adding runtime-specific adapters or deciding how to keep a skill portable
-- `references/anthropic_skill_best_practices.md`: read for deeper audits of structure, descriptions, progressive disclosure, script design, and evaluation loops
-- `references/progressive_skill_best_practices_supabase_workshop.md`: read for Skill vs MCP/CLI boundaries, production or security-sensitive skills, progressive context strategy, and eval-driven improvement; translate imported examples to Pi conventions such as `SKILL.md` and `<repo>/.agents/skills/`
-- `scripts/quick_validate.py`: neutral structural validation
-- other scripts in `scripts/`: optional tooling, some of which are runtime-specific
-- `agents/` and `eval-viewer/`: legacy/optional evaluation helpers; use only for explicit adapter or evaluation work
-
-## Editing guidance
+## Editing rules
 
 When changing an existing skill:
 
 - preserve the user's actual intent
-- reduce accidental runtime lock-in
-- remove dead complexity before adding new sections
+- remove dead complexity before adding sections
 - keep diffs reviewable
-- prefer moving details out of `SKILL.md` over endlessly expanding it
+- prefer moving detail to references over expanding `SKILL.md`
+- stop and ask if adapter behavior, legacy eval tooling, or source-of-truth location is ambiguous
 
-When creating a new skill:
-
-- start with the smallest viable structure
-- create only the folders you truly need
-- validate before adding optimization machinery
-
-## Minimal skill template
-
-```text
-my-skill/
-├── SKILL.md
-├── scripts/        # only if needed
-├── references/     # only if needed
-└── assets/         # only if needed
-```
-
-Minimal frontmatter:
-
-```yaml
----
-name: my-skill
-description: Use this skill when the user wants to ...
----
-```
-
-## Escalation rule
-
-If the user asks for a runtime-specific implementation, keep the core skill portable and isolate the runtime-specific parts. If that is not possible, say so explicitly and explain what portability is being traded away.
+When creating a new skill, start with the smallest viable folder and validate before adding optimization machinery.
