@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+checked=0
+while read -r local_ref local_sha remote_ref remote_sha; do
+  [[ -z "${local_ref:-}" ]] && continue
+  [[ "$local_sha" == "0000000000000000000000000000000000000000" ]] && continue
+  checked=1
+  if [[ "$remote_sha" == "0000000000000000000000000000000000000000" ]]; then
+    python3 _scripts/check_repo_metadata.py --tree "$local_sha"
+  else
+    python3 _scripts/check_repo_metadata.py --tree "$local_sha" --range "$remote_sha..$local_sha"
+  fi
+done
+
+if [[ "$checked" == "0" ]]; then
+  python3 _scripts/check_repo_metadata.py
+fi

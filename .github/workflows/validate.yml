@@ -1,0 +1,29 @@
+name: Validate skills metadata
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  metadata:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Validate README and CHANGELOG metadata
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base="origin/${{ github.base_ref }}"
+            git fetch origin "${{ github.base_ref }}" --depth=1 || true
+            python3 _scripts/check_repo_metadata.py --range "$base..HEAD"
+          elif [[ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]]; then
+            python3 _scripts/check_repo_metadata.py --range "${{ github.event.before }}..${{ github.sha }}"
+          else
+            python3 _scripts/check_repo_metadata.py
+          fi
