@@ -8,6 +8,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- Added a root `.ignore` so top-level repository docs (`README.md`, `CHANGELOG.md`) are not discovered as Pi skills, and corrected README layout docs for skill-local `scripts/` versus repo-level `_scripts/`.
 - Flattened the repository so Pi discovers skill folders directly from the repo root at `~/.pi/agent/skills`.
 - Renamed `manage-agent-context` to `managing-agent-context` to match the preferred gerund naming convention.
 - Updated `skill-creator` naming guidance to prefer gerund skill names while allowing established noun/action names.

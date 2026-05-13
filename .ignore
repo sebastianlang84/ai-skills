@@ -1,0 +1,4 @@
+# Pi skill discovery reads root *.md files as skills in ~/.pi/agent/skills.
+# Keep repository docs out of skill discovery.
+README.md
+CHANGELOG.md
