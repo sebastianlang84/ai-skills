@@ -1,73 +1,58 @@
 # ai-skills
 
-Reusable AI/agent skills collected for installation into coding-agent runtimes.
+Reusable AI/agent skills. This repository is laid out as the active Pi global skill store.
 
-This repository is the source/archive for portable skills. It is separate from:
+On this machine, the canonical checkout/runtime path is:
 
-- `sebastianlang84/pi-ext-*`: Pi extensions and packages.
-- `sebastianlang84/pi-config`: private Pi runtime configuration for one machine/user.
-- `~/.pi/agent/skills`: the active local Pi runtime skill directory.
+```text
+~/.pi/agent/skills
+```
+
+Do not keep a second global skill store. Repo-local skills, when needed, belong under a consuming repo's `.agents/skills/` directory.
 
 ## Layout
 
 ```text
-skills/<skill-name>/
+<skill-name>/
   SKILL.md        # required entry point
   assets/         # optional templates/resources
   references/     # optional deeper guidance
   scripts/        # optional deterministic helpers
 ```
 
-Treat each `skills/<skill-name>/` directory as the portable artifact. Install or copy selected skills into the target agent's runtime-specific skill directory. On this machine, the canonical global Pi skill store is:
-
-```text
-~/.pi/agent/skills/
-```
-
-Example Pi install/update:
-
-```bash
-cp -a skills/manage-agent-context ~/.pi/agent/skills/
-```
+Treat each `<skill-name>/` directory as the portable artifact. Pi discovers global skills directly from this repo root when it is checked out at `~/.pi/agent/skills`.
 
 Validate a skill after edits:
 
 ```bash
-python3 ~/.pi/agent/skills/skill-creator/scripts/quick_validate.py skills/<skill-name>
+python3 ~/.pi/agent/skills/skill-creator/scripts/quick_validate.py <skill-name>
 ```
 
 ## Current skills
 
-This list should match the immediate subdirectories under `skills/`.
+This list should match the immediate subdirectories in the repo root.
 
 - `audit-manager`
-- `browser-use`
 - `claude-api`
-- `dispatching-parallel-agents`
 - `doc-coauthoring`
-- `documentation-writer`
-- `executing-plans`
 - `git-workflow`
-- `macrolens`
-- `manage-agent-context`
+- `grill-me`
+- `grill-with-docs`
+- `improve-codebase-architecture`
+- `managing-agent-context`
 - `mcp-builder`
 - `newsletter-delivery`
 - `pdf`
 - `pi-extension-packaging`
 - `secrets-env`
 - `skill-creator`
-- `skill-manager`
-- `subagent-driven-development`
 - `subagent-workflow`
-- `systematic-debugging`
-- `test-driven-development`
+- `tdd`
 - `tool-update-checker`
-- `verification-before-completion`
-- `webapp-testing`
+- `to-prd`
 - `write-docker-compose`
 - `write-dockerfile`
-- `writing-plans`
 
 ## Scope notes
 
-This repo may contain skills that are useful as source material but are not installed globally by default. Domain-specific workflow skills should live with their consuming project when they are not generally reusable.
+Global skills should be broadly reusable across repos. Project-specific workflows should live with their consuming project under `.agents/skills/`.
