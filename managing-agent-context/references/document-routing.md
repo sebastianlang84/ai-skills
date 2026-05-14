@@ -8,6 +8,12 @@ Principle: as little as necessary, as much as needed — one clear home per kind
 - Binding agent rules belong in active instructions, agent instruction files, skills, tools, hooks, or CI; not in memory, README, or chat promises.
 - Loaded skills provide task-specific procedures, but must not silently override higher-priority instructions unless that override is explicit and intended.
 
+## Shared context docs
+
+- Give each rule, fact, plan, decision, and handoff one canonical home; use short pointers elsewhere instead of duplicating substance.
+- If a doc is only a discoverability index, keep it thin and link to the canonical source.
+- When moving shared context, update the source of truth and remove or redirect stale copies in the same change.
+
 ## Routing table
 
 | Information | Put it here | Avoid |

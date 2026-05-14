@@ -30,6 +30,8 @@ Use this skill to decide what agent-facing context should load automatically, lo
 
 Use specialized workflows for domain work; this skill may route to them, not duplicate them. Do not use it for ordinary prose editing, app architecture, Docker authoring, secrets handling, release execution, or domain-specific skill authoring.
 
+When maintaining shared context docs, name one canonical home for each rule, fact, plan, decision, or handoff; replace duplicates with short pointers; and update only the canonical home plus a discoverability link when needed. Use `references/document-routing.md` to choose the home before editing.
+
 Keep `SKILL.md` as overview, routing, and procedure. Move long examples, templates, checklists, and policy detail into `references/` or `assets/`.
 
 ## Workflow
