@@ -13,9 +13,14 @@ Goal: clear authority, low redundancy, good trigger boundaries, and high informa
 
 ## Mental model
 
-- Early/automatic instructions create baseline behavior; keep them short, stable, and normative.
-- Agent instruction files should encode durable norms and stop conditions, not task history or long runbooks.
-- Skills load near active work; keep descriptions precise and `SKILL.md` procedural, not encyclopedic.
+- Early/automatic instructions such as `AGENTS.md` shape baseline behavior through primacy. Keep them short, stable, normative, and focused on durable rules and stop conditions, not task history or long runbooks.
+- Skills shape task-local behavior through recency. Keep descriptions precise as the main trigger surface, and keep `SKILL.md` procedural, compact, and scoped to one job.
+- Subagents are prompt- and context-engineering tools, not just extra workers:
+  - Prompt engineering: the orchestrator can define role, scope, constraints, stop conditions, and output shape with surgical precision.
+  - Context engineering: scouts/reviewers can inspect large context in isolation and return only filtered, relevant handoffs, keeping the main agent's context small.
+  - Cost control: lightweight scouts can often use cheaper models while stronger models are reserved for planning, judgment, implementation, or review.
+  - Caveat: subagents add coordination overhead, lossy handoffs, scope-risk, and tool/model differences; the main agent remains responsible for final judgment.
+- Meta-skills for context management, subagent workflow, and skill creation are valuable audit and maintenance tools. They help keep the context system intentional without hard-routing every task through another skill.
 - Tools, MCP, scripts, hooks, and CI should provide capability or enforcement instead of prose promises.
 - Memory is for reset-resilient non-normative context, not enforcement.
 
