@@ -1,7 +1,8 @@
 # Example config for ~/.config/tool-update-checker/tools.toml
 #
-# Optional per-tool field:
+# Optional per-tool fields:
 # groups = ["pi", "core", "extensions"]
+# current = "<known installed source SHA/tag>"
 # Then run:
 #   python3 ~/.pi/agent/skills/tool-update-checker/scripts/check_updates.py --group pi
 
@@ -40,3 +41,32 @@ kind = "github-release"
 repo = "owner/repo"
 current = "v1.2.3"
 groups = ["extensions"]
+
+# Validate a local skill folder only. The checker verifies SKILL.md frontmatter
+# and reports local uncommitted changes when the folder is inside a Git repo.
+[[tool]]
+name = "tool-update-checker"
+kind = "skill-local"
+path = "~/.pi/agent/skills/tool-update-checker"
+groups = ["skills"]
+
+# Track a skill that lives in a local Git checkout, such as this ai-skills repo.
+# `source_path` defaults to the skill path relative to the repo root.
+[[tool]]
+name = "tool-update-checker"
+kind = "skill-git"
+path = "~/.pi/agent/skills/tool-update-checker"
+remote = "origin"
+branch = "main"
+groups = ["skills"]
+
+# Track a skills.sh skill. Without `current`, the checker reports latest source
+# visibility as info; set `current` to the source commit SHA you installed from
+# when you want update-available/up-to-date comparison.
+[[tool]]
+name = "improve-codebase-architecture"
+kind = "skills-sh"
+path = "~/.pi/agent/skills/improve-codebase-architecture"
+source = "mattpocock/skills/improve-codebase-architecture"
+# current = "abc123def456"
+groups = ["skills"]

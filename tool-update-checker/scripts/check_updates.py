@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -40,6 +41,40 @@ def run(cmd: list[str], *, cwd: str | None = None, timeout: int = 20) -> subproc
 
 def expand_path(path: str) -> Path:
     return Path(os.path.expandvars(os.path.expanduser(path)))
+
+
+def short_sha(sha: str) -> str:
+    return sha[:12] if len(sha) > 12 else sha
+
+
+def parse_skill_frontmatter(skill_path: Path) -> dict[str, str]:
+    skill_file = skill_path / "SKILL.md"
+    if not skill_file.exists():
+        raise RuntimeError(f"SKILL.md not found: {skill_file}")
+    lines = skill_file.read_text(encoding="utf-8").splitlines()
+    if not lines or lines[0].strip() != "---":
+        raise RuntimeError(f"SKILL.md has no frontmatter: {skill_file}")
+
+    data: dict[str, str] = {}
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return data
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        data[key.strip()] = value.strip().strip('"\'')
+    raise RuntimeError(f"SKILL.md frontmatter is not closed: {skill_file}")
+
+
+def configured_skill_path(tool: dict[str, Any]) -> Path:
+    if tool.get("path"):
+        return expand_path(str(tool["path"]))
+    skill = str(tool.get("skill") or tool.get("name") or "")
+    return expand_path(f"~/.pi/agent/skills/{skill}")
+
+
+def expected_skill_name(tool: dict[str, Any], skill_path: Path) -> str:
+    return str(tool.get("skill") or tool.get("expected_name") or skill_path.name)
 
 
 def load_config(path: Path) -> list[dict[str, Any]]:
@@ -128,6 +163,59 @@ def git_remote_url(path: Path, remote: str) -> str:
     return proc.stdout.strip()
 
 
+def git_remote_url_or_value(path: Path, remote: str) -> str:
+    proc = run(["git", "-C", str(path), "remote", "get-url", remote])
+    if proc.returncode == 0 and proc.stdout.strip():
+        return proc.stdout.strip()
+    return remote
+
+
+def git_repo_root(path: Path) -> Path | None:
+    probe = path if path.is_dir() else path.parent
+    proc = run(["git", "-C", str(probe), "rev-parse", "--show-toplevel"])
+    if proc.returncode != 0:
+        return None
+    return Path(proc.stdout.strip())
+
+
+def git_dirty_summary(repo_path: Path, path: Path) -> str:
+    rel = os.path.relpath(path, repo_path)
+    proc = run(["git", "-C", str(repo_path), "status", "--porcelain", "--", rel])
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "git status failed")
+    lines = [line for line in proc.stdout.splitlines() if line.strip()]
+    if not lines:
+        return ""
+    changed = ", ".join(line[3:] for line in lines[:5])
+    more = "" if len(lines) <= 5 else f", +{len(lines) - 5} more"
+    return f"local changes: {changed}{more}"
+
+
+def git_remote_head_sha(remote: str) -> str:
+    proc = run(["git", "ls-remote", remote, "HEAD"], timeout=30)
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "git ls-remote HEAD failed")
+    line = proc.stdout.strip().splitlines()
+    if not line:
+        raise RuntimeError(f"remote HEAD not found: {remote}")
+    sha = line[0].split()[0].strip()
+    if not sha:
+        raise RuntimeError(f"unable to parse remote HEAD SHA for {remote}")
+    return sha
+
+
+def refs_match(configured: str, remote_full: str) -> bool:
+    configured = configured.strip()
+    return len(configured) >= 7 and (configured == remote_full or remote_full.startswith(configured) or configured == short_sha(remote_full))
+
+
+def relative_path_if_inside(path: Path, root: Path) -> str | None:
+    try:
+        return str(path.resolve().relative_to(root.resolve()))
+    except ValueError:
+        return None
+
+
 def check_git_repo(tool: dict[str, Any]) -> Result:
     name = str(tool["name"])
     path = expand_path(str(tool["path"]))
@@ -192,10 +280,159 @@ def check_github_release(tool: dict[str, Any]) -> Result:
     return Result(name, "github-release", current, latest, status, repo)
 
 
+def validate_skill_folder(tool: dict[str, Any], kind: str) -> tuple[str, Path, str, str, str] | Result:
+    name = str(tool.get("name") or tool.get("skill") or "unnamed-skill")
+    skill_path = configured_skill_path(tool)
+    expected = expected_skill_name(tool, skill_path)
+    if not skill_path.exists():
+        return Result(name, kind, "missing", "valid", "missing", str(skill_path))
+    if not skill_path.is_dir():
+        return Result(name, kind, "invalid", "valid", "error", f"not a directory: {skill_path}")
+
+    frontmatter = parse_skill_frontmatter(skill_path)
+    actual = frontmatter.get("name") or ""
+    if actual != expected:
+        return Result(name, kind, actual or "unknown", expected, "error", f"frontmatter name mismatch in {skill_path}")
+    description = frontmatter.get("description") or ""
+    if not description:
+        return Result(name, kind, actual, expected, "error", f"frontmatter description is missing in {skill_path}")
+    return name, skill_path, expected, actual, description
+
+
+def check_skill_local(tool: dict[str, Any]) -> Result:
+    validated = validate_skill_folder(tool, "skill-local")
+    if isinstance(validated, Result):
+        return validated
+    name, skill_path, _expected, actual, _description = validated
+
+    repo_path = git_repo_root(skill_path)
+    dirty = git_dirty_summary(repo_path, skill_path) if repo_path else ""
+    status = "local-changed" if dirty else "up-to-date"
+    note_parts = [str(skill_path)]
+    if repo_path:
+        note_parts.append(f"git repo: {repo_path}")
+    if dirty:
+        note_parts.append(dirty)
+    return Result(name, "skill-local", f"{actual}@local", "valid", status, "; ".join(note_parts))
+
+
+def check_skill_git(tool: dict[str, Any]) -> Result:
+    validated = validate_skill_folder(tool, "skill-git")
+    if isinstance(validated, Result):
+        return validated
+    name, skill_path, _expected, actual, _description = validated
+
+    repo_path = expand_path(str(tool["repo_path"])) if tool.get("repo_path") else git_repo_root(skill_path)
+    if not repo_path or not repo_path.exists():
+        return Result(name, "skill-git", f"{actual}@local", "unknown", "error", "skill is not inside a git repo; set repo_path")
+
+    branch = str(tool.get("branch") or git_current_branch(repo_path))
+    remote = str(tool.get("remote") or "origin")
+    local_short, local_full = git_head_sha(repo_path)
+    remote_full = git_remote_sha(repo_path, remote, branch)
+    remote_url = git_remote_url_or_value(repo_path, remote)
+
+    installed_repo_path = git_repo_root(skill_path)
+    installed_dirty = git_dirty_summary(installed_repo_path, skill_path) if installed_repo_path else ""
+    source_path = str(tool.get("source_path") or relative_path_if_inside(skill_path, repo_path) or skill_path.name)
+    source_dirty = ""
+    source_local_path = repo_path / source_path
+    if relative_path_if_inside(source_local_path, repo_path) is None:
+        return Result(
+            name,
+            "skill-git",
+            f"{actual}@local",
+            "unknown",
+            "error",
+            f"source_path escapes repo_path: {source_path}",
+        )
+    if not source_local_path.exists():
+        return Result(
+            name,
+            "skill-git",
+            f"{actual}@local",
+            "unknown",
+            "error",
+            f"source_path not found in repo_path: {source_path}; set source_path explicitly",
+        )
+    same_local_path = source_local_path.resolve() == skill_path.resolve()
+    if not same_local_path:
+        source_dirty = git_dirty_summary(repo_path, source_local_path)
+    dirty = "; ".join(part for part in [installed_dirty, source_dirty] if part)
+
+    status = "local-changed" if dirty else ("up-to-date" if local_full == remote_full else "remote-changed")
+    note_parts = [f"{remote}/{branch} {remote_url}", f"installed: {skill_path}", f"source_path: {source_path}"]
+    if dirty:
+        note_parts.append(dirty)
+    return Result(
+        name,
+        "skill-git",
+        f"{source_path}@{branch}@{local_short}",
+        f"{source_path}@{branch}@{short_sha(remote_full)}",
+        status,
+        "; ".join(note_parts),
+    )
+
+
+def skills_sh_page(source: str) -> str:
+    url = f"https://www.skills.sh/{source.strip('/')}"
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.read().decode("utf-8")
+    except urllib.error.HTTPError as e:
+        raise RuntimeError(f"skills.sh API/page error {e.code}: {url}") from e
+    except urllib.error.URLError as e:
+        raise RuntimeError(f"skills.sh request failed: {e}") from e
+
+
+def github_repo_from_skills_sh(source: str) -> str:
+    page = skills_sh_page(source)
+    match = re.search(r"npx skills add (https://github\.com/[^\s<]+) --skill ", page)
+    if not match:
+        raise RuntimeError(f"could not find GitHub source on skills.sh page: {source}")
+    return match.group(1)
+
+
+def check_skills_sh(tool: dict[str, Any]) -> Result:
+    validated = validate_skill_folder(tool, "skills-sh")
+    if isinstance(validated, Result):
+        return validated
+    name, skill_path, _expected, actual, _description = validated
+
+    source = str(tool.get("source") or "")
+    if not source:
+        source = f"{tool['owner']}/{tool['repo']}/{tool.get('skill') or actual}"
+    repo_url = str(tool.get("repo_url") or github_repo_from_skills_sh(source))
+    branch = tool.get("branch")
+    latest_full = git_remote_sha(skill_path, repo_url, str(branch)) if branch else git_remote_head_sha(repo_url)
+    latest = short_sha(latest_full)
+    current = str(tool.get("current") or "unknown")
+
+    repo_path = git_repo_root(skill_path)
+    dirty = git_dirty_summary(repo_path, skill_path) if repo_path else ""
+    if dirty:
+        status = "local-changed"
+    elif current == "unknown":
+        status = "info"
+    else:
+        status = "up-to-date" if refs_match(current, latest_full) else "update-available"
+
+    note_parts = [f"skills.sh/{source.strip('/')}", repo_url, str(skill_path)]
+    if current == "unknown":
+        note_parts.append("set current to a source commit SHA to compare")
+    if dirty:
+        note_parts.append(dirty)
+    return Result(name, "skills-sh", f"{actual}@{current}", latest, status, "; ".join(note_parts))
+
+
 CHECKERS = {
     "npm-global": check_npm_global,
     "git-repo": check_git_repo,
     "github-release": check_github_release,
+    "skill-local": check_skill_local,
+    "skill-git": check_skill_git,
+    "skills-sh": check_skills_sh,
 }
 
 
