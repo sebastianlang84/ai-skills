@@ -6,6 +6,10 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ## [Unreleased]
 
+### Added
+
+- Added `code-documentation` to route documentation updates after code changes and keep PRD, README, changelog, TODO, AGENTS, and memory roles separate.
+
 ### Changed
 
 - Clarified `managing-agent-context` mental model for AGENTS.md primacy, skill recency, subagent prompt/context engineering, and meta-skill audit value.

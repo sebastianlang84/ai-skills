@@ -47,6 +47,7 @@ python3 _scripts/check_repo_metadata.py
 This generated list must match the immediate skill directories in the repo root. Each summary comes from the skill's `SKILL.md` frontmatter.
 
 <!-- BEGIN SKILL LIST -->
+- `code-documentation` — Update or review project documentation after code changes. Use when user-visible behavior, APIs, CLI commands, config, schemas, architecture, PRD status/scope, changelog entries, TODO cleanup, or ADR-worthy decisions may need documentation. Do not use for ordinary prose editing or agent-context/memory routing.
 - `git-workflow` — Use for Git safety, branch/worktree choice, commits, version/changelog impact, merge/push approval, and task closeout.
 - `grill-me` — Interview the user relentlessly about a plan or design until reaching shared understanding, resolving each branch of the decision tree. Use when user wants to stress-test a plan, get grilled on their design, or mentions "grill me".
 - `grill-with-docs` — Grilling session that challenges your plan against the existing domain model, sharpens terminology, and updates documentation (CONTEXT.md, ADRs) inline as decisions crystallise. Use when user wants to stress-test a plan against their project's language and documented decisions.
