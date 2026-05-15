@@ -44,6 +44,8 @@ Inspect the existing context system: file tree/root docs, agent instruction rela
 
 Judge each source by load path, authority, duplication, information-per-token, update trigger, and owner. Route information to the lowest reliable durable layer; use `references/document-routing.md` for detailed placement rules.
 
+Check the repository freshness contract: identify which docs or context artifacts are expected to stay current, what changes trigger updates, where that obligation is encoded, and whether it is advisory, procedural, or enforced. Prefer deterministic checks in scripts, hooks, CI, or release tooling when possible; keep `AGENTS.md` to short repo-specific gates and route detailed workflows to skills. If freshness is unclear or sources contradict code/config, refresh the source of truth or stop and ask before relying on it.
+
 For every skill inspected, check:
 
 - Does the description front-load the key use case and natural trigger phrases?

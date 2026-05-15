@@ -6,6 +6,7 @@ Principle: as little as necessary, as much as needed — one clear home per kind
 
 - Technical facts must match code, config, tests, schemas, and deploy manifests. Fix docs that contradict them.
 - Binding agent rules belong in active instructions, agent instruction files, skills, tools, hooks, or CI; not in memory, README, or chat promises.
+- Repository freshness obligations are rules or gates: encode them in `AGENTS.md`, skills, scripts, hooks, CI, release tooling, or contribution policy. Do not rely on README prose, memory, or chat promises as the only mechanism for keeping docs current.
 - Loaded skills provide task-specific procedures, but must not silently override higher-priority instructions unless that override is explicit and intended.
 
 ## Shared context docs

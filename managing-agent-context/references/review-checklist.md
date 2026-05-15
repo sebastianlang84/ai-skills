@@ -23,4 +23,5 @@ Use before considering a repo context alignment complete.
 - Relevant skills are referenced by name/path instead of duplicating full procedures.
 - Skill descriptions trigger intended tasks and avoid nearby false positives.
 - Enforceable gates use hooks, CI, scripts, tools, or extensions.
+- The repository freshness contract is explicit: maintained docs/context artifacts have clear update triggers, and release/user-visible changes route to changelog, README, TODO, ADRs, or canonical docs as appropriate.
 - Normal tasks do not require reading a large policy corpus.
