@@ -7,7 +7,7 @@ description: "Update or review project documentation after code changes. Use whe
 
 ## Goal
 
-Keep project documentation accurate without turning the PRD, README, changelog, TODO list, agent instructions, or memory into dumping grounds.
+Keep project documentation accurate while using each artifact for its intended role, not as a catch-all dumping ground.
 
 ## Core rule
 

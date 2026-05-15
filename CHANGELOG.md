@@ -9,6 +9,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 ### Added
 
 - Added `code-documentation` to route documentation updates after code changes and keep PRD, README, changelog, TODO, AGENTS, and memory roles separate.
+- Clarified the `code-documentation` goal so README, changelog, and TODO updates remain encouraged when they match each artifact's role.
 
 ### Changed
 
