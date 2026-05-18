@@ -13,6 +13,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- Renamed `subagent-workflow` to `pi-subagents` and narrowed it to Pi-specific orchestration policy that complements the `subagent` extension's built-in tool guidance.
 - Clarified `managing-agent-context` mental model for AGENTS.md primacy, skill recency, subagent prompt/context engineering, and meta-skill audit value.
 - Added explicit `managing-agent-context` guidance for shared context docs: one canonical home, thin pointers, and stale-copy cleanup.
 - Added a `managing-agent-context` repository freshness contract check for maintained docs/context artifacts, update triggers, and enforcement paths.
