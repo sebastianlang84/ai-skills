@@ -17,6 +17,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 - Added explicit `managing-agent-context` guidance for shared context docs: one canonical home, thin pointers, and stale-copy cleanup.
 - Added a `managing-agent-context` repository freshness contract check for maintained docs/context artifacts, update triggers, and enforcement paths.
 - Refined the `managing-agent-context` TODO template guidance to keep active items short and move detail into linked plans.
+- Clarified the `managing-agent-context` global-vs-repo `AGENTS.md` boundary: global defaults versus repo-local overrides, gates, and facts.
 - Extended `tool-update-checker` with read-only skill source checks for `skill-local`, `skill-git`, and `skills-sh` entries.
 - Added a root `.ignore` so top-level repository docs (`README.md`, `CHANGELOG.md`) are not discovered as Pi skills, and corrected README layout docs for skill-local `scripts/` versus repo-level `_scripts/`.
 - Flattened the repository so Pi discovers skill folders directly from the repo root at `~/.pi/agent/skills`.

@@ -28,6 +28,8 @@ Goal: clear authority, low redundancy, good trigger boundaries, and high informa
 
 Use this skill to decide what agent-facing context should load automatically, load situationally, be retrieved, be enforced, or stay human-facing. Check global vs repo-local layers, bloat, redundancy, stale authority, trigger quality, and portability.
 
+AGENTS.md boundary: global instructions hold durable user-wide defaults; repo/project instructions hold only repo-local overrides, gates, and verified facts. Repo instructions may specialize global defaults, but should not restate them; replace duplicates with short pointers or concrete local deltas.
+
 Use specialized workflows for domain work; this skill may route to them, not duplicate them. Do not use it for ordinary prose editing, app architecture, Docker authoring, secrets handling, release execution, or domain-specific skill authoring.
 
 When maintaining shared context docs, name one canonical home for each rule, fact, plan, decision, or handoff; replace duplicates with short pointers; and update only the canonical home plus a discoverability link when needed. Use `references/document-routing.md` to choose the home before editing.
