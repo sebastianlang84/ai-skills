@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "nightly-review lens output",
+  "description": "Each review lens must return ONLY a JSON array (no prose, no code fences). The bug lens returns bugFinding items; the usability lens returns usabilitySuggestion items. The orchestrator dedups, renders markdown, and (bug only) drives fixes.",
+  "oneOf": [
+    { "type": "array", "items": { "$ref": "#/$defs/bugFinding" } },
+    { "type": "array", "items": { "$ref": "#/$defs/usabilitySuggestion" } }
+  ],
+  "$defs": {
+    "bugFinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "line", "severity", "confidence", "category", "summary", "failure_scenario", "suggested_fix"],
+      "properties": {
+        "file": { "type": "string", "description": "repo-relative path" },
+        "line": { "type": "integer", "minimum": 1 },
+        "severity": { "enum": ["low", "medium", "high", "critical"] },
+        "confidence": { "enum": ["low", "medium", "high"] },
+        "category": { "enum": ["correctness", "security"] },
+        "summary": { "type": "string", "description": "one sentence: the defect" },
+        "failure_scenario": { "type": "string", "description": "concrete inputs/state -> wrong output/crash" },
+        "suggested_fix": { "type": "string", "description": "short prose, no code" }
+      }
+    },
+    "usabilitySuggestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["area", "kind", "summary", "rationale", "suggested_change"],
+      "properties": {
+        "area": { "type": "string", "description": "component / file / surface" },
+        "kind": { "enum": ["usability", "feature", "metric-suggestion"] },
+        "summary": { "type": "string" },
+        "rationale": { "type": "string", "description": "why it matters to a user" },
+        "suggested_change": { "type": "string", "description": "concrete, actionable" }
+      }
+    }
+  }
+}

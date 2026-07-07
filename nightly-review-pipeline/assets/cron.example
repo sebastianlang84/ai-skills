@@ -1,0 +1,8 @@
+# Cron alternative to the systemd timer. `crontab -e` and add (edit paths):
+#
+# Nightly at 02:30. PATH must include claude + gh (adjust to your install).
+PATH=/home/wasti/.local/bin:/usr/local/bin:/usr/bin:/bin
+30 2 * * * /home/wasti/.claude/skills/nightly-review-pipeline/assets/orchestrator.sh --config /home/wasti/.config/nightly-review/config.sh >> /home/wasti/.local/state/nightly-review/logs/cron.log 2>&1
+#
+# Note: cron has a minimal environment. The systemd user unit is preferred because it gives you
+# journald logging, Persistent=true (catch-up after downtime), timeouts, and RandomizedDelaySec.

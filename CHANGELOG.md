@@ -8,6 +8,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Added
 
+- Added `nightly-review-pipeline` to set up an unattended overnight review+fix pipeline (systemd/cron + bash orchestrator + headless `claude -p`) with bug and usability lenses, adaptive backoff, and safe auto-fix draft PRs (isolated worktree, tests-green gate, never main, never auto-merge).
 - Added `code-documentation` to route documentation updates after code changes and keep PRD, README, changelog, TODO, AGENTS, and memory roles separate.
 - Clarified the `code-documentation` goal so README, changelog, and TODO updates remain encouraged when they match each artifact's role.
 

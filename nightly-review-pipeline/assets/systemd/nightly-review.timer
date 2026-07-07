@@ -1,0 +1,12 @@
+[Unit]
+Description=Fire the nightly code-review pipeline
+
+[Timer]
+# Every night at 02:30 local time, jittered up to 20 min to avoid a thundering herd.
+OnCalendar=*-*-* 02:30:00
+RandomizedDelaySec=1200
+# If the machine was asleep/off at 02:30, run at next boot instead of skipping the night:
+Persistent=true
+
+[Install]
+WantedBy=timers.target

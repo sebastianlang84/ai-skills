@@ -1,0 +1,18 @@
+[Unit]
+Description=Nightly unattended code review + auto-fix pipeline
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# EDIT these two paths for your machine:
+ExecStart=%h/.claude/skills/nightly-review-pipeline/assets/orchestrator.sh --config %h/.config/nightly-review/config.sh
+# Hard ceiling so a runaway night cannot burn forever:
+TimeoutStartSec=6h
+# Be a good citizen on a shared box:
+Nice=10
+IOSchedulingClass=idle
+# claude/gh live in ~/.local/bin; make sure they are on PATH:
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+
+# This is a user unit: install under ~/.config/systemd/user/ and run with `systemctl --user`.
