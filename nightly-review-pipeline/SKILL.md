@@ -19,8 +19,8 @@ adaptive backoff. This "should I even run tonight?" logic is why a plain cron li
 ```
 systemd .timer  ──fires──▶  orchestrator.sh  ──per repo, per lens──▶  run-claude.sh (headless claude -p)
    (dumb)                     (smart: state,        │
-                              backoff, dedup,       ├─ bug lens ──▶ todo.md  + draft-PR fixes
-                              git/PR policy)        └─ usability ─▶ IDEAS.md (suggestions only)
+                              backoff, dedup,       ├─ bug lens ──▶ repo's task file + draft-PR fixes
+                              git/PR policy)        └─ usability ─▶ repo's ideas file (suggestions only)
 ```
 
 ## Review lenses
@@ -30,9 +30,18 @@ A repo enables whichever lenses make sense for it, in the config.
 
 - **`bug`** — correctness/security bug screen. Read-only review (`--permission-mode plan`).
   New, deduped, high-confidence findings become auto-fix **draft PRs**; all findings are also
-  appended as checkboxes to the repo's `todo.md`.
+  recorded as checkboxes in the repo's task file (see "Where findings go" below).
 - **`usability`** — product/usability/functionality review. Read-only. Suggestions only,
-  appended to `IDEAS.md`. **Never** opens a PR (design is a human call).
+  recorded in the repo's ideas file. **Never** opens a PR (design is a human call).
+
+### Where findings go
+
+Findings are written into a **marker-delimited managed block**
+(`<!-- nightly-review:<lens>:start -->` … `:end`), so the pipeline owns that block and never
+touches your own content. With `REPORT_IN_REPO=1` (default) it **reuses the repo's existing file,
+case-insensitively** — an existing `TODO.md` is appended to, never a competing `todo.md` — falling
+back to `TASK_FILE`/`IDEAS_FILE` if none exists. With `REPORT_IN_REPO=0` it writes out of the repo
+under `REPORTS_DIR/<repo-slug>/` instead, leaving the repo's working tree completely untouched.
 - **metrics is not a lens** — it is an *output*. When the bug or usability lens notices something
   whose quality can only be judged by measuring it (retrieval quality, recall, latency, memory hit
   rate), it emits a `metric-suggestion` item into `IDEAS.md`. You decide later whether to build an
@@ -59,8 +68,9 @@ next commit. Details and tuning: `references/adaptive-cadence.md`.
    ```bash
    ~/.claude/skills/nightly-review-pipeline/assets/orchestrator.sh --config ~/.config/nightly-review/config.sh --dry-run
    ```
-4. **One real manual run** on a single repo (edit REPOS down to one first) and inspect
-   `todo.md`, `IDEAS.md`, any draft PRs, and the log under `~/.local/state/nightly-review/logs/`.
+4. **One real manual run** on a single repo (edit REPOS down to one first) and inspect the repo's
+   task/ideas file (or `REPORTS_DIR/` if `REPORT_IN_REPO=0`), any draft PRs, and the log under
+   `~/.local/state/nightly-review/logs/`.
 5. **Install the timer** (systemd user units):
    ```bash
    cp assets/systemd/nightly-review.{service,timer} ~/.config/systemd/user/

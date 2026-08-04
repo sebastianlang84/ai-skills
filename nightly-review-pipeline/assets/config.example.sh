@@ -18,6 +18,18 @@ MODEL=""                     # "" = account default; or e.g. claude-opus-4-8
 STATE_DIR="$HOME/.local/state/nightly-review"
 LOG_DIR="$STATE_DIR/logs"
 
+# --- Where findings are written ---------------------------------------------
+# REPORT_IN_REPO=1 : write into the repo, REUSING its existing task/ideas file. An existing
+#                    TODO.md (any case) is reused — never a competing todo.md — and content
+#                    goes into a delimited "<!-- nightly-review:<lens>:start/end -->" block,
+#                    so your own file content is left untouched. Shows up in git status.
+# REPORT_IN_REPO=0 : write out of the repo, under REPORTS_DIR/<repo-slug>/ — zero repo side
+#                    effects (nothing in git status). Good for repos you don't want touched.
+REPORT_IN_REPO=1
+REPORTS_DIR="$STATE_DIR/reports"
+TASK_FILE="TODO.md"          # bug-lens target basename (case-insensitive match in-repo)
+IDEAS_FILE="IDEAS.md"        # usability-lens target basename
+
 # --- Adaptive cadence -------------------------------------------------------
 EMPTY_RUNS_BEFORE_BACKOFF=2  # K empty runs before the interval starts doubling
 BACKOFF_MAX_DAYS=14          # cap; a quiet lens is retried at most this rarely

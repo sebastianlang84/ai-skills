@@ -27,7 +27,8 @@ version-sensitive and easy to get subtly wrong.
   branch and worktree are discarded — no PR, no residue.
 - **No auto-merge.** Ever. You review and merge (or close) each PR yourself.
 - No force-push; each finding maps to its own branch, deduped so the same bug is not re-PR'd nightly.
-- If `AUTO_FIX=0`, the bug lens is pure review: it writes `todo.md` and opens nothing.
+- If `AUTO_FIX=0`, the bug lens is pure review: it records findings in the repo's task file (or
+  `REPORTS_DIR/` when `REPORT_IN_REPO=0`) and opens nothing.
 
 ## Runaway-cost guards
 

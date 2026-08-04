@@ -44,6 +44,13 @@ source "$CONFIG"
 : "${FIX_MAX_TURNS:=60}"
 : "${FIX_TIMEOUT:=2400}"
 : "${TEST_TIMEOUT:=1200}"
+# Where review findings are written:
+#   REPORT_IN_REPO=1 -> into the repo, reusing its EXISTING task/ideas file (case-detected)
+#   REPORT_IN_REPO=0 -> out of the repo, under REPORTS_DIR/<repo-slug>/ (no repo side effects)
+: "${REPORT_IN_REPO:=1}"
+: "${REPORTS_DIR:=$STATE_DIR/reports}"
+: "${TASK_FILE:=TODO.md}"     # bug lens target basename (matched case-insensitively in-repo)
+: "${IDEAS_FILE:=IDEAS.md}"   # usability lens target basename
 export MODEL CLAUDE_BIN 2>/dev/null || true
 mkdir -p "$STATE_DIR" "$LOG_DIR"
 RUN_LOG="$LOG_DIR/run-$(date +%Y%m%d-%H%M%S).log"
@@ -83,28 +90,60 @@ update_cadence(){ # $1 statedir  $2 lens  $3 new_findings_count  $4 new_commits(
   log "  cadence[$lens]: findings=$count new_commits=$newc empty_streak=$streak next_in=${interval}d"
 }
 
-# Render new items (jsonl) as markdown checkboxes appended to a target file.
-render_md(){ # $1 target.md  $2 lens  $3 jsonl
-  local target=$1 lens=$2 jsonl=$3 o
+# Resolve the markdown target for a lens. In-repo mode reuses the repo's EXISTING file
+# (case-insensitive: an existing TODO.md is used, not a competing todo.md); otherwise it
+# falls back to the configured basename. Out-of-repo mode writes under REPORTS_DIR.
+resolve_target(){ # $1 repo  $2 lens  -> echoes absolute path
+  local repo=$1 lens=$2 base found rd
+  if [[ "$lens" == "bug" ]]; then base="$TASK_FILE"; else base="$IDEAS_FILE"; fi
+  if [[ "$REPORT_IN_REPO" == "1" ]]; then
+    found=$(cd "$repo" 2>/dev/null && ls -1 2>/dev/null | grep -ixF "$base" | head -1 || true)
+    [[ -n "$found" ]] && { printf '%s/%s' "$repo" "$found"; return; }
+    printf '%s/%s' "$repo" "$base"
+  else
+    rd="$REPORTS_DIR/$(slug "$repo")"; mkdir -p "$rd"; printf '%s/%s' "$rd" "$base"
+  fi
+}
+
+# Render this run's new items as a dated markdown subsection (to stdout).
+render_body(){ # $1 lens  $2 jsonl
+  local lens=$1 jsonl=$2 o
+  echo
+  echo "### $(date +%Y-%m-%d) — nightly-review ($lens)"
+  echo
+  while IFS= read -r o; do
+    if [[ "$lens" == "bug" ]]; then
+      printf -- '- [ ] **%s/%s** `%s:%s` — %s\n' \
+        "$(jq -r '.severity' <<<"$o")" "$(jq -r '.confidence' <<<"$o")" \
+        "$(jq -r '.file' <<<"$o")" "$(jq -r '.line' <<<"$o")" "$(jq -r '.summary' <<<"$o")"
+      printf -- '    - scenario: %s\n' "$(jq -r '.failure_scenario // "-"' <<<"$o")"
+    else
+      printf -- '- [ ] _%s_ (%s) — %s\n' \
+        "$(jq -r '.kind' <<<"$o")" "$(jq -r '.area' <<<"$o")" "$(jq -r '.summary' <<<"$o")"
+      printf -- '    - %s\n' "$(jq -r '.suggested_change // .rationale // "-"' <<<"$o")"
+    fi
+  done < "$jsonl"
+}
+
+# Write new items into a marker-delimited managed block in the target file. Everything the
+# pipeline owns lives between the markers; the rest of the file (human content) is never
+# touched. New subsections are inserted just before the end marker, so history accumulates
+# inside the block instead of a second competing file being created.
+write_report(){ # $1 target  $2 lens  $3 jsonl
+  local target=$1 lens=$2 jsonl=$3 bf
+  local start="<!-- nightly-review:$lens:start -->" end="<!-- nightly-review:$lens:end -->"
   [[ -s "$jsonl" ]] || return 0
-  {
-    echo
-    echo "## nightly-review ($lens) — $(date +%Y-%m-%d)"
-    echo
-    while IFS= read -r o; do
-      if [[ "$lens" == "bug" ]]; then
-        printf -- '- [ ] **%s/%s** `%s:%s` — %s\n' \
-          "$(jq -r '.severity' <<<"$o")" "$(jq -r '.confidence' <<<"$o")" \
-          "$(jq -r '.file' <<<"$o")" "$(jq -r '.line' <<<"$o")" "$(jq -r '.summary' <<<"$o")"
-        printf -- '    - scenario: %s\n' "$(jq -r '.failure_scenario // "-"' <<<"$o")"
-      else
-        printf -- '- [ ] _%s_ (%s) — %s\n' \
-          "$(jq -r '.kind' <<<"$o")" "$(jq -r '.area' <<<"$o")" "$(jq -r '.summary' <<<"$o")"
-        printf -- '    - %s\n' "$(jq -r '.suggested_change // .rationale // "-"' <<<"$o")"
-      fi
-    done < "$jsonl"
-  } >> "$target"
-  log "  appended $(wc -l < "$jsonl" | tr -d ' ') new item(s) to $target"
+  [[ -f "$target" ]] || : > "$target"
+  if ! grep -qF "$start" "$target"; then
+    printf '\n%s\n%s\n' "$start" "$end" >> "$target"
+  fi
+  bf=$(mktemp); render_body "$lens" "$jsonl" > "$bf"
+  awk -v endm="$end" -v bf="$bf" '
+    index($0, endm) && !done { while ((getline l < bf) > 0) print l; done=1 }
+    { print }
+  ' "$target" > "$target.nrp.tmp" && mv "$target.nrp.tmp" "$target"
+  rm -f "$bf"
+  log "  wrote $(wc -l < "$jsonl" | tr -d ' ') new item(s) into managed $lens block of $target"
 }
 
 # Run one review lens. Writes new (deduped) items to $sd/$lens.new.jsonl and echoes their count.
@@ -273,14 +312,14 @@ for entry in "${REPOS[@]}"; do
       bug)
         cnt=$(run_review "$repo" "$sd" bug "$PROMPT_DIR/bug-review.prompt.md" "$newc" "$last" "$sha")
         [[ "$cnt" == "-1" ]] && continue
-        render_md "$repo/todo.md" bug "$sd/bug.new.jsonl"
+        write_report "$(resolve_target "$repo" bug)" bug "$sd/bug.new.jsonl"
         update_cadence "$sd" bug "$cnt" "$newc"
         do_fixes "$repo" "$sd" "$testcmd"
         ;;
       usability)
         cnt=$(run_review "$repo" "$sd" usability "$PROMPT_DIR/usability-review.prompt.md" "$newc" "$last" "$sha")
         [[ "$cnt" == "-1" ]] && continue
-        render_md "$repo/IDEAS.md" usability "$sd/usability.new.jsonl"
+        write_report "$(resolve_target "$repo" usability)" usability "$sd/usability.new.jsonl"
         update_cadence "$sd" usability "$cnt" "$newc"
         ;;
       *) log "  unknown lens: $lens";;

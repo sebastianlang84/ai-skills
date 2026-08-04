@@ -25,6 +25,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- Changed `nightly-review-pipeline` to write findings into a marker-delimited managed block (`<!-- nightly-review:<lens>:start -->`) inside the repo's existing task and ideas files, instead of appending to hardcoded `todo.md` / `IDEAS.md`. The pipeline owns only that block and never touches surrounding content.
 - Tightened `git-workflow` release discipline: patch/minor/major impact now requires proposing the concrete next version number and expected tag name before push or closeout, and a version bump may not be pushed while silently omitting its matching release tag.
 - Decoupled `improve-codebase-architecture` from the `CONTEXT.md` domain model: it names modules from the project's own terms in the code instead of a maintained glossary, and no longer reads or writes `CONTEXT.md` or ADRs as part of its process.
 - Updated `newsletter-delivery` for the `market-digest-*` systemd unit names and added a Risk & Chance Radar private-test gate: a private Radar test counts as ready only after a final no-delivery end-to-end run produces and validates `risk_chance_radar.md`, never from renderer-only output or stale artifacts.
