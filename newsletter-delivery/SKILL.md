@@ -21,9 +21,9 @@ Use this skill for Market Digest/newsletter tasks: fetch latest output, check wh
 ## Safety defaults
 
 - **Default: do not send to the production Telegram channel.** Delivery requires an explicit operator instruction for this specific send.
-- Rendering tests may go to the operator's private Oberhummer Telegram DM via OpenClaw after explicit confirmation; derive the private chat id from recent inbound logs, but never print/store it.
+- Rendering tests may go to the operator's private Telegram DM after explicit confirmation, sent natively via `newsletter_writer.delivery.send_telegram` (Telegram Bot API). The DM chat id comes from `.env` (`NW_OPERATOR_TELEGRAM_CHAT_ID`); never print/store it. OpenClaw is removed — do not use it.
 - If the newsletter is stale, incomplete, contradictory, or unaudited: **abort/blocked, do not send**.
-- Never print or store Telegram token values. Token lives in `openclaw.json`/Telegram plugin config, not in `newsletter-writer`.
+- Never print or store Telegram token values. The bot token lives in the repo `.env` (`OPENCLAW_TELEGRAM_BOT_TOKEN` — legacy name, plain bot token; `NW_TELEGRAM_BOT_TOKEN`/`TELEGRAM_BOT_TOKEN` also accepted), read by `delivery.py`.
 - When this skill materially guides the answer, say so briefly (for example: `Skill genutzt: newsletter-delivery`).
 
 ## Sources
@@ -31,7 +31,7 @@ Use this skill for Market Digest/newsletter tasks: fetch latest output, check wh
 - Newsletter API: `http://localhost:8100/newsletters/latest` → `{ date, text }`
 - Risk Tracker API: `http://localhost:8100/risk-tracker` → `{ text }` (404 is non-blocking)
 - Pipeline status artifacts: `/home/wasti/ai_stack_data/newsletter-writer/runs/*/pipeline_status.json`
-- User systemd units: `ai-stack-news-pipeline.timer`, `ai-stack-news-pipeline.service`, `newsletter-writer.service`, `tm.service`
+- User systemd units: `market-digest-news-pipeline.timer`, `market-digest-news-pipeline.service`, `newsletter-writer.service`, `tm.service`
 - Protected production Telegram channel: `-1003676013069` (only use after explicit authorization)
 
 ## Workflow
@@ -60,7 +60,7 @@ For stale latest output, gather only safe metadata:
 
 1. Report latest newsletter date and today's UTC/local date.
 2. Find the last successful pipeline run and most recent failed runs under `/home/wasti/ai_stack_data/newsletter-writer/runs/*/pipeline_status.json`.
-3. Check `systemctl --user status ai-stack-news-pipeline.timer ai-stack-news-pipeline.service newsletter-writer.service tm.service --no-pager` when available.
+3. Check `systemctl --user status market-digest-news-pipeline.timer market-digest-news-pipeline.service newsletter-writer.service tm.service --no-pager` when available.
 4. Summarize only redacted metadata; do not paste raw `systemctl` output, raw artifact JSON, tokens, command lines containing secrets, or unredacted exception blobs.
 5. Classify the likely blocker:
    - `insufficient fresh newsletter inputs` → fresh-input coverage issue
@@ -102,19 +102,41 @@ Only after explicit authorization and only if freshness + audit pass, use the Te
 
 Telegram renders Markdown. The newsletter uses `**bold**` and `##` headings — send as-is.
 
-### 5b. Private Telegram rendering test via Oberhummer DM
+### 5b. Private Telegram Risk & Chance Radar test via Oberhummer DM
 
-For render/layout tests, avoid the production channel and send to the operator's private Oberhummer DM via OpenClaw. Use the helper so the chat-id extraction and redaction are not rediscovered each time:
+For `Risk & Chance Radar` private tests, **do not use renderer-only output, stale artifacts, or the current canonical tracker as proof of readiness**. A private Radar test is ready only after a final no-delivery end-to-end pipeline run produces and validates `risk_chance_radar.md`.
+
+Preferred repo smoke test:
+
+```bash
+# Validate only; never sends to production Telegram and never writes production artifacts.
+/home/wasti/dev/market-digest/scripts/ops/private-radar-smoke.sh
+
+# Send the validated final Radar to the private Oberhummer DM only after explicit operator approval.
+/home/wasti/dev/market-digest/scripts/ops/private-radar-smoke.sh --send-private
+```
+
+Required private-test gates:
+
+- run uses isolated temp `AI_STACK_DATA_DIR` and `send_delivery=False`
+- final `runs/<run_id>/risk_chance_radar.md` exists
+- `## 🟢 Top-Chancen` is present and not `(keine)` unless the operator explicitly accepts an empty-chance layout test
+- no visible `R-*`/`C-*` internal IDs
+- no Markdown bullet markers in the reader-facing Radar
+- one Telegram page (`<=4096` chars)
+- status shows `delivery_status=skipped_delivery_disabled`
+
+For ad-hoc non-Radar layout tests, avoid the production channel and send to the operator's private Telegram DM natively (via `delivery.py`, no OpenClaw). Use the helper so target resolution and redaction are not rediscovered each time:
 
 ```bash
 # dry-run first
-/home/wasti/.pi/agent/skills/newsletter-delivery/scripts/send_oberhummer_dm.sh /tmp/message.md
+/home/wasti/.agents/skills/newsletter-delivery/scripts/send_oberhummer_dm.sh /tmp/message.md
 
 # real send only after explicit operator confirmation
-/home/wasti/.pi/agent/skills/newsletter-delivery/scripts/send_oberhummer_dm.sh --send /tmp/message.md
+/home/wasti/.agents/skills/newsletter-delivery/scripts/send_oberhummer_dm.sh --send /tmp/message.md
 ```
 
-If the helper cannot find a recent direct inbound, ask the operator to DM the bot once. Oberhummer agent auth errors are non-blocking for pure `openclaw message send`.
+The helper reads the DM target and bot token from the repo `.env` (`NW_OPERATOR_TELEGRAM_CHAT_ID` + a bot-token env) and sends via `newsletter_writer.delivery.send_telegram`. It dry-runs by default (prints `dry_run=1 target=<private-dm> chars=N`, sends nothing); pass `--send` only after explicit operator confirmation. No OpenClaw log scraping, no daily DM bootstrapping, no chat id/token ever printed.
 
 ### 6. Report
 

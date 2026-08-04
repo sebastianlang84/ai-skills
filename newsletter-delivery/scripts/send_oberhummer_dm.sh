@@ -5,8 +5,13 @@ usage() {
   cat <<'EOF'
 Usage: send_oberhummer_dm.sh [--send] <message-file>
 
-Dry-runs by default. Use --send only after explicit operator confirmation.
-Sends via OpenClaw to the latest private/direct Telegram DM chat that messaged the bot.
+Dry-runs by default (prints target placeholder + char count, sends nothing).
+Use --send only after explicit operator confirmation.
+
+Sends natively via newsletter_writer.delivery.send_telegram (Telegram Bot API)
+to the operator's private DM. No OpenClaw dependency. The DM target and bot
+token are read from the repo .env; nothing is scraped from OpenClaw logs and
+no chat id / token is ever printed.
 EOF
 }
 
@@ -25,34 +30,49 @@ if [[ ! -f "${message_file}" ]]; then
   echo "ERROR: message file not found: ${message_file}" >&2
   exit 1
 fi
-if ! command -v openclaw >/dev/null 2>&1; then
-  echo "ERROR: openclaw CLI not found" >&2
-  exit 1
-fi
-if ! command -v rg >/dev/null 2>&1; then
-  echo "ERROR: rg not found" >&2
-  exit 1
+
+repo_root="/home/wasti/dev/market-digest"
+service_dir="${repo_root}/services/newsletter-writer"
+env_file="${repo_root}/.env"
+if [[ -f "${env_file}" ]]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "${env_file}"
+  set +a
 fi
 
-log_file="/tmp/openclaw/openclaw-$(date +%F).log"
-if [[ ! -f "${log_file}" ]]; then
-  echo "ERROR: OpenClaw log not found: ${log_file}" >&2
-  echo "Ask the operator to DM the bot once, then retry." >&2
-  exit 1
-fi
+MSG_FILE="${message_file}" SEND="${send}" \
+  "${service_dir}/.venv/bin/python" - <<'PY'
+import os
+import sys
 
-chat_id="$(rg -o 'Inbound message telegram:[0-9]+' "${log_file}" | tail -1 | sed 's/.*telegram://' || true)"
-if [[ -z "${chat_id}" ]]; then
-  echo "ERROR: no recent direct Telegram inbound found in ${log_file}" >&2
-  echo "Ask the operator to DM the bot once, then retry." >&2
-  exit 1
-fi
+sys.path.insert(0, "/home/wasti/dev/market-digest/services/newsletter-writer/src")
 
-args=(message send --channel telegram --target "${chat_id}" --message "$(cat "${message_file}")" --json)
-if [[ "${send}" != "1" ]]; then
-  args+=(--dry-run)
-fi
 
-# Redact chat ids and bot tokens from CLI output. Do not echo ${chat_id}.
-openclaw "${args[@]}" 2> >(sed -E 's/[0-9]{8,}/<id>/g; s/(bot)[0-9]+:[A-Za-z0-9_-]+/\1<TOKEN>/g' >&2) \
-  | sed -E 's/[0-9]{8,}/<id>/g; s/"to":"[^"]+"/"to":"<private-dm>"/g; s/"target":"[^"]+"/"target":"<private-dm>"/g'
+def first_env(keys):
+    for key in keys:
+        value = os.environ.get(key, "").strip()
+        if value:
+            return value
+    return ""
+
+
+chat_id = first_env(["NW_OPERATOR_TELEGRAM_CHAT_ID", "OPERATOR_TELEGRAM_CHAT_ID"])
+token = first_env(["NW_TELEGRAM_BOT_TOKEN", "OPENCLAW_TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_TOKEN"])
+if not chat_id:
+    print("ERROR: no operator DM chat id (set NW_OPERATOR_TELEGRAM_CHAT_ID)", file=sys.stderr)
+    sys.exit(1)
+if not token:
+    print("ERROR: no telegram bot token env set", file=sys.stderr)
+    sys.exit(1)
+
+text = open(os.environ["MSG_FILE"], encoding="utf-8").read()
+if os.environ.get("SEND") != "1":
+    print(f"dry_run=1 target=<private-dm> chars={len(text)} (no message sent)")
+    sys.exit(0)
+
+from newsletter_writer.delivery import send_telegram
+
+send_telegram(text, channel_id=chat_id, bot_token=token)
+print("private_send=sent (native delivery.py, operator DM)")
+PY

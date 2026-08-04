@@ -27,6 +27,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 - Tightened `git-workflow` release discipline: patch/minor/major impact now requires proposing the concrete next version number and expected tag name before push or closeout, and a version bump may not be pushed while silently omitting its matching release tag.
 - Decoupled `improve-codebase-architecture` from the `CONTEXT.md` domain model: it names modules from the project's own terms in the code instead of a maintained glossary, and no longer reads or writes `CONTEXT.md` or ADRs as part of its process.
+- Updated `newsletter-delivery` for the `market-digest-*` systemd unit names and added a Risk & Chance Radar private-test gate: a private Radar test counts as ready only after a final no-delivery end-to-end run produces and validates `risk_chance_radar.md`, never from renderer-only output or stale artifacts.
 - Hardened `newsletter-delivery` with explicit production-send authorization, stale-run diagnosis guidance, safe Telegram/Oberhummer DM render-test helper, and redaction rules.
 - Renamed `subagent-workflow` to `pi-subagents` and narrowed it to Pi-specific orchestration policy that complements the `subagent` extension's built-in tool guidance.
 - Clarified `managing-agent-context` mental model for AGENTS.md primacy, skill recency, subagent prompt/context engineering, and meta-skill audit value.
