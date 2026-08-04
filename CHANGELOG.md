@@ -8,6 +8,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Added
 
+- Added `diagnosing-bugs`: a six-phase discipline for hard bugs, flaky failures, and performance regressions. Its rule is that no hypothesis may be formed until one named command exists that has already been run and goes **red** on this specific bug — tight, deterministic, fast, agent-runnable. Loop recipes are written for this machine (curl against a running service, `docker compose run --rm`, the unit command from `systemctl --user cat` in the foreground, bisecting image tags), because system log access here is restricted. Adapted from Matt Pocock's `diagnosing-bugs` skill (MIT).
 - Added `grilling`: the reusable relentless-interview loop, run before acting on a plan. Separates *facts* (the agent looks them up) from *decisions* (put to the user, one question at a time, each with a recommended answer), and ends on an explicit confirmation gate so nothing is built before shared understanding is reached. Adapted from Matt Pocock's `grilling` skill (MIT).
 - Tracked `autoresearch`, `evaluating-local-tools`, and `releasing-pi-packages`, which existed in the working tree but had never been committed.
 - Added `nightly-review-pipeline` to set up an unattended overnight review+fix pipeline (systemd/cron + bash orchestrator + headless `claude -p`) with bug and usability lenses, adaptive backoff, and safe auto-fix draft PRs (isolated worktree, tests-green gate, never main, never auto-merge).
