@@ -13,15 +13,18 @@ Use this skill to perform fast, read-only update checks for operator-selected to
 2. Run the checker script:
 
 ```bash
-python3 ~/.pi/agent/skills/tool-update-checker/scripts/check_updates.py
+python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py
 ```
 
 Useful flags:
 
 ```bash
-python3 ~/.pi/agent/skills/tool-update-checker/scripts/check_updates.py --format json
-python3 ~/.pi/agent/skills/tool-update-checker/scripts/check_updates.py --group pi
-python3 ~/.pi/agent/skills/tool-update-checker/scripts/check_updates.py --config /path/to/tools.toml
+python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --format json
+python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --group pi
+python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --actionable-only
+python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --actionable-only --exit-code
+python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --actionable-only --notify
+python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --config /path/to/tools.toml
 ```
 
 3. Summarize only the actionable results:
@@ -31,7 +34,9 @@ python3 ~/.pi/agent/skills/tool-update-checker/scripts/check_updates.py --config
    - local-changed
    - missing / error
    - info entries that need `current` to compare
-4. Stay read-only unless the user explicitly asks to perform updates.
+4. For scheduled checks, prefer `--actionable-only --exit-code` so cron/systemd can report only when attention is needed.
+5. Use `--notify` only for local desktop notifications via `notify-send`; no scheduler or remote notification is configured by this skill.
+6. Stay read-only unless the user explicitly asks to perform updates.
 
 ## Supported tool kinds
 
@@ -87,7 +92,7 @@ Validates an installed local skill folder without checking a remote source.
 Required fields:
 - `name`
 - `kind = "skill-local"`
-- `path` to the skill folder, unless it is `~/.pi/agent/skills/<name>`
+- `path` to the skill folder, unless it is `~/.agents/skills/<name>`
 
 Optional fields:
 - `skill` or `expected_name` when the display name differs from the frontmatter `name`
@@ -120,8 +125,27 @@ Notes:
 - remote comparison is repo-level; `source_path` scopes local dirty checks and output labels, not remote diffing
 
 Good for:
-- the global ai-skills checkout
+- one important skill that needs individual reporting
 - personal GitHub-hosted skills installed from local clones
+
+### `skills-root-git`
+Validates every direct child skill in a local skills root and compares the owning Git repo with a remote branch.
+
+Required fields:
+- `name`
+- `kind = "skills-root-git"`
+- `path` to a directory containing direct child skill folders
+
+Optional fields:
+- `repo_path` when the skills root is not inside the source Git checkout
+- `remote` (default `origin`)
+- `branch` (defaults to current branch)
+- `source_path` (defaults to the skills root path relative to the repo root; set it when `repo_path` is separate)
+- `groups = ["..."]`
+
+Good for:
+- the global `~/.agents/skills` checkout
+- repo-local skill collections such as `<repo>/.agents/skills`
 
 ### `skills-sh`
 Validates a local skill folder and checks the latest source commit advertised by skills.sh.
@@ -146,6 +170,7 @@ Good for:
 
 - For pi packages installed via `pi install`, inspect `~/.pi/agent/settings.json` first.
 - npm-based pi packages can usually be tracked as `npm-global` entries.
+- Skills are not auto-discovered today; add explicit `skill-git`, `skills-root-git`, or `skills-sh` entries for every managed skill source.
 - Auto-discovered local extensions in `~/.pi/agent/extensions/` only become update-checkable when you know their package name or upstream repository.
 
 ## Editing policy

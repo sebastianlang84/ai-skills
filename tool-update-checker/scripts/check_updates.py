@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -16,6 +17,7 @@ from typing import Any
 
 DEFAULT_CONFIG = Path("~/.config/tool-update-checker/tools.toml").expanduser()
 USER_AGENT = "tool-update-checker/0.1"
+ACTIONABLE_STATUSES = {"update-available", "remote-changed", "local-changed", "missing", "error"}
 
 
 @dataclass
@@ -70,7 +72,7 @@ def configured_skill_path(tool: dict[str, Any]) -> Path:
     if tool.get("path"):
         return expand_path(str(tool["path"]))
     skill = str(tool.get("skill") or tool.get("name") or "")
-    return expand_path(f"~/.pi/agent/skills/{skill}")
+    return expand_path(f"~/.agents/skills/{skill}")
 
 
 def expected_skill_name(tool: dict[str, Any], skill_path: Path) -> str:
@@ -316,6 +318,87 @@ def check_skill_local(tool: dict[str, Any]) -> Result:
     return Result(name, "skill-local", f"{actual}@local", "valid", status, "; ".join(note_parts))
 
 
+def validate_skill_collection(root_path: Path, kind: str, name: str) -> tuple[list[str], list[str]] | Result:
+    if not root_path.exists():
+        return Result(name, kind, "missing", "valid", "missing", str(root_path))
+    if not root_path.is_dir():
+        return Result(name, kind, "invalid", "valid", "error", f"not a directory: {root_path}")
+
+    skill_files = sorted(root_path.glob("*/SKILL.md"))
+    if not skill_files:
+        return Result(name, kind, "0 skills", "valid", "error", f"no direct child SKILL.md files found in {root_path}")
+
+    valid: list[str] = []
+    errors: list[str] = []
+    for skill_file in skill_files:
+        skill_path = skill_file.parent
+        expected = skill_path.name
+        try:
+            frontmatter = parse_skill_frontmatter(skill_path)
+        except Exception as e:  # noqa: BLE001
+            errors.append(f"{expected}: {e}")
+            continue
+        actual = frontmatter.get("name") or ""
+        if actual != expected:
+            errors.append(f"{expected}: frontmatter name is {actual or 'unknown'}")
+            continue
+        if not frontmatter.get("description"):
+            errors.append(f"{expected}: frontmatter description is missing")
+            continue
+        valid.append(actual)
+
+    return valid, errors
+
+
+def check_skills_root_git(tool: dict[str, Any]) -> Result:
+    name = str(tool.get("name") or "skills-root")
+    root_path = expand_path(str(tool["path"]))
+    validated = validate_skill_collection(root_path, "skills-root-git", name)
+    if isinstance(validated, Result):
+        return validated
+    valid, errors = validated
+    total = len(valid) + len(errors)
+    if errors:
+        shown = "; ".join(errors[:5])
+        more = "" if len(errors) <= 5 else f"; +{len(errors) - 5} more"
+        return Result(name, "skills-root-git", f"{len(valid)} valid/{total} skills", "valid", "error", shown + more)
+
+    repo_path = expand_path(str(tool["repo_path"])) if tool.get("repo_path") else git_repo_root(root_path)
+    if not repo_path or not repo_path.exists():
+        return Result(name, "skills-root-git", f"{total} skills@local", "unknown", "error", "skills root is not inside a git repo; set repo_path")
+
+    branch = str(tool.get("branch") or git_current_branch(repo_path))
+    remote = str(tool.get("remote") or "origin")
+    local_short, local_full = git_head_sha(repo_path)
+    remote_full = git_remote_sha(repo_path, remote, branch)
+    remote_url = git_remote_url_or_value(repo_path, remote)
+
+    installed_repo_path = git_repo_root(root_path)
+    installed_dirty = git_dirty_summary(installed_repo_path, root_path) if installed_repo_path else ""
+    source_path = str(tool.get("source_path") or relative_path_if_inside(root_path, repo_path) or root_path.name)
+    source_local_path = repo_path / source_path
+    if relative_path_if_inside(source_local_path, repo_path) is None:
+        return Result(name, "skills-root-git", f"{total} skills@local", "unknown", "error", f"source_path escapes repo_path: {source_path}")
+    if not source_local_path.exists():
+        return Result(name, "skills-root-git", f"{total} skills@local", "unknown", "error", f"source_path not found in repo_path: {source_path}; set source_path explicitly")
+    same_local_path = source_local_path.resolve() == root_path.resolve()
+    source_dirty = "" if same_local_path else git_dirty_summary(repo_path, source_local_path)
+    dirty = "; ".join(part for part in [installed_dirty, source_dirty] if part)
+
+    status = "local-changed" if dirty else ("up-to-date" if local_full == remote_full else "remote-changed")
+    note_parts = [f"{remote}/{branch} {remote_url}", f"skills: {total}", f"installed: {root_path}", f"source_path: {source_path}"]
+    if dirty:
+        note_parts.append(dirty)
+    return Result(
+        name,
+        "skills-root-git",
+        f"{total} skills@{branch}@{local_short}",
+        f"{total} skills@{branch}@{short_sha(remote_full)}",
+        status,
+        "; ".join(note_parts),
+    )
+
+
 def check_skill_git(tool: dict[str, Any]) -> Result:
     validated = validate_skill_folder(tool, "skill-git")
     if isinstance(validated, Result):
@@ -432,6 +515,7 @@ CHECKERS = {
     "github-release": check_github_release,
     "skill-local": check_skill_local,
     "skill-git": check_skill_git,
+    "skills-root-git": check_skills_root_git,
     "skills-sh": check_skills_sh,
 }
 
@@ -488,11 +572,40 @@ def to_markdown(results: list[Result]) -> str:
     return "\n".join(lines)
 
 
+def actionable_results(results: list[Result]) -> list[Result]:
+    return [result for result in results if result.status in ACTIONABLE_STATUSES]
+
+
+def notify(results: list[Result]) -> bool:
+    if not results:
+        return True
+    notify_send = shutil.which("notify-send")
+    if not notify_send:
+        print("notify-send not found; skipping desktop notification", file=sys.stderr)
+        return False
+
+    counts: dict[str, int] = {}
+    for result in results:
+        counts[result.status] = counts.get(result.status, 0) + 1
+    summary = ", ".join(f"{count} {status}" for status, count in sorted(counts.items()))
+    names = ", ".join(result.name for result in results[:5])
+    if len(results) > 5:
+        names += f", +{len(results) - 5} more"
+    proc = run([notify_send, "Tool updates need attention", f"{summary}: {names}"], timeout=10)
+    if proc.returncode != 0:
+        print(proc.stderr.strip() or proc.stdout.strip() or "notify-send failed", file=sys.stderr)
+        return False
+    return True
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Check local tools for available updates")
     parser.add_argument("--config", default=str(DEFAULT_CONFIG), help="Path to tools.toml")
     parser.add_argument("--format", choices=["table", "markdown", "json"], default="table")
     parser.add_argument("--group", action="append", default=[], help="Only check tools that belong to this group; repeatable")
+    parser.add_argument("--actionable-only", action="store_true", help="Only print results that need attention")
+    parser.add_argument("--exit-code", action="store_true", help="Exit 1 when any actionable result is found")
+    parser.add_argument("--notify", action="store_true", help="Send a desktop notification with actionable results via notify-send")
     return parser.parse_args()
 
 
@@ -515,14 +628,26 @@ def main() -> int:
         return 2
 
     results = [check_tool(tool) for tool in tools]
+    actionable = actionable_results(results)
+    display_results = actionable if args.actionable_only else results
 
-    if args.format == "json":
-        print(json.dumps([asdict(r) for r in results], indent=2))
-    elif args.format == "markdown":
-        print(to_markdown(results))
+    if display_results:
+        if args.format == "json":
+            print(json.dumps([asdict(r) for r in display_results], indent=2))
+        elif args.format == "markdown":
+            print(to_markdown(display_results))
+        else:
+            print(to_table(display_results))
+    elif args.format == "json":
+        print("[]")
     else:
-        print(to_table(results))
+        print("No actionable tool updates found." if args.actionable_only else "No tool results to display.")
 
+    notified = notify(actionable) if args.notify else True
+    if args.notify and actionable and not notified:
+        return 2
+    if args.exit_code and actionable:
+        return 1
     return 0
 
 
