@@ -112,7 +112,16 @@ Use only what the skill needs:
 
 Avoid empty directories. Link important references directly from `SKILL.md`; avoid deep reference chains. Give long references a short table of contents.
 
-### 4. Write `SKILL.md`
+### 4. Choose the invocation
+
+Decide before writing, because it changes what the description is for.
+
+- **Model-invoked** (default): keep the `description`. The agent can fire the skill itself and other skills can reach it — at the cost of that description sitting in the context window every turn. Write it as triggers, one per branch.
+- **User-invoked** (`disable-model-invocation: true`): only the human typing `/name` starts it. The description becomes a one-line human summary. Choose this when the skill sends, publishes, deletes, or installs something, or when it only ever fires by hand.
+
+Neither is free — one spends context, the other spends the user's memory. See `references/skill-design-theory.md` for the full trade-off and the router-skill cure when user-invoked skills multiply.
+
+### 5. Write `SKILL.md`
 
 Frontmatter and naming requirements:
 
@@ -133,13 +142,19 @@ In the body:
 - state whether scripts should be executed or read as reference
 - isolate runtime-specific instructions under clear adapter labels
 
-### 5. Keep the core portable
+### 6. Prune before finishing
+
+Read the draft once for what it costs, not what it says. Run the no-op test **sentence by sentence**: does this change behaviour versus what the model does by default? Delete whole sentences that fail rather than trimming them. Then check that each meaning has exactly one home, and that every prohibition is either phrased as the positive target behaviour or is a genuine hard guardrail on something irreversible.
+
+Full pass and the failure modes it catches: `references/skill-design-theory.md`.
+
+### 7. Keep the core portable
 
 Default to agent-agnostic guidance. If the user targets Claude, Codex, Cursor, Pi, or another runtime, add adapter notes without making them the universal workflow.
 
 Read `references/agent_adapters.md` when adding runtime-specific adapters or deciding portability trade-offs.
 
-### 6. Validate after meaningful edits
+### 8. Validate after meaningful edits
 
 Run:
 
@@ -169,6 +184,7 @@ Read extra resources only when the task needs them. Do not load the large best-p
 
 - `references/anthropic_skill_best_practices.md`: structure, descriptions, progressive disclosure, scripts, evaluation loops
 - `references/progressive_skill_best_practices_supabase_workshop.md`: Skill vs MCP/CLI boundaries, production/security-sensitive skills, progressive context strategy, eval-driven improvement; translate examples to Pi conventions
+- `references/skill-design-theory.md`: why a skill works — invocation trade-offs, information hierarchy, completion criteria, leading words, and the failure modes (no-op, negation, premature completion, sediment, sprawl). Read it when writing a new skill, when one fires unreliably, or when one has grown and needs cutting.
 - `references/agent_adapters.md`: adapter policy and portability trade-offs
 - `references/schemas.md`: JSON shapes used by bundled evaluation tools
 - `scripts/quick_validate.py`: neutral structural validator; execute it after meaningful edits
