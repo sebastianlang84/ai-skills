@@ -37,15 +37,34 @@ def validate_skill(skill_path):
     except yaml.YAMLError as e:
         return False, f"Invalid YAML in frontmatter: {e}"
 
-    # Define allowed properties
+    # Properties defined by the portable Agent Skills standard
     ALLOWED_PROPERTIES = {'name', 'description', 'license', 'allowed-tools', 'metadata', 'compatibility'}
 
+    # Claude Code extends the standard with these. They are accepted, but a skill
+    # using them is Claude-Code-specific and will be ignored by other harnesses.
+    HARNESS_PROPERTIES = {
+        'claude-code': {
+            'disable-model-invocation', 'user-invocable', 'when_to_use', 'argument-hint',
+            'arguments', 'disallowed-tools', 'model', 'effort', 'context', 'agent',
+            'background', 'hooks', 'paths', 'shell',
+        },
+    }
+
+    notes = []
+
     # Check for unexpected properties (excluding nested keys under metadata)
-    unexpected_keys = set(frontmatter.keys()) - ALLOWED_PROPERTIES
+    keys = set(frontmatter.keys())
+    unexpected_keys = keys - ALLOWED_PROPERTIES
+    for harness, props in HARNESS_PROPERTIES.items():
+        used = sorted(unexpected_keys & props)
+        if used:
+            notes.append(f"{harness}-specific frontmatter: {', '.join(used)} (ignored by other harnesses)")
+        unexpected_keys -= props
     if unexpected_keys:
+        known = ALLOWED_PROPERTIES | set().union(*HARNESS_PROPERTIES.values())
         return False, (
             f"Unexpected key(s) in SKILL.md frontmatter: {', '.join(sorted(unexpected_keys))}. "
-            f"Allowed properties are: {', '.join(sorted(ALLOWED_PROPERTIES))}"
+            f"Allowed properties are: {', '.join(sorted(known))}"
         )
 
     # Check required fields
@@ -90,6 +109,8 @@ def validate_skill(skill_path):
         if len(compatibility) > 500:
             return False, f"Compatibility is too long ({len(compatibility)} characters). Maximum is 500 characters."
 
+    if notes:
+        return True, "Skill is valid! Note: " + "; ".join(notes)
     return True, "Skill is valid!"
 
 if __name__ == "__main__":
