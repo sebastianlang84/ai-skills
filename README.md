@@ -1,12 +1,14 @@
 # ai-skills
 
-Reusable AI/agent skills. This repository is laid out as the active Pi global skill store.
+Reusable AI/agent skills. This repository is the active global skill store.
 
 On this machine, the canonical checkout/runtime path is:
 
 ```text
-~/.pi/agent/skills
+~/.agents/skills
 ```
+
+Harness-specific skill directories are symlinks into it, not separate stores — currently `~/.claude/skills` → `~/.agents/skills`.
 
 Do not keep a second global skill store. Repo-local skills, when needed, belong under a consuming repo's `.agents/skills/` directory.
 
@@ -23,17 +25,17 @@ _scripts/         # repo-level validation/enforcement helpers, not a skill
 .githooks/        # local Git hooks
 README.md         # repo documentation
 CHANGELOG.md      # operator-facing changes
-.ignore           # excludes repo docs from Pi skill discovery
+.ignore           # excludes repo docs from skill discovery
 ```
 
 Treat each `<skill-name>/` directory as the portable artifact. Skill-local helper scripts belong under that skill's `scripts/` directory. Repo-maintenance scripts belong in the root `_scripts/` directory; there is intentionally no root `scripts/` directory.
 
-This repo is checked out directly at `~/.pi/agent/skills`, so Pi discovers skill folders from the repo root. Pi also discovers direct root `*.md` files in `~/.pi/agent/skills/` as individual skills; this repo keeps `README.md` and `CHANGELOG.md` out of skill discovery via the root `.ignore` file.
+This repo is checked out directly at `~/.agents/skills`, so consuming harnesses discover skill folders from the repo root. Because some harnesses also treat root `*.md` files as individual skills, this repo keeps `README.md` and `CHANGELOG.md` out of skill discovery via the root `.ignore` file.
 
 Validate a skill after edits:
 
 ```bash
-python3 ~/.pi/agent/skills/skill-creator/scripts/quick_validate.py <skill-name>
+python3 ~/.agents/skills/skill-creator/scripts/quick_validate.py <skill-name>
 ```
 
 Validate repo metadata after README, CHANGELOG, hook, CI, or skill-list changes:

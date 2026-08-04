@@ -37,7 +37,7 @@ Use the smallest structure that solves the recurring task.
 
 Default to:
 
-- global: `~/.pi/agent/skills/<skill-name>/`
+- global: `~/.agents/skills/<skill-name>/`
 - repo-local: `<repo>/.agents/skills/<skill-name>/`
 
 Treat other runtime-specific entrypoints, symlinks, metadata files, or discovery hooks as adapter glue unless the user explicitly chooses them as source of truth.
@@ -59,8 +59,8 @@ For simple inventory or installation checks, inspect files directly; do not inve
 Useful local inventory commands:
 
 ```bash
-find ~/.pi/agent/skills .agents/skills -maxdepth 2 -name SKILL.md 2>/dev/null
-rg '^name:|^description:' ~/.pi/agent/skills .agents/skills 2>/dev/null
+find ~/.agents/skills .agents/skills -maxdepth 2 -name SKILL.md 2>/dev/null
+rg '^name:|^description:' ~/.agents/skills .agents/skills 2>/dev/null
 ```
 
 Optional third-party discovery commands may help when requested and trusted; `npx` can fetch/execute external code, so get user approval before running it:
@@ -72,7 +72,7 @@ npx skills check
 npx skills update
 ```
 
-On this machine the canonical global store is `~/.pi/agent/skills/`; if tooling writes to `~/.agents/skills/`, relocate rather than maintain two global stores.
+On this machine the canonical global store is `~/.agents/skills/`, as declared in the global `AGENTS.md`. Harness-specific directories such as `~/.claude/skills` are symlinks into it, not separate stores. If tooling writes a second global store elsewhere, relocate rather than maintain two.
 
 ## Required workflow
 
@@ -144,7 +144,7 @@ Read `references/agent_adapters.md` when adding runtime-specific adapters or dec
 Run:
 
 ```bash
-python3 /home/wasti/.pi/agent/skills/skill-creator/scripts/quick_validate.py <path/to/skill-folder>
+python3 ~/.agents/skills/skill-creator/scripts/quick_validate.py <path/to/skill-folder>
 ```
 
 This checks structure and frontmatter; it does not prove the skill is useful. For important skills, also test realistic tasks and compare behavior before/after the skill.

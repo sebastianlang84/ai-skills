@@ -19,6 +19,10 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 - Removed `grill-me` and `grill-with-docs`. `grill-with-docs` coupled grilling to a `CONTEXT.md` domain model that this collection no longer maintains (see the matching `improve-codebase-architecture` change); `grill-me` was a wrapper whose only remaining primitive, `grilling`, is directly invocable.
 - Removed `pi-subagents`. It was entirely Pi-specific orchestration policy, and Pi no longer consumes this skill store.
 
+### Fixed
+
+- Corrected the canonical global skill store path from `~/.pi/agent/skills` to `~/.agents/skills` across `README.md`, `skill-creator`, and `skill-creator/references/agent_adapters.md`. The old path does not exist on this machine, so the documented validation command could not run and `skill-creator` instructed agents to relocate skills to a missing directory, contradicting the global `AGENTS.md`.
+
 ### Changed
 
 - Hardened `newsletter-delivery` with explicit production-send authorization, stale-run diagnosis guidance, safe Telegram/Oberhummer DM render-test helper, and redaction rules.
