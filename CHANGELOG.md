@@ -26,6 +26,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 ### Changed
 
 - Taught `skill-creator`'s validator to accept Claude Code's frontmatter extensions (`disable-model-invocation`, `model`, `effort`, `paths`, `context`, …) instead of rejecting them as unknown keys. They now pass with a note that the skill is Claude-Code-specific; genuinely unknown keys still fail. This unblocks marking skills user-invoked.
+- Corrected the `nightly-review-pipeline` description, which still promised findings in `todo.md` / `IDEAS.md` after the move to a managed block in the repo's own files.
 - Changed `nightly-review-pipeline` to write findings into a marker-delimited managed block (`<!-- nightly-review:<lens>:start -->`) inside the repo's existing task and ideas files, instead of appending to hardcoded `todo.md` / `IDEAS.md`. The pipeline owns only that block and never touches surrounding content.
 - Tightened `git-workflow` release discipline: patch/minor/major impact now requires proposing the concrete next version number and expected tag name before push or closeout, and a version bump may not be pushed while silently omitting its matching release tag.
 - Decoupled `improve-codebase-architecture` from the `CONTEXT.md` domain model: it names modules from the project's own terms in the code instead of a maintained glossary, and no longer reads or writes `CONTEXT.md` or ADRs as part of its process.
