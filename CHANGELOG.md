@@ -8,9 +8,16 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Added
 
+- Added `grilling`: the reusable relentless-interview loop, run before acting on a plan. Separates *facts* (the agent looks them up) from *decisions* (put to the user, one question at a time, each with a recommended answer), and ends on an explicit confirmation gate so nothing is built before shared understanding is reached. Adapted from Matt Pocock's `grilling` skill (MIT).
+- Tracked `autoresearch`, `evaluating-local-tools`, and `releasing-pi-packages`, which existed in the working tree but had never been committed.
 - Added `nightly-review-pipeline` to set up an unattended overnight review+fix pipeline (systemd/cron + bash orchestrator + headless `claude -p`) with bug and usability lenses, adaptive backoff, and safe auto-fix draft PRs (isolated worktree, tests-green gate, never main, never auto-merge).
 - Added `code-documentation` to route documentation updates after code changes and keep PRD, README, changelog, TODO, AGENTS, and memory roles separate.
 - Clarified the `code-documentation` goal so README, changelog, and TODO updates remain encouraged when they match each artifact's role.
+
+### Removed
+
+- Removed `grill-me` and `grill-with-docs`. `grill-with-docs` coupled grilling to a `CONTEXT.md` domain model that this collection no longer maintains (see the matching `improve-codebase-architecture` change); `grill-me` was a wrapper whose only remaining primitive, `grilling`, is directly invocable.
+- Removed `pi-subagents`. It was entirely Pi-specific orchestration policy, and Pi no longer consumes this skill store.
 
 ### Changed
 
