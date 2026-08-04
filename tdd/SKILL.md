@@ -13,6 +13,8 @@ description: Test-driven development with red-green-refactor loop. Use when user
 
 **Bad tests** are coupled to implementation. They mock internal collaborators, test private methods, or verify through external means (like querying a database directly instead of using the interface). The warning sign: your test breaks when you refactor, but behavior hasn't changed. If you rename an internal function and tests fail, those tests were testing implementation, not behavior.
 
+**Tautological tests** are the other way to write a worthless test: the expected value is derived the same way the code derives it, so the assertion passes by construction and can never fail. Expected values must come from an independent source of truth — a known-good literal, a worked example, the spec.
+
 See [tests.md](tests.md) for examples and [mocking.md](mocking.md) for mocking guidelines.
 
 ## Anti-Pattern: Horizontal Slices
@@ -44,12 +46,16 @@ RIGHT (vertical):
 
 ### 1. Planning
 
-When exploring the codebase, use the project's domain glossary so that test names and interface vocabulary match the project's language, and respect ADRs in the area you're touching.
+When exploring the codebase, take test names and interface vocabulary from the project's own terms in the code, so the tests read in the same language as what they exercise.
+
+**Agree the seams first.** A **seam** is the public boundary a test observes behaviour through, without reaching inside. Before writing any test, write down which seams you intend to test and confirm them with the user. No test is written at an unconfirmed seam — you can't test everything, and agreeing the seams up front is how the effort lands on critical paths instead of every edge case.
+
+Ask: "What's the public interface, and which seams should we test?"
 
 Before writing any code:
 
 - [ ] Confirm with user what interface changes are needed
-- [ ] Confirm with user which behaviors to test (prioritize)
+- [ ] Confirm with user which seams are under test
 - [ ] Identify opportunities for [deep modules](deep-modules.md) (small interface, deep implementation)
 - [ ] Design interfaces for [testability](interface-design.md)
 - [ ] List the behaviors to test (not implementation steps)
@@ -102,8 +108,9 @@ After all tests pass, look for [refactor candidates](refactoring.md):
 
 ```
 [ ] Test describes behavior, not implementation
-[ ] Test uses public interface only
+[ ] Test uses public interface only, at a pre-agreed seam
 [ ] Test would survive internal refactor
+[ ] Expected value comes from an independent source, not recomputed like the code
 [ ] Code is minimal for this test
 [ ] No speculative features added
 ```

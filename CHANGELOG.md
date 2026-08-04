@@ -27,6 +27,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- Added the tautological-test anti-pattern to `tdd` — an assertion whose expected value is recomputed the way the code computes it passes by construction and can never fail. Distinct from implementation coupling, and previously not covered at all. Also introduced **seam** as the unit to agree before testing ("no test at an unconfirmed seam"), and dropped the last reference to a project domain glossary this collection no longer maintains.
 - Marked `newsletter-delivery`, `releasing-pi-packages`, and `nightly-review-pipeline` user-invoked (`disable-model-invocation`). Each one sends, publishes, or installs a systemd timer, so it should fire only when typed — not when the model infers it from prose.
 - Shortened the `autoresearch`, `nightly-review-pipeline`, `releasing-pi-packages`, and `newsletter-delivery` descriptions to one trigger per branch. Descriptions load into context on every turn, and these four carried 2,019 characters between them; they now carry 710, with the same reach.
 - Taught `skill-creator`'s validator to accept Claude Code's frontmatter extensions (`disable-model-invocation`, `model`, `effort`, `paths`, `context`, …) instead of rejecting them as unknown keys. They now pass with a note that the skill is Claude-Code-specific; genuinely unknown keys still fail. This unblocks marking skills user-invoked.
