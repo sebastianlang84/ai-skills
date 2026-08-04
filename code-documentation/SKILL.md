@@ -91,25 +91,28 @@ Avoid using PRDs for:
 
 ## ADR threshold
 
-Create or update an ADR only for decisions with lasting consequences, such as storage choices, public contracts, major dependencies, security boundaries, deployment model, data model, or architecture direction.
+Offer an ADR only when **all three** hold:
 
-Minimal ADR shape:
+1. **Hard to reverse** — changing your mind later carries real cost.
+2. **Surprising without context** — a future reader will look at the code and wonder "why on earth did they do it this way?"
+3. **The result of a real trade-off** — there were genuine alternatives and you picked one for specific reasons.
+
+If it is easy to reverse, you will just reverse it. If it is not surprising, nobody will wonder. If there was no alternative, there is nothing to record beyond "we did the obvious thing."
+
+What typically qualifies: architectural shape, integration patterns between components, technology choices carrying lock-in (the ones that would take a quarter to swap, not every library), ownership and scope boundaries — the explicit no's as much as the yes's — deliberate deviations from the obvious path ("manual SQL instead of an ORM because X", which stops the next engineer from "fixing" it), constraints invisible in the code (compliance, a partner's response-time contract), and non-obvious rejected alternatives.
+
+Keep it short. An ADR can be a single paragraph — the value is recording *that* a decision was made and *why*, not filling in sections.
 
 ```md
-# ADR-0001: Use SQLite for local storage
+# Use SQLite for local storage
 
-## Status
-Accepted
-
-## Context
-...
-
-## Decision
-...
-
-## Consequences
-...
+Ruled out Postgres because the tool must run with no service to install.
+SQLite's single-writer limit is acceptable: writes only happen during indexing.
 ```
+
+Add `Status` (`proposed | accepted | deprecated | superseded by ADR-NNNN`) when decisions get revisited, `Considered Options` when the rejected alternatives are worth remembering, and `Consequences` when non-obvious downstream effects need calling out. Most ADRs need none of them.
+
+Number sequentially: scan the ADR directory for the highest number and increment.
 
 ## CHANGELOG threshold
 
