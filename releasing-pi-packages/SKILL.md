@@ -1,6 +1,7 @@
 ---
 name: releasing-pi-packages
-description: "Release a Pi extension or Pi package from a local Git repo. Use when preparing, versioning, tagging, packing, or pushing releases for Pi packages/extensions after code changes are verified. Extends generic git workflow with Pi/package-specific checks such as package.json pi manifest, changelog, npm pack dry-run, extension/tool tests, and post-release indexing notes. Do not use for ordinary code edits or non-Pi package releases."
+description: "Release a Pi extension or package from a local Git repo: verify, version, changelog, pack, tag, push."
+disable-model-invocation: true
 ---
 
 # Releasing Pi Packages

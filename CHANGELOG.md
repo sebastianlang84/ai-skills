@@ -25,6 +25,8 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- Marked `newsletter-delivery`, `releasing-pi-packages`, and `nightly-review-pipeline` user-invoked (`disable-model-invocation`). Each one sends, publishes, or installs a systemd timer, so it should fire only when typed — not when the model infers it from prose.
+- Shortened the `autoresearch`, `nightly-review-pipeline`, `releasing-pi-packages`, and `newsletter-delivery` descriptions to one trigger per branch. Descriptions load into context on every turn, and these four carried 2,019 characters between them; they now carry 710, with the same reach.
 - Taught `skill-creator`'s validator to accept Claude Code's frontmatter extensions (`disable-model-invocation`, `model`, `effort`, `paths`, `context`, …) instead of rejecting them as unknown keys. They now pass with a note that the skill is Claude-Code-specific; genuinely unknown keys still fail. This unblocks marking skills user-invoked.
 - Corrected the `nightly-review-pipeline` description, which still promised findings in `todo.md` / `IDEAS.md` after the move to a managed block in the repo's own files.
 - Changed `nightly-review-pipeline` to write findings into a marker-delimited managed block (`<!-- nightly-review:<lens>:start -->`) inside the repo's existing task and ideas files, instead of appending to hardcoded `todo.md` / `IDEAS.md`. The pipeline owns only that block and never touches surrounding content.

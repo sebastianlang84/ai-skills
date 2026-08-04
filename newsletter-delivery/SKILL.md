@@ -1,6 +1,7 @@
 ---
 name: newsletter-delivery
-description: Fetch the Market Digest, check freshness, diagnose stale newsletter runs, audit content, and optionally deliver via Telegram only after explicit operator authorization.
+description: Fetch and audit the Market Digest, diagnose stale runs, and deliver via Telegram only after explicit authorization.
+disable-model-invocation: true
 metadata:
   openclaw:
     emoji: "🦞"

@@ -1,6 +1,7 @@
 ---
 name: nightly-review-pipeline
-description: Set up an unattended overnight code-review-and-fix pipeline on a Linux server. Use when the user wants scheduled/nightly automated reviews of one or more git repos that record findings into the repo's own task and ideas files and optionally open auto-fix draft pull requests, driven by a systemd timer (or cron) + a bash orchestrator + headless `claude -p`. Covers the review "lenses" (bug screening, usability/functionality), adaptive scheduling with backoff, git/PR policy, and safety guardrails for unattended agent runs. Not for one-off interactive reviews (use /code-review) or Anthropic cloud routines (use /schedule).
+description: Set up an unattended overnight code-review-and-fix pipeline for one or more git repos — systemd timer, bash orchestrator, headless `claude -p`.
+disable-model-invocation: true
 ---
 
 # Nightly review pipeline

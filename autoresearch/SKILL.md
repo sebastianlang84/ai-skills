@@ -1,6 +1,6 @@
 ---
 name: autoresearch
-description: "Use when the user mentions autoresearch, or when an improvement request explicitly needs a measurable baseline plus repeatable evaluation/benchmark/rubric to compare variants. Autoresearch turns optimization work into controlled loops: define a goal, freeze metrics and cases, form hypotheses, change one lever at a time, run evaluations, log quantitative deltas, classify regressions, and keep/discard changes. Especially useful for retrieval/search quality, ranking, chunking, agents/prompts/workflows, skill descriptions, extension/tool prompt injections, performance, cost, reliability, usability, and other systems with iterative loops and measurable outcomes. Do not use for ordinary bugfixes, reviews, prose edits, vague brainstorming, or one-off changes without a verification signal."
+description: "Improve something through controlled experiments: freeze a metric and cases, change one lever, measure, keep or discard. Use when the user says autoresearch, or when tuning retrieval/ranking quality, prompts, skill descriptions, cost, or performance needs a baseline instead of a one-off change. Not for ordinary fixes with no verification signal."
 ---
 
 # Autoresearch
