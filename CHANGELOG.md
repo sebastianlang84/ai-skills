@@ -25,6 +25,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- Tightened `git-workflow` release discipline: patch/minor/major impact now requires proposing the concrete next version number and expected tag name before push or closeout, and a version bump may not be pushed while silently omitting its matching release tag.
 - Decoupled `improve-codebase-architecture` from the `CONTEXT.md` domain model: it names modules from the project's own terms in the code instead of a maintained glossary, and no longer reads or writes `CONTEXT.md` or ADRs as part of its process.
 - Hardened `newsletter-delivery` with explicit production-send authorization, stale-run diagnosis guidance, safe Telegram/Oberhummer DM render-test helper, and redaction rules.
 - Renamed `subagent-workflow` to `pi-subagents` and narrowed it to Pi-specific orchestration policy that complements the `subagent` extension's built-in tool guidance.

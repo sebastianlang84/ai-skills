@@ -65,14 +65,17 @@ For each commit, merge, or push decision, state one impact:
 - `major`: breaking API/config/data/operational behavior, migration, or removed compatibility
 - `no bump`: internal, unreleased, or non-user-facing change when repo policy allows it
 
+When the impact is `patch`, `minor`, or `major`, explicitly propose the concrete next version bump from the current version before pushing or closing out, unless the user has already deferred releasing. Do not leave release-relevant work only under `Unreleased` without calling out the missing bump/tag step.
+
 When release-relevant:
 - update canonical version source(s) for the affected package/service
 - update `CHANGELOG.md`, scoped changelog, or equivalent release notes
 - use the repo's tag convention; in monorepos prefer scoped tags like `<service>-vX.Y.Z` when unscoped tags are ambiguous
-- create annotated release tags only after explicit user approval
-- never push tags without explicit tag-push approval
+- treat a committed version bump plus fixed changelog section as a release state; the matching annotated tag is required unless the user explicitly says tagging is deferred or this repo does not tag releases
+- create annotated release tags only after tag approval; a user request to release/bump and push a specific version may count as approval only after you state the exact tag name and push target before executing
+- never push tags when the tag name, remote, or approval is ambiguous
 
-This checklist is a gate: do not commit, merge, push, tag, or declare completion for release-relevant changes until version/changelog/release-note updates are included, or a clear `no bump` rationale is stated. If the version/changelog policy is unknown, stop and ask or inspect repo policy before mutating history.
+This checklist is a gate: do not commit, merge, push, tag, or declare completion for release-relevant changes until the version bump/release-note update and tag decision are resolved, or a clear `no bump`/deferred-release/deferred-tag rationale is stated. If the version/changelog/tag policy is unknown, stop and ask or inspect repo policy before mutating history.
 
 If no version or changelog update is needed, state why.
 
@@ -86,7 +89,7 @@ Rebase only when policy allows it and it will not surprise other users of the br
 
 Merge only after explicit user approval and only when source, target, strategy, verification, release impact, and changelog/version decision are clear.
 
-Push only after explicit user approval and according to repo policy. Before pushing, state: target remote/branch/tags, verification result, release impact, changelog/version decision, and whether push approval has been given. Never push from a side context if ownership or target is unclear.
+Push only after explicit user approval and according to repo policy. Before pushing, state: target remote/branch/tags, verification result, release impact, changelog/version/tag decision, and whether push approval has been given. If version metadata was bumped, do not push only the branch while silently omitting the matching release tag; either include the exact tag in the push plan or explicitly mark tag creation/push as deferred. Never push from a side context if ownership or target is unclear.
 
 ## Sub-agent isolation
 
@@ -101,8 +104,8 @@ Before declaring a coding or documentation task complete:
 3. Update repo task-tracking or planning artifacts only when their file roles require it. Do not create or update repo-local memory files unless explicitly required by repo policy/user instruction.
 4. Run the smallest relevant tests/checks and state what passed or was not run.
 5. Apply the release impact checklist: patch / minor / major / no bump, changelog/release notes, version metadata, and tags.
-6. If changes remain uncommitted, propose a commit message, included files, SemVer impact, and changelog/version decision.
-7. If commits are local and ready, propose the exact push target and any tag push needed.
+6. If changes remain uncommitted, propose a commit message, included files, SemVer impact, and changelog/version/tag decision; for patch/minor/major, include the concrete next version number and expected tag name.
+7. If commits are local and ready, propose the exact push target, whether a version bump commit should happen first, and the exact tag push or deferred-tag rationale.
 8. Merge, push, tag, branch-switch, or other mutating Git operations only when policy, target, verification, and explicit user approval are clear.
 
 Final handoff should state: changed files, verification, version impact/tag, commit/merge/push status, and remaining risks or next steps.
