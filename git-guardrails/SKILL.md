@@ -17,7 +17,7 @@ The script is [scripts/block-dangerous-git.py](scripts/block-dangerous-git.py).
 | Blocked | Still allowed |
 |---|---|
 | `push --force` / `-f` / `+refspec` | `push --force-with-lease` (refuses if the remote moved) |
-| `push --delete`, `push :ref` | — |
+| `push --delete`, `push :ref` | the same, when every named branch is *provably contained* in the remote's default branch (see below) |
 | `reset --hard` | `reset` soft/mixed |
 | `clean -f` (any bundling) | `clean -n` |
 | `checkout .` / `restore .` | targeted paths (`restore src/foo.ts`) |
@@ -28,6 +28,22 @@ The script is [scripts/block-dangerous-git.py](scripts/block-dangerous-git.py).
 A blocked call exits 2, so the model receives the reason and the safe alternative instead of the command running.
 
 Commit and tag messages are blanked before matching, so `git commit -m "undo reset --hard"` is not mistaken for a reset.
+
+## The one exception: deleting a provably merged branch
+
+Every other rule guards something the guard cannot re-derive. Branch deletion is different: "this destroys nothing" is a *checkable fact*, and leaving it unfixable made the guard cost real work — merged branches piled up on remotes because only the operator could ever remove them, and in nightshift's case a leftover ref silently held its throughput cap at zero for nights.
+
+`deletion_is_provably_merged` therefore allows a deletion when **every** named branch is contained in the remote's default branch. The commits survive in the base and the ref is recreatable from it, so nothing is lost.
+
+It is built to answer "no" whenever it is not certain:
+
+- The sha comes from **`ls-remote`, the live remote** — never from a remote-tracking ref, which may be stale and hide commits pushed since the last fetch.
+- Containment is `merge-base --is-ancestor` against the remote's default branch. A **squash merge is not an ancestor**, so it stays blocked even though the change landed.
+- One unqualified ref voids the whole batch — deletions are not partially allowed.
+- Never: tags, the default branch itself, URL remotes, `--mirror`/`--all`/`--tags`, or a command line carrying any shell metacharacter (composition and substitution defeat single-command parsing). `cd repo && git push --delete x` is therefore blocked; write `git -C repo push --delete x`.
+- Any probe that errors, any option the parser does not recognise, any repo it cannot locate → blocked.
+
+If you want the strict old behaviour back, delete `DELETE_RULE` handling from `check()`.
 
 ## Install
 
@@ -67,3 +83,12 @@ printf '{"tool_input":{"command":"git status"}}'       | python3 scripts/block-d
 ```
 
 Check both directions: every command you meant to block exits 2, and the safe variant beside it still exits 0.
+
+The deletion exception needs a real repo to judge, so pass a `cwd` and point it at a throwaway sandbox — a bare remote with a `merged` branch at the tip of `main`, an `unmerged` branch ahead of it, and a tag:
+
+```bash
+printf '{"tool_input":{"command":"git push origin --delete merged"},"cwd":"/tmp/sandbox/repo"}'   | python3 scripts/block-dangerous-git.py; echo "exit=$?"   # expect 0
+printf '{"tool_input":{"command":"git push origin --delete unmerged"},"cwd":"/tmp/sandbox/repo"}' | python3 scripts/block-dangerous-git.py; echo "exit=$?"   # expect 2
+```
+
+Note that an agent cannot run these two itself: the hook inspects its own Bash command line, sees the quoted `git push --delete` inside the `printf`, and blocks it. Verify the exception by attempting the real deletion in a throwaway sandbox instead, where a wrong "allow" costs nothing.
