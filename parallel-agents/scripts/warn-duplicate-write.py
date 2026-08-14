@@ -1,74 +1,263 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: say so when another session already has the file you are about to create.
+"""Hook: refuse to create a file another live session already has, until you have read theirs.
+
+Registered twice in ~/.claude/settings.json and dispatching on `hook_event_name`:
+  PreToolUse  / Write  — deny a colliding creation, naming the file to read first
+  PostToolUse / Read   — record that the sibling version was read, which lifts the denial
 
 WHAT IT IS FOR
 Three to five agents run on this machine at once, in sibling git worktrees of one repo. Worktree
 isolation prevents *interference* — two agents disturbing each other's working tree — and does
 nothing about *duplication*. Two sessions creating the same new file is invisible to Git, because an
 add/add divergence does not exist until both sides do; it surfaces at merge, after both sides have
-paid for the work. That happened on 2026-08-14 in ~/dev/brain: two sessions independently wrote
-preferences/structural-search-first.md and preferences/tools-are-part-of-the-work.md.
+paid. That happened on 2026-08-14 in ~/dev/brain to two sessions each following the isolation rules
+perfectly.
 
-WHY A HOOK AND NOT A RULE
-The rule exists (`git worktree list` before substantial work) and a rule is not what failed. On this
-same machine, instructions to prefer ast-grep and CodeMap over grep sat in AGENTS.md for months and
-were routinely skipped — the gap was habit, not knowledge. A probe that must be remembered gets
-forgotten; this one runs at the moment it matters and costs nothing to ignore.
+WHY IT DENIES RATHER THAN WARNS
+The first version of this hook allowed the write and attached a note saying "read that version
+first". A cross-vendor review pointed out that this is temporally impossible, and a live test
+confirmed it: the write completes, and the model only sees the note on its next turn, next to the
+tool result. The merge risk was caught; the duplicated file and the duplicated work — the actual
+costs — were not. So a high-confidence collision is refused.
 
-WHAT IT IS NOT
-Not a gate. It emits no permission decision, so the normal permission flow is untouched and no write
-is ever blocked or auto-approved — it only adds context the model can act on or dismiss. That is
-deliberate: a file existing elsewhere is evidence, not proof, and a check that blocks on evidence
-teaches people to route around it. So it reports where the file is and how old that work is, and
-lets the agent judge.
+Denying costs the operator nothing. Exit-style denial cancels one tool call and hands the reason
+back to the model, which can act on it unattended; it is not a permission prompt and does not wake
+anyone. The unlock is deliberately NOT "the model tried again": a blind retry stays denied. It is a
+successful Read of the named sibling file, which is the thing we actually wanted to happen.
 
-The one thing it can do that no git command can: a sibling worktree's working directory is readable
-on disk, so this sees **uncommitted** files in another live session. The written rule admits it
-cannot close that window.
+WHY ONLY HIGH-CONFIDENCE EVIDENCE
+An earlier draft also searched the whole history (`git log --all -- <path>`). That is worthless as
+evidence and was removed: it reports a file deleted two years ago forever, and the branch list it
+printed came from `--contains <commit>`, which says a branch contains the commit that touched the
+path — not that the branch tip has the file. Now the only evidence that gates is a path that exists
+in an *attached sibling worktree* and is a *new addition* there relative to the merge base, touched
+recently enough to be live work. Everything weaker is silent, because a note that arrives after the
+write is nearly worthless and a check that cries wolf gets routed around.
 
-FAILING OPEN
-Any error at all exits 0 silently. A hook that breaks Write is worse than no hook, and this one is
-an advisory — there is no failure mode where refusing to run should stop the operator's work.
+KNOWN GAPS, not papered over
+- A millisecond-wide check-then-write race remains: two hooks can both see absence before either
+  write lands. Closing it needs an O_EXCL reservation with expiry; the real incident was minutes
+  wide, so that complexity is not bought yet.
+- Files created by Bash (`>`, `tee`, `cp`) bypass this entirely — `Write` is the only deterministic
+  event that knows the intended path.
+- Two sessions appending to the same existing file (`log.md`) is untouched: the path exists, so this
+  never fires. That collision is Git's ordinary content conflict and it does surface at merge.
+- Choosing different filenames for the same work defeats it completely. This is an exact-path last
+  line of defence, not a solution to semantic duplication — that stays with cross-session messaging.
+
+FAILING OPEN, EXCEPT WHERE IT MATTERS
+Every internal error, timeout or unreadable state exits 0 and allows the write. This is advisory
+coordination, not protection from destruction, and a hook that breaks `Write` is worse than no hook.
+Only a *detected* high-confidence collision fails closed.
+
+OPT-IN PER REPOSITORY
+Silent unless the repo enables it:  git config --local agents.duplicate-write-guard true
+Local config lives in the common git dir, so every linked worktree of that repo inherits it, and no
+repository policy is hardcoded into a machine-wide hook.
 """
+import hashlib
 import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
-TIMEOUT = 5  # seconds for the whole hook; a slow probe is not worth a slow Write
+BUDGET = 0.25          # hard ceiling for the whole hook, not per subprocess
+STALE_AFTER = 24 * 3600  # a sibling file untouched this long is not live work
+STATE = Path.home() / ".agents" / "state" / "parallel-agents"
+STATE_TTL = 7 * 24 * 3600
+FINGERPRINT_MAX = 1 << 20  # hash contents below this; fall back to size+mtime above it
 
 
-def git(repo: str, *args: str) -> str | None:
-    """Run a read-only git command, returning None on any failure."""
+class Deadline:
+    """One monotonic budget for the whole hook. Each git call gets what is left, never a fresh 5s."""
+
+    def __init__(self, seconds: float) -> None:
+        self.until = time.monotonic() + seconds
+
+    def left(self) -> float:
+        return self.until - time.monotonic()
+
+    def expired(self) -> bool:
+        return self.left() <= 0.01
+
+
+def git(repo: str, dl: Deadline, *args: str) -> str | None:
+    if dl.expired():
+        return None
     try:
-        out = subprocess.run(
-            ("git", "-C", repo, *args),
-            capture_output=True, text=True, timeout=TIMEOUT, check=False,
-        )
+        out = subprocess.run(("git", "-C", repo, *args), capture_output=True, text=True,
+                             timeout=max(0.02, dl.left()), check=False)
     except (OSError, subprocess.SubprocessError):
         return None
     return out.stdout.strip() if out.returncode == 0 else None
 
 
-def worktrees(repo: str) -> list[tuple[str, str]]:
-    """Every worktree of this repo as (path, branch). Empty when git cannot say."""
-    porcelain = git(repo, "worktree", "list", "--porcelain")
+def fingerprint(path: Path) -> str | None:
+    """Identify the exact bytes that were offered for reading, so a later change re-arms the gate."""
+    try:
+        st = path.stat()
+        if st.st_size < FINGERPRINT_MAX:
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+        return f"size:{st.st_size}:mtime:{st.st_mtime_ns}"
+    except OSError:
+        return None
+
+
+def marker(session: str, path: Path, fp: str) -> Path:
+    """State filename is a digest, never an agent-supplied path — that would be a traversal."""
+    key = f"{session}\0{path}\0{fp}".encode()
+    return STATE / hashlib.sha256(key).hexdigest()
+
+
+def sweep() -> None:
+    cutoff = time.time() - STATE_TTL
+    try:
+        for f in STATE.iterdir():
+            if f.is_file() and f.stat().st_mtime < cutoff:
+                f.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def repo_of(path: Path, dl: Deadline) -> str | None:
+    probe = path if path.exists() else path.parent
+    while not probe.exists() and probe.parent != probe:
+        probe = probe.parent
+    return git(str(probe), dl, "rev-parse", "--show-toplevel")
+
+
+def attached_worktrees(repo: str, dl: Deadline) -> list[tuple[str, str]]:
+    porcelain = git(repo, dl, "worktree", "list", "--porcelain")
     if not porcelain:
         return []
-    found, path = [], None
+    out, path = [], None
     for line in porcelain.splitlines():
         if line.startswith("worktree "):
             path = line[len("worktree "):]
         elif line.startswith("branch ") and path:
-            found.append((path, line[len("branch "):].removeprefix("refs/heads/")))
+            out.append((path, line[len("branch "):].removeprefix("refs/heads/")))
             path = None
         elif not line.strip() and path:
-            found.append((path, "(detached)"))
+            out.append((path, "HEAD"))
             path = None
     if path:
-        found.append((path, "(detached)"))
-    return found
+        out.append((path, "HEAD"))
+    return out
+
+
+def collisions(repo: str, rel: str, dl: Deadline) -> list[dict]:
+    """Sibling worktrees that hold this path as recent, newly added work. Highest signal first."""
+    here = str(Path(repo).resolve())
+    found = []
+    for wt, branch in attached_worktrees(repo, dl):
+        if dl.expired():
+            break
+        if str(Path(wt).resolve()) == here:
+            continue
+        candidate = Path(wt) / rel
+        if not candidate.exists():
+            continue
+
+        tracked = git(wt, dl, "ls-files", "--error-unmatch", rel) is not None
+        if not tracked:
+            kind, rank = "uncommitted — it exists only in that session's working tree", 0
+        else:
+            # Tracked: only interesting if it is NEW on that branch. A file both of us inherited
+            # from the merge base is not duplicated work, it is shared history.
+            base = git(repo, dl, "merge-base", "HEAD", branch) or ""
+            if base and git(repo, dl, "cat-file", "-e", f"{base}:{rel}") is not None:
+                continue
+            kind, rank = f"added on branch {branch}, not present at the merge base", 1
+
+        try:
+            age = time.time() - candidate.stat().st_mtime
+        except OSError:
+            continue
+        if age > STALE_AFTER:
+            # An abandoned worktree must not block a legitimate recreation forever.
+            continue
+        found.append({"path": candidate, "branch": branch, "kind": kind,
+                      "rank": rank, "age_min": int(age // 60)})
+    return sorted(found, key=lambda c: (c["rank"], c["age_min"]))
+
+
+def pre_tool_use(payload: dict, dl: Deadline) -> int:
+    if payload.get("tool_name") != "Write":
+        return 0
+    raw = (payload.get("tool_input") or {}).get("file_path")
+    if not raw:
+        return 0
+    target = Path(os.path.join(payload.get("cwd") or os.getcwd(), raw))
+    try:
+        target = target.resolve()
+    except OSError:
+        return 0
+    if target.exists():
+        return 0  # an edit, not a creation — Git reports that collision itself, at merge
+
+    repo = repo_of(target, dl)
+    if not repo:
+        return 0
+    if git(repo, dl, "config", "--get", "agents.duplicate-write-guard") != "true":
+        return 0
+    try:
+        rel = target.relative_to(Path(repo).resolve()).as_posix()
+    except ValueError:
+        return 0
+    if rel.startswith(".git/") or "/.claude/worktrees/" in f"/{rel}":
+        return 0
+
+    hits = collisions(repo, rel, dl)
+    if not hits:
+        return 0
+
+    session = payload.get("session_id") or "?"
+    top = hits[0]
+    fp = fingerprint(top["path"])
+    if fp and marker(session, top["path"], fp).exists():
+        return 0  # already read this exact version — proceed deliberately
+
+    where = "\n".join(
+        f"  - {h['path']}\n    ({h['kind']}; touched {h['age_min']} min ago)" for h in hits)
+    reason = (
+        f"Another session is already working on `{rel}`. Refused so the work is not done twice:\n"
+        f"{where}\n\n"
+        f"Read {top['path']} first. This refusal lifts as soon as you have read it — a plain retry "
+        f"stays refused, because retrying is not reading.\n\n"
+        f"Then decide deliberately: extend their version, or agree who owns the file. `ListAgents` "
+        f"names the live sessions and `SendMessage` reaches them. Two sessions creating the same "
+        f"file is invisible to Git until merge, and it has already cost this machine a "
+        f"hand-resolved merge once."
+    )
+    json.dump({"hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "deny",
+        "permissionDecisionReason": reason,
+    }}, sys.stdout)
+    return 0
+
+
+def post_tool_use(payload: dict) -> int:
+    """Record that a file was read, with the bytes that were read. This is what lifts a denial."""
+    if payload.get("tool_name") != "Read":
+        return 0
+    raw = (payload.get("tool_input") or {}).get("file_path")
+    session = payload.get("session_id")
+    if not raw or not session:
+        return 0
+    try:
+        path = Path(os.path.join(payload.get("cwd") or os.getcwd(), raw)).resolve()
+    except OSError:
+        return 0
+    fp = fingerprint(path)
+    if not fp:
+        return 0
+    STATE.mkdir(parents=True, exist_ok=True)
+    sweep()
+    marker(session, path, fp).write_text("", encoding="utf-8")
+    return 0
 
 
 def main() -> int:
@@ -76,85 +265,16 @@ def main() -> int:
         payload = json.load(sys.stdin)
     except (json.JSONDecodeError, ValueError):
         return 0
-    if payload.get("tool_name") != "Write":
-        return 0
-
-    raw = (payload.get("tool_input") or {}).get("file_path")
-    if not raw:
-        return 0
-    target = Path(os.path.join(payload.get("cwd") or os.getcwd(), raw)).resolve()
-
-    # Only new files. An existing path is an edit, and editing a file two sessions share is a
-    # different problem — one Git can and does report, at merge, as a normal content conflict.
-    if target.exists():
-        return 0
-
-    repo = git(str(target.parent if target.parent.exists() else Path.cwd()),
-               "rev-parse", "--show-toplevel")
-    if not repo:
-        return 0
-    try:
-        rel = target.relative_to(Path(repo).resolve()).as_posix()
-    except ValueError:
-        return 0
-    # Never report on git internals or on a sibling's checkout seen from inside another worktree.
-    if rel.startswith(".git/") or "/.claude/worktrees/" in f"/{rel}":
-        return 0
-
-    trees = worktrees(repo)
-    # Scope: only a repo that actually has parallel checkouts. Without this, the history probe below
-    # fires in every repo on the machine whenever anyone recreates a deleted file — a different
-    # feature, un-asked-for, and a steady source of noise in exactly the tool whose credibility
-    # depends on not crying wolf. Two sessions sharing ONE checkout are not missed by dropping this:
-    # there the file is already in the working tree, and the `target.exists()` check above returns.
-    if len(trees) < 2:
-        return 0
-
-    here = str(Path(repo).resolve())
-    notes: list[str] = []
-
-    for path, branch in trees:
-        resolved = str(Path(path).resolve())
-        # `git rev-parse --show-toplevel` run from inside a worktree returns THAT worktree's root,
-        # so `here` is our own checkout and is the one to skip.
-        if resolved == here:
-            continue
-        candidate = Path(path) / rel
-        if candidate.exists():
-            state = "committed" if git(path, "ls-files", "--error-unmatch", rel) is not None \
-                    else "UNCOMMITTED — it exists only in that session's working tree"
-            notes.append(f"  - {candidate} (branch {branch}, {state})")
-
-    # One bounded call: has any ref in this repo ever carried this path?
-    if not notes:
-        touched = git(repo, "log", "--all", "--format=%h %cr", "--max-count=1", "--", rel)
-        if touched:
-            sha, _, when = touched.partition(" ")
-            branches = git(repo, "branch", "-a", "--contains", sha, "--format=%(refname:short)")
-            where = ", ".join(branches.split("\n")[:4]) if branches else "another ref"
-            notes.append(f"  - already exists in this repo's history ({sha}, {when}) on: {where}")
-
-    if not notes:
-        return 0
-
-    message = (
-        f"Another session may already have done this work. `{rel}` does not exist in your working "
-        f"tree, but it was found here:\n" + "\n".join(notes) + "\n\n"
-        "This is information, not a refusal — the write proceeds. But read that version before "
-        "writing a second one: two sessions creating the same file is invisible to Git until merge, "
-        "and it has already cost this machine a hand-resolved merge once. If another session is "
-        "live, `ListAgents` names it and `SendMessage` reaches it; agreeing who owns the file is "
-        "cheaper than reconciling two versions of it."
-    )
-    json.dump({"hookSpecificOutput": {
-        "hookEventName": "PreToolUse",
-        "additionalContext": message,
-    }}, sys.stdout)
+    event = payload.get("hook_event_name")
+    if event == "PostToolUse":
+        return post_tool_use(payload)
+    if event == "PreToolUse":
+        return pre_tool_use(payload, Deadline(BUDGET))
     return 0
 
 
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except Exception:  # noqa: BLE001 — advisory hook, never break a Write
+    except Exception:  # noqa: BLE001 — advisory hook, never break a tool call
         sys.exit(0)

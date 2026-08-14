@@ -1,6 +1,6 @@
 ---
 name: parallel-agents
-description: Coordinating several agent sessions working the same repo at once — detecting that another session is already on your topic, claiming work, and the PreToolUse hook that reports a file another worktree already has. Use when several sessions run in parallel, when a merge turns up duplicate work, or when deciding whether to start on something another agent may already hold.
+description: Coordinating several agent sessions working the same repo at once — detecting that another session is already on your topic, claiming work, and the hook that refuses to create a file another live session already has. Use when several sessions run in parallel, when a merge turns up duplicate work, when a Write is refused as a collision, or when deciding whether to start on something another agent may already hold.
 ---
 
 # Parallel agents on one repo
@@ -19,8 +19,8 @@ The argument, the incident and the list of what still has no rule live in
 ## Before substantial work
 
 ```bash
-git worktree list                              # sibling checkouts of this repo
-git branch -a --sort=-committerdate | head     # who has been working, and on what
+git worktree list                                 # sibling checkouts of this repo
+git branch -a --sort=-committerdate | head        # who has been working, and on what
 git fetch && git log --oneline -5 origin/<base>   # did the base move under you
 ```
 
@@ -30,35 +30,63 @@ committed anything yet. When one of them is in your repo, say which files you ar
 
 Re-check the base **before merging**, not only before starting.
 
-## The hook
+## If a Write is refused
 
-`scripts/warn-duplicate-write.py` runs as a `PreToolUse` hook on `Write` (registered in
-`~/.claude/settings.json`). When the file you are about to create does not exist in your working
-tree but does exist in a sibling worktree, or anywhere in the repo's history, it says so and names
-where.
+`scripts/warn-duplicate-write.py` runs as a `PreToolUse` hook on `Write`. When the file you are
+about to create already exists in a sibling worktree as recent, newly added work, the write is
+**denied** and the message names the file to read.
 
-It reads a sibling worktree's **working directory**, so it sees uncommitted files in another live
-session — the one thing no git command can do, and precisely the window the written rule admits it
-cannot close.
+Do exactly that: read their version. The denial lifts as soon as you have (a `PostToolUse` hook on
+`Read` records it). **A plain retry stays denied** — retrying is not reading. Then decide
+deliberately: extend their version, or use `SendMessage` to agree who owns the file.
 
-It is advisory by construction:
+If their version changes after you read it, the gate re-arms — you approved specific bytes, not a
+filename.
 
-- it emits **no permission decision**, so the normal permission flow is untouched and no write is
-  ever blocked or auto-approved — it only adds context;
-- a file existing elsewhere is evidence, not proof (the worktree may be abandoned, or the path may
-  legitimately exist on the base), so it reports the facts and lets the agent judge;
-- **any error exits 0 silently.** A hook that breaks `Write` is worse than no hook.
+## Why it denies instead of warning
 
-Why a hook rather than another paragraph: the rule already existed and rules were not what failed.
-Instructions to prefer `ast-grep` and CodeMap over `grep` sat in `AGENTS.md` for months and were
-routinely skipped. A probe that has to be remembered gets forgotten; this one runs at the moment it
-matters and costs nothing to ignore.
+The first version allowed the write and attached a note. A cross-vendor review pointed out that
+"read their version first" is temporally impossible that way, and a live test confirmed it: the file
+is created, and the model only sees the note on the next turn. The merge risk was caught; the
+duplicated file and the duplicated work — the actual costs — were not.
+
+Denying costs the operator nothing. It cancels one tool call and hands the reason to the model,
+which can resolve it unattended. It is not a permission prompt and does not wake anyone.
+
+## What it deliberately does not do
+
+- **Weak evidence is silent.** Only a path that exists in an *attached sibling worktree*, is a *new
+  addition* there relative to the merge base, and was touched within 24 h will gate. An earlier
+  draft also searched all history; that reports a file deleted two years ago forever, so it was
+  removed. A check that cries wolf gets routed around.
+- **It fails open.** Every internal error, timeout or unreadable state allows the write. The whole
+  hook runs under a single 250 ms budget. Only a *detected* collision fails closed.
+- **It is opt-in per repository**, so no repo policy is baked into a machine-wide hook:
+
+  ```bash
+  git config --local agents.duplicate-write-guard true
+  ```
+
+  Local config lives in the common git dir, so every linked worktree inherits it. Enabled for
+  `~/dev/brain`.
+
+## Known gaps
+
+- A millisecond-wide check-then-write race remains; the real incident was minutes wide, so the
+  `O_EXCL` reservation that would close it is not bought yet.
+- Files created through Bash (`>`, `tee`, `cp`) bypass it — `Write` is the only deterministic event
+  that knows the intended path.
+- Two sessions appending to the same *existing* file (`log.md`) never trigger it. That one is an
+  ordinary content conflict and does surface at merge.
+- Different filenames for the same work defeat it entirely. This is an exact-path last line of
+  defence, not a solution to semantic duplication — that stays with cross-session messaging.
 
 Test it without waiting for a real collision:
 
 ```bash
-echo '{"tool_name":"Write","cwd":"<repo>","tool_input":{"file_path":"<path>"}}' \
+echo '{"hook_event_name":"PreToolUse","tool_name":"Write","cwd":"<repo>","session_id":"t",
+       "tool_input":{"file_path":"<path>"}}' \
   | python3 ~/.agents/skills/parallel-agents/scripts/warn-duplicate-write.py
 ```
 
-Silence means no collision found. It costs roughly 100 ms, nearly all of it Python start-up.
+Silence means no collision. Roughly 43 ms, most of it Python start-up.
