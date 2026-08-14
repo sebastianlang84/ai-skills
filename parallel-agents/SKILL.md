@@ -16,6 +16,30 @@ were each following the isolation rules perfectly.
 The argument, the incident and the list of what still has no rule live in
 `~/.agents/brain/preferences/parallel-agents-git.md`.
 
+## Who holds what, right now
+
+```bash
+python3 ~/.agents/skills/parallel-agents/scripts/ownership.py         # this repo
+python3 ~/.agents/skills/parallel-agents/scripts/ownership.py --all   # every live session
+```
+
+Joins `git worktree list`, the harness session files (`~/.claude/sessions/<pid>.json`) and
+`kill -0` into worktree → branch → live session. **Nothing is stored**, so nothing goes stale and
+the answer is correct the instant a session dies. A registry file would have to be written,
+refreshed and cleaned up, and every one of those is a way for it to lie — a stale claim blocks real
+work with the authority of a fact. Pid reuse is checked, not assumed away, via the recorded process
+start time.
+
+What follows from it:
+
+- **A branch with a live owner is not yours** — do not push to it, rebase it, or check it out
+  elsewhere. `SendMessage` to the printed session name.
+- **A non-fast-forward push rejection**: live owner → stop and talk to them, someone is building on
+  the history you would rewrite. No owner → the branch is unattended, `fetch` and rebase, no human
+  needed.
+- It reports that a session is live, not what it is *thinking about*. Intent is what messaging is
+  for.
+
 ## Before substantial work
 
 ```bash
@@ -56,9 +80,11 @@ which can resolve it unattended. It is not a permission prompt and does not wake
 ## What it deliberately does not do
 
 - **Weak evidence is silent.** Only a path that exists in an *attached sibling worktree*, is a *new
-  addition* there relative to the merge base, and was touched within 24 h will gate. An earlier
-  draft also searched all history; that reports a file deleted two years ago forever, so it was
-  removed. A check that cries wolf gets routed around.
+  addition* there relative to the merge base, and whose worktree is held by a **live session** will
+  gate. Liveness is a fact from `ownership.py`, not the file-mtime guess the first version used, so
+  an abandoned worktree never blocks a legitimate recreation. An earlier draft also searched all
+  history; that reports a file deleted two years ago forever, so it was removed. A check that cries
+  wolf gets routed around.
 - **It fails open.** Every internal error, timeout or unreadable state allows the write. The whole
   hook runs under a single 250 ms budget. Only a *detected* collision fails closed.
 - **It is opt-in per repository**, so no repo policy is baked into a machine-wide hook:
@@ -89,4 +115,5 @@ echo '{"hook_event_name":"PreToolUse","tool_name":"Write","cwd":"<repo>","sessio
   | python3 ~/.agents/skills/parallel-agents/scripts/warn-duplicate-write.py
 ```
 
-Silence means no collision. Roughly 43 ms, most of it Python start-up.
+Silence means no collision. Median 53 ms, p95 79 ms measured under load 4 with nine live sessions;
+bare Python start-up is 14 ms of that.

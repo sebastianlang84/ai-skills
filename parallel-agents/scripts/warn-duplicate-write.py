@@ -30,9 +30,11 @@ An earlier draft also searched the whole history (`git log --all -- <path>`). Th
 evidence and was removed: it reports a file deleted two years ago forever, and the branch list it
 printed came from `--contains <commit>`, which says a branch contains the commit that touched the
 path — not that the branch tip has the file. Now the only evidence that gates is a path that exists
-in an *attached sibling worktree* and is a *new addition* there relative to the merge base, touched
-recently enough to be live work. Everything weaker is silent, because a note that arrives after the
-write is nearly worthless and a check that cries wolf gets routed around.
+in an *attached sibling worktree*, is a *new addition* there relative to the merge base, and that
+worktree is held by a **live session** — a fact from ownership.py (pid alive, start time still
+matching what the session recorded), not the file-mtime guess an earlier version used. An abandoned
+worktree therefore never blocks a legitimate recreation. Everything weaker is silent, because a
+check that cries wolf gets routed around.
 
 KNOWN GAPS, not papered over
 - A millisecond-wide check-then-write race remains: two hooks can both see absence before either
@@ -63,8 +65,10 @@ import sys
 import time
 from pathlib import Path
 
-BUDGET = 0.25          # hard ceiling for the whole hook, not per subprocess
-STALE_AFTER = 24 * 3600  # a sibling file untouched this long is not live work
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import ownership  # noqa: E402 — sibling module, same directory
+
+BUDGET = 0.25  # hard ceiling for the whole hook, not per subprocess
 STATE = Path.home() / ".agents" / "state" / "parallel-agents"
 STATE_TTL = 7 * 24 * 3600
 FINGERPRINT_MAX = 1 << 20  # hash contents below this; fall back to size+mtime above it
@@ -150,8 +154,11 @@ def attached_worktrees(repo: str, dl: Deadline) -> list[tuple[str, str]]:
 def collisions(repo: str, rel: str, dl: Deadline) -> list[dict]:
     """Sibling worktrees that hold this path as recent, newly added work. Highest signal first."""
     here = str(Path(repo).resolve())
+    trees = attached_worktrees(repo, dl)
+    paths = [p for p, _ in trees]
+    sessions: list[dict] | None = None  # read lazily: most Writes collide with nothing
     found = []
-    for wt, branch in attached_worktrees(repo, dl):
+    for wt, branch in trees:
         if dl.expired():
             break
         if str(Path(wt).resolve()) == here:
@@ -171,15 +178,22 @@ def collisions(repo: str, rel: str, dl: Deadline) -> list[dict]:
                 continue
             kind, rank = f"added on branch {branch}, not present at the merge base", 1
 
+        # Only a LIVE session gates. An abandoned worktree must never block a legitimate
+        # recreation, and "the directory exists" was never evidence that anyone is coming back —
+        # the previous version guessed at this with the file's mtime, which is a proxy for activity,
+        # not for a session. ownership.py answers it as a fact: pid alive, and its start time still
+        # matching what the session recorded, so a recycled pid cannot masquerade as its predecessor.
+        if sessions is None:
+            sessions = ownership.live_sessions()
+        owner = ownership.owner_of(wt, sessions, paths)
+        if owner is None:
+            continue
         try:
-            age = time.time() - candidate.stat().st_mtime
+            age_min = int((time.time() - candidate.stat().st_mtime) // 60)
         except OSError:
-            continue
-        if age > STALE_AFTER:
-            # An abandoned worktree must not block a legitimate recreation forever.
-            continue
-        found.append({"path": candidate, "branch": branch, "kind": kind,
-                      "rank": rank, "age_min": int(age // 60)})
+            age_min = -1
+        found.append({"path": candidate, "branch": branch, "kind": kind, "rank": rank,
+                      "age_min": age_min, "session": owner.get("name") or "?"})
     return sorted(found, key=lambda c: (c["rank"], c["age_min"]))
 
 
@@ -220,15 +234,16 @@ def pre_tool_use(payload: dict, dl: Deadline) -> int:
         return 0  # already read this exact version — proceed deliberately
 
     where = "\n".join(
-        f"  - {h['path']}\n    ({h['kind']}; touched {h['age_min']} min ago)" for h in hits)
+        f"  - {h['path']}\n    held by live session {h['session']} ({h['kind']};"
+        f" touched {h['age_min']} min ago)" for h in hits)
     reason = (
-        f"Another session is already working on `{rel}`. Refused so the work is not done twice:\n"
-        f"{where}\n\n"
+        f"Another live session is already working on `{rel}`. Refused so the work is not done "
+        f"twice:\n{where}\n\n"
         f"Read {top['path']} first. This refusal lifts as soon as you have read it — a plain retry "
         f"stays refused, because retrying is not reading.\n\n"
-        f"Then decide deliberately: extend their version, or agree who owns the file. `ListAgents` "
-        f"names the live sessions and `SendMessage` reaches them. Two sessions creating the same "
-        f"file is invisible to Git until merge, and it has already cost this machine a "
+        f"Then decide deliberately: extend their version, or agree who owns the file. "
+        f"`SendMessage` to `{top['session']}` reaches that session directly. Two sessions creating "
+        f"the same file is invisible to Git until merge, and it has already cost this machine a "
         f"hand-resolved merge once."
     )
     json.dump({"hookSpecificOutput": {
