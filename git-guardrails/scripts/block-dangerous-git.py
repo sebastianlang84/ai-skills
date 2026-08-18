@@ -160,6 +160,7 @@ def deletion_is_provably_merged(command: str, cwd: str) -> bool:
 
     repo = cwd or os.getcwd()
     for d in dirs:                       # -C is cumulative and may be relative
+        d = os.path.expanduser(d)        # the shell resolves ~ before git sees it
         repo = d if os.path.isabs(d) else os.path.join(repo, d)
     if not os.path.isdir(repo):
         return False

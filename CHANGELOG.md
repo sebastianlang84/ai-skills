@@ -27,6 +27,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Fixed
 
+- `git-guardrails` no longer refuses a merged-branch deletion just because the path carried a tilde. The exception resolved `-C` arguments literally, but the shell expands `~` before git sees them, so `git -C ~/dev/foo push origin --delete <merged-branch>` failed the directory check and fell back to the block — while the same command with an absolute path was allowed. It failed safe, but it cost a wasted attempt and read as the guard contradicting its own refusal message. Every refusal the guard exists for still holds: the default branch, a nonexistent directory, a compound command line (which can never be parsed safely and so is never eligible), and tag refs.
 - Corrected the canonical global skill store path from `~/.pi/agent/skills` to `~/.agents/skills` across `README.md`, `skill-creator`, and `skill-creator/references/agent_adapters.md`. The old path does not exist on this machine, so the documented validation command could not run and `skill-creator` instructed agents to relocate skills to a missing directory, contradicting the global `AGENTS.md`.
 
 ### Changed
