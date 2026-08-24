@@ -49,14 +49,19 @@ RULES = [
      "use git stash list and git stash pop to inspect it first"),
     (r"\bgit\b[^;&|]*\bbranch\b[^;&|]*\s-[A-Za-z]*D\b",
      "branch -D deletes a branch even when it holds unmerged commits",
-     "use git branch -d, which refuses to delete unmerged work"),
+     "use git branch -d, which refuses to delete unmerged work — or, if the branch "
+     "was squash-merged, note that the forced form is allowed automatically once the "
+     "default branch demonstrably contains every line the branch carries"),
     (r"\bgit\b[^;&|]*\b(?:filter-branch|filter-repo)\b",
      "rewriting the entire history of the repository",
      "do this by hand, outside the agent, with a backup"),
 ]
 
 COMPILED = [(re.compile(p), why, alt) for p, why, alt in RULES]
-DELETE_RULE = 2  # index into RULES — the one rule that can be proved safe
+DELETE_RULE = 2         # index into RULES — remote branch deletion
+BRANCH_DELETE_RULE = 7  # index into RULES — local forced branch deletion
+assert RULES[DELETE_RULE][1].startswith("deleting a remote branch")
+assert RULES[BRANCH_DELETE_RULE][1].startswith("branch -D")
 
 # Commit/tag messages quote arbitrary prose, so "git commit -m 'undo reset --hard'"
 # must not read as a reset. Blank the message argument before matching.
@@ -70,6 +75,9 @@ SHELL_META = set(";&|<>`$()\n\\\"'")
 INERT_PUSH_OPTS = {"-q", "--quiet", "--porcelain", "--dry-run", "-n", "--no-verify",
                    "--verbose", "-v", "--progress", "--no-progress", "--atomic"}
 SAFE_REF = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
+# Tokens that only express "delete this branch", forced or not. Anything else after `git branch`
+# selects or lists other refs and voids the exception.
+DELETE_FLAGS = {"-" + "D", "-d", "--delete", "--force", "-f"}
 
 
 def _git(repo, *args, timeout=15):
@@ -141,6 +149,54 @@ def _parse_push_delete(command: str):
     return dirs, remote, cleaned
 
 
+def _default_branch_ref(repo, remote=None):
+    """The ref to prove containment against: the remote's default branch, or the local one."""
+    if remote:
+        base = _git(repo, "symbolic-ref", "-q", "--short", f"refs/remotes/{remote}/HEAD")
+        if base:
+            return base
+        for cand in (f"{remote}/main", f"{remote}/master"):
+            if _git(repo, "rev-parse", "-q", "--verify", cand):
+                return cand
+        return None
+    base = _git(repo, "symbolic-ref", "-q", "--short", "refs/remotes/origin/HEAD")
+    if base:
+        return base
+    for cand in ("origin/main", "origin/master", "main", "master"):
+        if _git(repo, "rev-parse", "-q", "--verify", cand):
+            return cand
+    return None
+
+
+def _absorbed_into(repo, sha, base):
+    """True if merging `sha` into `base` would change nothing — i.e. base already has it all.
+
+    `merge-base --is-ancestor` is the cheap proof and covers fast-forward and merge-commit
+    integration. It does NOT cover a SQUASH merge, which is how most review flows land a branch:
+    the change is in the default branch, byte for byte, but under a new commit that lists the
+    branch nowhere in its ancestry. The branch then looks unmerged forever, and a rule that only
+    knows ancestry blocks every cleanup of a repository that squashes.
+
+    So ask the question the operator actually cares about — can this branch still contribute
+    anything the default branch lacks? — by merging it in memory. An identical tree means no: every
+    line it carries is already there, under whatever commit landed it. A conflict, an unrelated
+    history, or any git failure answers "cannot prove" and stays blocked.
+
+    What this does NOT preserve is the branch's own history: commit messages, authorship and the
+    order of the work. A squash merge has already discarded those, which is why proving the content
+    is the right bar here and not a lowered one.
+    """
+    if _git(repo, "merge-base", "--is-ancestor", sha, base) is not None:
+        return True
+    base_tree = _git(repo, "rev-parse", f"{base}^{{tree}}")
+    if not base_tree:
+        return False
+    merged = _git(repo, "merge-tree", "--write-tree", base, sha)
+    if not merged:
+        return False                     # conflict, unrelated history, or git too old
+    return merged.splitlines()[0].strip() == base_tree
+
+
 def deletion_is_provably_merged(command: str, cwd: str) -> bool:
     """True only if every named branch is demonstrably contained in the remote's default branch.
 
@@ -165,12 +221,7 @@ def deletion_is_provably_merged(command: str, cwd: str) -> bool:
     if not os.path.isdir(repo):
         return False
 
-    base = _git(repo, "symbolic-ref", "-q", "--short", f"refs/remotes/{remote}/HEAD")
-    if not base:
-        for cand in (f"{remote}/main", f"{remote}/master"):
-            if _git(repo, "rev-parse", "-q", "--verify", cand):
-                base = cand
-                break
+    base = _default_branch_ref(repo, remote)
     if not base:
         return False
     base_branch = base.split("/", 1)[1] if "/" in base else base
@@ -189,7 +240,85 @@ def deletion_is_provably_merged(command: str, cwd: str) -> bool:
             return False
         if _git(repo, "cat-file", "-e", f"{sha}^{{commit}}") is None:
             return False                 # not fetched locally — cannot prove anything
-        if _git(repo, "merge-base", "--is-ancestor", sha, base) is None:
+        if not _absorbed_into(repo, sha, base):
+            return False
+    return True
+
+
+def _parse_branch_delete(command: str):
+    """(repo_rel_dirs, [branches]) for a plain forced `git branch` deletion, else None."""
+    if any(ch in command for ch in SHELL_META):
+        return None
+    try:
+        tokens = shlex.split(command)
+    except ValueError:
+        return None
+    if not tokens or os.path.basename(tokens[0]) != "git":
+        return None
+
+    dirs, i = [], 1
+    while i < len(tokens) and tokens[i] != "branch":
+        t = tokens[i]
+        if t == "-C" and i + 1 < len(tokens):
+            dirs.append(tokens[i + 1]); i += 2
+        elif t.startswith("-C") and len(t) > 2:
+            dirs.append(t[2:]); i += 1
+        elif t == "-c" and i + 1 < len(tokens):
+            i += 2
+        else:
+            return None
+    if i >= len(tokens):
+        return None
+    i += 1                               # step past "branch"
+
+    names = []
+    for t in tokens[i:]:
+        if t in DELETE_FLAGS:
+            continue                     # the delete intent itself, which is why we are here
+        if t.startswith("-"):
+            return None                  # -r, --remotes, -a, anything else voids the exception
+        names.append(t)
+    if not names or not all(SAFE_REF.match(n) for n in names):
+        return None
+    return dirs, names
+
+
+def _resolve_repo(cwd: str, dirs) -> str:
+    repo = cwd or os.getcwd()
+    for d in dirs:                       # -C is cumulative and may be relative
+        d = os.path.expanduser(d)        # the shell resolves ~ before git sees it
+        repo = d if os.path.isabs(d) else os.path.join(repo, d)
+    return repo
+
+
+def branch_delete_is_provably_absorbed(command: str, cwd: str) -> bool:
+    """True only if every named local branch is fully contained in the default branch.
+
+    Same bar as the remote case, and the same failure mode: every unknown answers "no". The branch
+    must resolve locally, must be neither the default branch nor the checked-out one, and its
+    content must already be in the default branch by ancestry or by `_absorbed_into`.
+    """
+    parsed = _parse_branch_delete(command)
+    if not parsed:
+        return False
+    dirs, names = parsed
+    repo = _resolve_repo(cwd, dirs)
+    if not os.path.isdir(repo):
+        return False
+
+    base = _default_branch_ref(repo)
+    if not base:
+        return False
+    base_short = base.split("/", 1)[1] if "/" in base else base
+    current = _git(repo, "symbolic-ref", "-q", "--short", "HEAD")
+
+    for name in names:
+        if name in (base, base_short) or (current and name == current):
+            return False
+        sha = _git(repo, "rev-parse", "-q", "--verify", "refs/heads/" + name)
+        if not sha or not re.fullmatch(r"[0-9a-f]{40}", sha):
+            return False
+        if not _absorbed_into(repo, sha, base):
             return False
     return True
 
@@ -201,6 +330,8 @@ def check(command: str, cwd: str = ""):
             continue
         if idx == DELETE_RULE and deletion_is_provably_merged(command, cwd):
             continue                     # proved harmless; other rules still apply
+        if idx == BRANCH_DELETE_RULE and branch_delete_is_provably_absorbed(command, cwd):
+            continue
         return why, alt
     return None
 
