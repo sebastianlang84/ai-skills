@@ -1,6 +1,6 @@
 ---
 name: cross-vendor-review
-description: Get an adversarial second opinion from a different vendor's model (Codex/GPT) on a design, plan, or architecture decision, running in the background so work continues meanwhile. Use when a substantial decision is about to be committed to, when the user asks to have something "gegengelesen", wants a second opinion, a codex review, or a devil's advocate — and proactively after any design that will be expensive to reverse. Not for reviewing a code diff; that is what a code review does.
+description: Get a narrowly scoped adversarial second opinion from another vendor's model on a substantial design, plan, or architecture decision. Use when the user explicitly asks for something to be "gegengelesen", a second opinion, a Codex/Opus review, or a devil's advocate; or when an expensive-to-reverse decision has a named unresolved risk and the verdict could change the decision. Not for routine implementation, small or reversible changes, code diffs, general reassurance, or automatic review after every change.
 ---
 
 # Cross-vendor review
@@ -8,17 +8,35 @@ description: Get an adversarial second opinion from a different vendor's model (
 A second opinion is only worth its tokens if it comes from a **different vendor** and is pointed at
 what the design *is*, not at a diff. Same-vendor review catches anchoring, not blind spots.
 
-## Always background it
+## Gate the launch
 
-Launch the reviewer through the harness's background mechanism and keep working. A high-effort
-review takes minutes; blocking on it wastes the entire point. Fold the findings in when it lands.
+An explicit user request authorizes one review; still narrow it to the decision they care about.
+Without an explicit request, launch only when all are true:
+
+1. The decision is substantial and expensive to reverse, or controls a real security, data-loss, or
+   correctness boundary.
+2. One concrete uncertainty remains after reading the source and running the available deterministic
+   checks.
+3. A plausible contrary verdict would change the design or stop the work.
+
+If any condition is missing, do not spend the foreign-model call. A passing routine change does not
+earn a review merely because a reviewer is available. Review one decision against the smallest
+evidence set that can settle it; do not submit the whole workstream for general reassurance.
+
+## Background an approved review
+
+Launch the reviewer through the harness's background mechanism and keep working. A review can take
+minutes; blocking on it wastes the entire point. Fold the findings in when it lands.
 
 ```bash
 ~/.agents/skills/cross-vendor-review/scripts/launch-review.sh <prompt-file> <output-file> [cwd]
 ```
 
-The script blocks by design — the *caller* backgrounds it. Defaults to `gpt-5.6-sol` at high
-reasoning effort, read-only sandbox; override with `REVIEW_MODEL`.
+The script blocks by design — the *caller* backgrounds it. It is the Claude-to-GPT adapter and
+defaults to `gpt-5.6-sol` at `medium` reasoning effort in a read-only sandbox; override with
+`REVIEW_MODEL` or `REVIEW_REASONING_EFFORT`. From Codex/GPT, use the harness's Claude/Opus
+background mechanism. If no foreign-vendor reviewer is available, report that instead of silently
+substituting a same-vendor model.
 
 ## Write the prompt from the design, not from the diff
 
@@ -51,9 +69,9 @@ condition.** One round is the default. Stop when the acceptance criteria stated 
 met, the repo's deterministic gates pass, no confirmed blocker is open, and each confirmed defect
 left a regression test behind.
 
-A second round is justified only when the first produced a confirmed blocker whose fix was
-substantial — and then its mandate is *that fix*: was it really fixed, did it break anything, do the
-criteria still hold. It is not a fresh unbounded pass over everything.
+A second round or higher reasoning effort is justified only when the first `medium` round produced a
+confirmed blocker whose fix was substantial, or exposed one concrete risk that `medium` could not
+settle — and then its mandate is *that fix or risk*. It is not a fresh unbounded pass over everything.
 
 For a design document rather than code there are no gates, so the spec has to carry the whole load:
 write down before the review what the document must establish, and treat anything outside it as the
