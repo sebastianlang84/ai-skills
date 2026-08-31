@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Peer debate — processes over time</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#fafafa; --ink:#000000; --muted:#717273; --soft:#8a8b8c;
+    --rule:rgba(0,0,0,0.12); --accent:#d90000;
+  }
+  *{box-sizing:border-box}
+  body{margin:0; background:var(--paper); color:var(--ink);
+       font-family:'Geist',system-ui,sans-serif; line-height:1.6}
+  .page{max-width:1000px; margin:0 auto; padding:48px 24px 64px}
+  .eyebrow{font-family:'Geist Mono',monospace; font-size:8px; letter-spacing:0.14em;
+           text-transform:uppercase; color:var(--muted); margin:0 0 8px}
+  h1{font-family:'Instrument Serif',Georgia,serif; font-weight:400; font-size:28px;
+     margin:0 0 8px}
+  .sub{color:var(--muted); font-size:14px; margin:0 0 32px; max-width:62ch}
+  .figure{overflow-x:auto}
+  svg{display:block; max-width:100%; height:auto}
+  footer{margin-top:40px; padding-top:16px; border-top:1px solid var(--rule);
+         font-family:'Geist Mono',monospace; font-size:8px; letter-spacing:0.12em;
+         text-transform:uppercase; color:var(--soft)}
+</style>
+</head>
+<body>
+<div class="page">
+  <p class="eyebrow">peer-debate · skill documentation</p>
+  <h1>How many agents actually run</h1>
+  <p class="sub">Agent A and Agent B are not standing services — each turn starts a fresh Agy
+  process that exits when it has answered. Blind round 0 runs both sides concurrently; later turns
+  run in relay order. Conversation ids persist between turns. There is no separate judge.</p>
+
+  <div class="figure">
+  <svg viewBox="0 0 920 800" role="img" aria-labelledby="debate-seq-title debate-seq-desc"
+       xmlns="http://www.w3.org/2000/svg">
+    <title id="debate-seq-title">Agent processes over the course of a debate</title>
+    <desc id="debate-seq-desc">A sequence diagram in which the orchestrating agent runs
+    continuously while Agent A and Agent B each run only for the duration of a single turn. Both
+    run concurrently in blind round 0; later turns alternate. An optional review agent from a
+    different vendor may run once at the end.</desc>
+
+    <defs>
+      <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#717273"/>
+      </marker>
+      <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+        <polygon points="0 0, 8 3, 0 6" fill="#d90000"/>
+      </marker>
+    </defs>
+
+    <rect width="100%" height="100%" fill="#fafafa"/>
+
+    <!-- ===== lifelines ===== -->
+    <line x1="120" y1="104" x2="120" y2="652" stroke="rgba(0,0,0,0.22)" stroke-width="1" stroke-dasharray="4,4"/>
+    <line x1="340" y1="104" x2="340" y2="652" stroke="rgba(0,0,0,0.22)" stroke-width="1" stroke-dasharray="4,4"/>
+    <line x1="560" y1="104" x2="560" y2="652" stroke="rgba(0,0,0,0.22)" stroke-width="1" stroke-dasharray="4,4"/>
+    <line x1="800" y1="104" x2="800" y2="652" stroke="rgba(0,0,0,0.22)" stroke-width="1" stroke-dasharray="4,4"/>
+
+    <!-- ===== loop fragment (drawn before messages so it sits behind) ===== -->
+    <rect x="72" y="296" width="536" height="184" rx="4" fill="rgba(0,0,0,0.02)" stroke="rgba(0,0,0,0.22)" stroke-width="1"/>
+    <rect x="72" y="296" width="40" height="16" rx="2" fill="#fafafa" stroke="rgba(0,0,0,0.22)" stroke-width="1"/>
+    <text x="92" y="308" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          text-anchor="middle" letter-spacing="0.06em">LOOP</text>
+    <text x="196" y="308" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          letter-spacing="0.06em">UP TO 4 ROUNDS</text>
+
+    <!-- ===== activation bars ===== -->
+    <!-- orchestrator: continuous -->
+    <rect x="116" y="128" width="8" height="516" fill="rgba(0,0,0,0.05)" stroke="#717273" stroke-width="0.8"/>
+    <!-- Agent A: two short lives -->
+    <rect x="336" y="136" width="8" height="48" fill="rgba(0,0,0,0.05)" stroke="#717273" stroke-width="0.8"/>
+    <rect x="336" y="328" width="8" height="48" fill="rgba(0,0,0,0.05)" stroke="#717273" stroke-width="0.8"/>
+    <!-- Agent B: first life overlaps A in blind round 0 -->
+    <rect x="556" y="136" width="8" height="48" fill="rgba(0,0,0,0.05)" stroke="#717273" stroke-width="0.8"/>
+    <rect x="556" y="408" width="8" height="48" fill="rgba(0,0,0,0.05)" stroke="#717273" stroke-width="0.8"/>
+    <!-- review agent: one life -->
+    <rect x="796" y="584" width="8" height="48" fill="rgba(0,0,0,0.05)" stroke="#717273" stroke-width="0.8"/>
+
+    <!-- ===== messages ===== -->
+    <!-- R0 to A -->
+    <line x1="128" y1="140" x2="332" y2="140" stroke="#717273" stroke-width="1" marker-end="url(#arrow)"/>
+    <rect x="184" y="120" width="96" height="12" rx="2" fill="#fafafa"/>
+    <text x="232" y="129" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          text-anchor="middle" letter-spacing="0.06em">ROUND 0, BLIND</text>
+    <line x1="332" y1="180" x2="128" y2="180" stroke="#717273" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+    <rect x="196" y="160" width="72" height="12" rx="2" fill="#fafafa"/>
+    <text x="232" y="169" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          text-anchor="middle" letter-spacing="0.06em">POSITION</text>
+
+    <!-- R0 to B -->
+    <line x1="128" y1="148" x2="552" y2="148" stroke="#717273" stroke-width="1" marker-end="url(#arrow)"/>
+    <rect x="288" y="132" width="136" height="12" rx="2" fill="#fafafa"/>
+    <text x="356" y="141" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          text-anchor="middle" letter-spacing="0.06em">SAME TEXT, STILL BLIND</text>
+    <line x1="552" y1="188" x2="128" y2="188" stroke="#717273" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+    <rect x="304" y="172" width="72" height="12" rx="2" fill="#fafafa"/>
+    <text x="340" y="181" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          text-anchor="middle" letter-spacing="0.06em">POSITION</text>
+
+    <!-- loop: orch -> A -->
+    <line x1="128" y1="332" x2="332" y2="332" stroke="#717273" stroke-width="1" marker-end="url(#arrow)"/>
+    <rect x="180" y="316" width="104" height="12" rx="2" fill="#fafafa"/>
+    <text x="232" y="325" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          text-anchor="middle" letter-spacing="0.06em">B'S LATEST REPLY</text>
+    <line x1="332" y1="372" x2="128" y2="372" stroke="#717273" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+    <rect x="180" y="352" width="104" height="12" rx="2" fill="#fafafa"/>
+    <text x="232" y="361" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          text-anchor="middle" letter-spacing="0.06em">REFUTE / CONCEDE</text>
+
+    <!-- loop: orch -> B -->
+    <line x1="128" y1="412" x2="552" y2="412" stroke="#717273" stroke-width="1" marker-end="url(#arrow)"/>
+    <rect x="288" y="396" width="104" height="12" rx="2" fill="#fafafa"/>
+    <text x="340" y="405" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          text-anchor="middle" letter-spacing="0.06em">A'S LATEST REPLY</text>
+    <line x1="552" y1="452" x2="128" y2="452" stroke="#717273" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+    <rect x="288" y="432" width="104" height="12" rx="2" fill="#fafafa"/>
+    <text x="340" y="441" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          text-anchor="middle" letter-spacing="0.06em">REFUTE / CONCEDE</text>
+
+    <!-- self message: judge -->
+    <path d="M 128 512 L 172 512 Q 180 512 180 520 L 180 528 Q 180 536 172 536 L 128 536"
+          fill="none" stroke="#d90000" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+    <rect x="192" y="512" width="216" height="12" rx="2" fill="#fafafa"/>
+    <text x="200" y="521" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          letter-spacing="0.06em">JUDGE — RECOMPUTE, DO NOT TRUST</text>
+    <rect x="192" y="528" width="216" height="12" rx="2" fill="#fafafa"/>
+    <text x="200" y="537" fill="#8a8b8c" font-size="8" font-family="'Geist Mono',monospace"
+          letter-spacing="0.06em">SAME PROCESS — NO JUDGE AGENT</text>
+
+    <!-- optional escalation -->
+    <line x1="128" y1="588" x2="792" y2="588" stroke="#717273" stroke-width="1" marker-end="url(#arrow)"/>
+    <rect x="396" y="568" width="216" height="12" rx="2" fill="#fafafa"/>
+    <text x="504" y="577" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          text-anchor="middle" letter-spacing="0.06em">ONLY IF BOTH SHARE A PREMISE</text>
+    <line x1="792" y1="628" x2="128" y2="628" stroke="#717273" stroke-width="1" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+    <rect x="424" y="608" width="160" height="12" rx="2" fill="#fafafa"/>
+    <text x="504" y="617" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          text-anchor="middle" letter-spacing="0.06em">FINDINGS, THEN EXITS</text>
+
+    <!-- ===== actor boxes (painted last) ===== -->
+    <rect x="40" y="40" width="160" height="64" rx="6" fill="#fafafa"/>
+    <rect x="40" y="40" width="160" height="64" rx="6" fill="rgba(217,0,0,0.07)" stroke="#d90000" stroke-width="1"/>
+    <text x="120" y="68" fill="#000000" font-size="12" font-weight="600"
+          font-family="'Geist',sans-serif" text-anchor="middle">Agent Orchestrator</text>
+    <text x="120" y="86" fill="#717273" font-size="9"
+          font-family="'Geist Mono',monospace" text-anchor="middle">orchestrator, continuous</text>
+
+    <rect x="260" y="40" width="160" height="64" rx="6" fill="#fafafa"/>
+    <rect x="260" y="40" width="160" height="64" rx="6" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+    <text x="340" y="68" fill="#000000" font-size="12" font-weight="600"
+          font-family="'Geist',sans-serif" text-anchor="middle">Agent A · proposer</text>
+    <text x="340" y="86" fill="#717273" font-size="9"
+          font-family="'Geist Mono',monospace" text-anchor="middle">agy, one shot per turn</text>
+
+    <rect x="480" y="40" width="160" height="64" rx="6" fill="#fafafa"/>
+    <rect x="480" y="40" width="160" height="64" rx="6" fill="#ffffff" stroke="#000000" stroke-width="1"/>
+    <text x="560" y="68" fill="#000000" font-size="12" font-weight="600"
+          font-family="'Geist',sans-serif" text-anchor="middle">Agent B · refuter</text>
+    <text x="560" y="86" fill="#717273" font-size="9"
+          font-family="'Geist Mono',monospace" text-anchor="middle">agy, one shot per turn</text>
+
+    <rect x="720" y="40" width="160" height="64" rx="6" fill="#fafafa"/>
+    <rect x="720" y="40" width="160" height="64" rx="6" fill="rgba(0,0,0,0.03)" stroke="rgba(0,0,0,0.30)" stroke-width="1"/>
+    <text x="800" y="68" fill="#000000" font-size="12" font-weight="600"
+          font-family="'Geist',sans-serif" text-anchor="middle">Agent Review</text>
+    <text x="800" y="86" fill="#717273" font-size="9"
+          font-family="'Geist Mono',monospace" text-anchor="middle">other vendor, optional</text>
+
+    <!-- ===== legend ===== -->
+    <line x1="32" y1="712" x2="888" y2="712" stroke="rgba(0,0,0,0.10)" stroke-width="0.8"/>
+    <text x="32" y="732" fill="#717273" font-size="8" font-family="'Geist Mono',monospace"
+          letter-spacing="0.14em">LEGEND</text>
+
+    <rect x="120" y="722" width="8" height="16" fill="rgba(0,0,0,0.05)" stroke="#717273" stroke-width="0.8"/>
+    <text x="140" y="734" fill="#717273" font-size="8" font-family="'Geist Mono',monospace">PROCESS ALIVE</text>
+
+    <line x1="272" y1="730" x2="304" y2="730" stroke="#717273" stroke-width="1"/>
+    <text x="312" y="734" fill="#717273" font-size="8" font-family="'Geist Mono',monospace">PROMPT SENT</text>
+
+    <line x1="428" y1="730" x2="460" y2="730" stroke="#717273" stroke-width="1" stroke-dasharray="5,4"/>
+    <text x="468" y="734" fill="#717273" font-size="8" font-family="'Geist Mono',monospace">REPLY RETURNED</text>
+
+    <line x1="608" y1="730" x2="640" y2="730" stroke="#d90000" stroke-width="1.2"/>
+    <text x="648" y="734" fill="#717273" font-size="8" font-family="'Geist Mono',monospace">ORCHESTRATOR'S OWN JUDGEMENT</text>
+  </svg>
+  </div>
+
+  <footer>peer-debate · ~/.agents/skills/peer-debate · human documentation, not loaded by the agent</footer>
+</div>
+</body>
+</html>
