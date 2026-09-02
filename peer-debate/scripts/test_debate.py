@@ -74,7 +74,7 @@ class DebateTests(unittest.TestCase):
         add_dir = argv.index("--add-dir")
         self.assertEqual(Path(argv[add_dir + 1]), self.run / "A")
         transcript = (self.run / "transcript.md").read_text(encoding="utf-8")
-        self.assertIn("cli=agy model=gemini-3.8-flash-medium effort=medium", transcript)
+        self.assertIn("cli=agy model=gemini-3.8-flash-high effort=high", transcript)
         self.assertIn("total=120 cumulative-for-this-side", transcript)
 
     @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/agy")
@@ -124,8 +124,8 @@ class DebateTests(unittest.TestCase):
         return "\n".join(json.dumps(e) for e in events) + "\n"
 
     def test_parse_model_defaults_to_agy_and_rejects_unknown_cli(self):
-        self.assertEqual(debate.parse_model("gemini-3.8-flash-medium"),
-                         ("agy", "gemini-3.8-flash-medium"))
+        self.assertEqual(debate.parse_model("gemini-3.8-flash-high"),
+                         ("agy", "gemini-3.8-flash-high"))
         self.assertEqual(debate.parse_model("codex:gpt-5.6-terra"), ("codex", "gpt-5.6-terra"))
         with self.assertRaisesRegex(debate.Failed, "unknown cli"):
             debate.parse_model("claude:opus")
@@ -151,7 +151,7 @@ class DebateTests(unittest.TestCase):
 
     def _sides(self, b="codex:gpt-5.6-terra"):
         (self.run / "sides.json").write_text(json.dumps({
-            "A": {"cli": "agy", "model": "gemini-3.8-flash-medium", "effort": "medium"},
+            "A": {"cli": "agy", "model": "gemini-3.8-flash-high", "effort": "high"},
             "B": {"cli": "codex", "model": b.split(":", 1)[1], "effort": "low"},
         }), encoding="utf-8")
 
@@ -204,7 +204,7 @@ class DebateTests(unittest.TestCase):
         with mock.patch.dict(debate.os.environ, {"PEER_DEBATE_MODEL_A": "codex:other"}):
             debate.turn(self.run.name, "A", "question")
         argv = run.call_args.args[0]
-        self.assertEqual(argv[argv.index("--model") + 1], "gemini-3.8-flash-medium")
+        self.assertEqual(argv[argv.index("--model") + 1], "gemini-3.8-flash-high")
 
 
 if __name__ == "__main__":

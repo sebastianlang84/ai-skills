@@ -103,9 +103,9 @@ Every value below is an environment variable with a default.
 | Variable | Default | Meaning |
 |---|---|---|
 | `PEER_DEBATE_ROOT` | `~/peer-debates` | where run directories are created. Point it elsewhere to keep a debate's record beside the thing it is about |
-| `PEER_DEBATE_MODEL` | `agy:gemini-3.8-flash-medium` | model both sides run, as `<cli>:<id>` with cli `agy` or `codex`; a bare id means agy. `agy models` lists agy ids |
-| `PEER_DEBATE_MODEL_A`, `PEER_DEBATE_MODEL_B` | unset | model for one side; set both to put two vendors against each other, e.g. `A=agy:gemini-3.8-flash-medium B=codex:gpt-5.6-terra` |
-| `PEER_DEBATE_EFFORT` | `medium` | reasoning effort for both sides (`PEER_DEBATE_EFFORT_A`/`_B` per side) |
+| `PEER_DEBATE_MODEL` | `agy:gemini-3.8-flash-high` | model both sides run, as `<cli>:<id>` with cli `agy` or `codex`; a bare id means agy. `agy models` lists agy ids |
+| `PEER_DEBATE_MODEL_A`, `PEER_DEBATE_MODEL_B` | unset | model for one side; set both to put two vendors against each other, e.g. `A=agy:gemini-3.8-flash-high B=codex:gpt-5.6-terra` |
+| `PEER_DEBATE_EFFORT` | `high` | reasoning effort for both sides (`PEER_DEBATE_EFFORT_A`/`_B` per side). High by default, against the house rule of starting at medium: measured 2026-09-02 on one question with fresh context per run, the medium pair invented an architecture whose acceptance test was unreachable, the high pair read the repo and anchored its answer there, for 8 instead of 6 minutes |
 | `PEER_DEBATE_TIMEOUT` | `3600` | seconds per turn; a turn that hits it is killed and reported, not recorded |
 
 What each side runs is written to `sides.json` at `init` and read by every later turn, so a

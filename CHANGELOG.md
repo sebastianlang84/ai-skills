@@ -8,7 +8,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
-- `peer-debate` can now put two vendors against each other: `PEER_DEBATE_MODEL` takes `<cli>:<id>` with `agy` or `codex`, `PEER_DEBATE_MODEL_A`/`_B` set one side, and what each side runs is fixed in `sides.json` at `init`. Codex turns run `codex exec --json` with hooks off, because the SessionEnd compaction hook holds the thread's writer lock for minutes and a resume inside that window fails. Measured 2026-09-02: `gemini-3.8-flash-low` against `gpt-5.6-terra`, round 0 plus one exchange, both sides resumed. Default model moves to `agy:gemini-3.8-flash-medium`.
+- `peer-debate` can now put two vendors against each other: `PEER_DEBATE_MODEL` takes `<cli>:<id>` with `agy` or `codex`, `PEER_DEBATE_MODEL_A`/`_B` set one side, and what each side runs is fixed in `sides.json` at `init`. Codex turns run `codex exec --json` with hooks off, because the SessionEnd compaction hook holds the thread's writer lock for minutes and a resume inside that window fails. Measured 2026-09-02: `gemini-3.8-flash-low` against `gpt-5.6-terra`, round 0 plus one exchange, both sides resumed. Default effort moves to `high` and the default model to `agy:gemini-3.8-flash-high`: on the same question with fresh context per run, the medium pair invented an architecture whose acceptance test was unreachable, the high pair read the repo and anchored its answer there, for 8 instead of 6 minutes.
 
 ### Added
 

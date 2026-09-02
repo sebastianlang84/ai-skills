@@ -17,14 +17,14 @@ wherever those differ.
 Configuration, all optional, all environment variables:
 
     PEER_DEBATE_ROOT         where run directories are created   (default ~/peer-debates)
-    PEER_DEBATE_MODEL        model both sides run                 (default agy:gemini-3.8-flash-medium)
+    PEER_DEBATE_MODEL        model both sides run                 (default agy:gemini-3.8-flash-high)
     PEER_DEBATE_MODEL_A/_B   model for one side, overrides PEER_DEBATE_MODEL
-    PEER_DEBATE_EFFORT       reasoning effort both sides run      (default medium)
+    PEER_DEBATE_EFFORT       reasoning effort both sides run      (default high)
     PEER_DEBATE_EFFORT_A/_B  effort for one side
     PEER_DEBATE_TIMEOUT      seconds per turn                     (default 3600)
 
 A model is `<cli>:<id>` with cli `agy` or `codex`; a bare id means agy. Sides may differ:
-`PEER_DEBATE_MODEL_A=agy:gemini-3.8-flash-medium PEER_DEBATE_MODEL_B=codex:gpt-5.6-terra` puts
+`PEER_DEBATE_MODEL_A=agy:gemini-3.8-flash-high PEER_DEBATE_MODEL_B=codex:gpt-5.6-terra` puts
 Gemini against a Codex model. What each side runs is fixed at `init` in `sides.json` and cannot
 drift between rounds through the environment.
 """
@@ -47,8 +47,8 @@ from pathlib import Path
 
 HOME = Path.home()
 ROOT = Path(os.environ.get("PEER_DEBATE_ROOT", HOME / "peer-debates"))
-MODEL = os.environ.get("PEER_DEBATE_MODEL", "agy:gemini-3.8-flash-medium")
-EFFORT = os.environ.get("PEER_DEBATE_EFFORT", "medium")
+MODEL = os.environ.get("PEER_DEBATE_MODEL", "agy:gemini-3.8-flash-high")
+EFFORT = os.environ.get("PEER_DEBATE_EFFORT", "high")
 TURN_TIMEOUT = int(os.environ.get("PEER_DEBATE_TIMEOUT", "3600"))
 CLIS = ("agy", "codex")
 
@@ -80,7 +80,7 @@ class Failed(Exception):
 
 
 def parse_model(spec: str) -> tuple[str, str]:
-    """`agy:gemini-3.8-flash-medium` -> ("agy", "gemini-3.8-flash-medium"); a bare id is agy."""
+    """`agy:gemini-3.8-flash-high` -> ("agy", "gemini-3.8-flash-high"); a bare id is agy."""
     spec = spec.strip()
     cli, sep, model = spec.partition(":")
     if not sep:
