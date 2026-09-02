@@ -25,7 +25,10 @@ touches the Brain itself or will write to it.
    language. Do not pass a free-form German question to the mostly English corpus and treat its
    ranking as semantic retrieval. Do not bulk-load the bundle.
 3. Distinguish the Brain's synthesis from the current authority. For drift-prone or consequential
-   claims, inspect the cited source or the owning repo before treating the claim as current.
+   claims, inspect the cited source or the owning repo before treating the claim as current. When
+   freshness itself is in scope or a local source appears to have moved, run
+   `python3 ~/.agents/brain/tools/audit_staleness.py`; treat every finding as a review trigger, not
+   proof that the concept is false.
 4. Preserve trust state in the answer: machine-written or `draft` concepts inform; they are not
    human-confirmed rules.
 
@@ -88,8 +91,9 @@ has provenance, passes lint, and the lock is released.
 When asked what the Brain is, why it exists, how it works, how to use it, or how to build another
 one, start with `brain-architecture.md`, then follow its links for the requested depth. Report the
 current implementation separately from desired future capabilities; in particular, do not imply
-automatic clustering, contradiction detection, semantic retrieval, or staleness checks unless they
-exist and have been verified.
+automatic clustering, contradiction detection, semantic retrieval, or semantic staleness
+detection. The current report-only audit covers elapsed review dates and selected local-source
+failures, not whether prose remains true.
 
 ## Improve retrieval and structure
 

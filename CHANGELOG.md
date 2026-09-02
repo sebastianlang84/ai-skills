@@ -8,6 +8,8 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- `using-brain` now routes freshness questions and visibly moved local sources through the Brain's
+  report-only staleness audit, while keeping semantic truth assessment with source review.
 - `parallel-agents` gained `brain-lock.py`, an atomic multi-path claim over shared Brain files (kernel advisory locks, 15-minute default TTL, up to one hour), plus the rule to lock concept, index and `log.md` together before a Brain edit. `using-brain` already referenced the script; it had been sitting uncommitted since 2026-08-18.
 - `newsletter-delivery` follows the 2026-08-23 retirement of the production Telegram path: the protected channel id is gone from the skill, the unified digest is the only private smoke, and legacy Digest, Radar and watchdog sends are refused. Uncommitted since 2026-08-23.
 - `_scripts/check_repo_metadata.py` skips symlinked skill directories and `.gitignore` lists `diagram-design`, which is a symlink into the externally owned `~/dev/diagram-design` checkout: the README skill list is generated from what this repo owns, and a symlink is neither trackable as `<skill>/SKILL.md` nor ours to version.
