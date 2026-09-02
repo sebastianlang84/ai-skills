@@ -6,3 +6,6 @@ __pycache__/
 .DS_Store
 *.log
 *.tmp
+
+# Externally owned skill checkouts, linked in rather than vendored
+diagram-design

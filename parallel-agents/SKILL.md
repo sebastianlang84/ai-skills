@@ -1,6 +1,6 @@
 ---
 name: parallel-agents
-description: Coordinating several agent sessions working the same repo at once — detecting that another session is already on your topic, claiming work, and the hook that refuses to create a file another live session already has. Use when several sessions run in parallel, when a merge turns up duplicate work, when a Write is refused as a collision, or when deciding whether to start on something another agent may already hold.
+description: Coordinating several agent sessions working the same repo or shared Brain at once — detecting live ownership, claiming Brain files, and stopping duplicate writes. Use when agents run in parallel, before editing shared Brain entries, when a merge turns up duplicate work, or when a Write is refused as a collision.
 ---
 
 # Parallel agents on one repo
@@ -39,6 +39,22 @@ What follows from it:
   needed.
 - It reports that a session is live, not what it is *thinking about*. Intent is what messaging is
   for.
+
+## Before writing to the shared Brain
+
+Lock every Brain file the edit touches — concept, index and `log.md` — in one atomic claim:
+
+```bash
+python3 ~/.agents/skills/parallel-agents/scripts/brain-lock.py acquire \
+  preferences/example.md preferences/index.md log.md
+# edit, then run: python3 tools/lint.py
+python3 ~/.agents/skills/parallel-agents/scripts/brain-lock.py release <token>
+```
+
+The holder uses kernel advisory locks, so two agents cannot claim the same path. Different paths
+remain parallel. Locks expire after 15 minutes if an agent disappears; use `--ttl` only when the
+critical section genuinely needs longer, up to one hour. A blocked claim means another agent owns
+that file now — inspect `brain-lock.py status` and coordinate rather than bypassing it.
 
 ## Before substantial work
 
@@ -102,8 +118,6 @@ which can resolve it unattended. It is not a permission prompt and does not wake
   `O_EXCL` reservation that would close it is not bought yet.
 - Files created through Bash (`>`, `tee`, `cp`) bypass it — `Write` is the only deterministic event
   that knows the intended path.
-- Two sessions appending to the same *existing* file (`log.md`) never trigger it. That one is an
-  ordinary content conflict and does surface at merge.
 - Different filenames for the same work defeat it entirely. This is an exact-path last line of
   defence, not a solution to semantic duplication — that stays with cross-session messaging.
 

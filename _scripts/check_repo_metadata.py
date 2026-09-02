@@ -46,7 +46,8 @@ class View:
             return sorted(
                 p.name
                 for p in ROOT.iterdir()
-                if p.is_dir() and not p.name.startswith(".") and (p / "SKILL.md").exists()
+                if p.is_dir() and not p.is_symlink() and not p.name.startswith(".")
+                and (p / "SKILL.md").exists()
             )
         names: set[str] = set()
         for path in git_lines(["ls-tree", "-r", "--name-only", self.treeish]):

@@ -8,6 +8,9 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- `parallel-agents` gained `brain-lock.py`, an atomic multi-path claim over shared Brain files (kernel advisory locks, 15-minute default TTL, up to one hour), plus the rule to lock concept, index and `log.md` together before a Brain edit. `using-brain` already referenced the script; it had been sitting uncommitted since 2026-08-18.
+- `newsletter-delivery` follows the 2026-08-23 retirement of the production Telegram path: the protected channel id is gone from the skill, the unified digest is the only private smoke, and legacy Digest, Radar and watchdog sends are refused. Uncommitted since 2026-08-23.
+- `_scripts/check_repo_metadata.py` skips symlinked skill directories and `.gitignore` lists `diagram-design`, which is a symlink into the externally owned `~/dev/diagram-design` checkout: the README skill list is generated from what this repo owns, and a symlink is neither trackable as `<skill>/SKILL.md` nor ours to version.
 - `peer-debate` can now put two vendors against each other: `PEER_DEBATE_MODEL` takes `<cli>:<id>` with `agy` or `codex`, `PEER_DEBATE_MODEL_A`/`_B` set one side, and what each side runs is fixed in `sides.json` at `init`. Codex turns run `codex exec --json` with hooks off, because the SessionEnd compaction hook holds the thread's writer lock for minutes and a resume inside that window fails. Measured 2026-09-02: `gemini-3.8-flash-low` against `gpt-5.6-terra`, round 0 plus one exchange, both sides resumed. Default effort moves to `high` and the default model to `agy:gemini-3.8-flash-high`: on the same question with fresh context per run, the medium pair invented an architecture whose acceptance test was unreachable, the high pair read the repo and anchored its answer there, for 8 instead of 6 minutes.
 
 ### Added
