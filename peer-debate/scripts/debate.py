@@ -17,9 +17,16 @@ wherever those differ.
 Configuration, all optional, all environment variables:
 
     PEER_DEBATE_ROOT         where run directories are created   (default ~/peer-debates)
-    PEER_DEBATE_MODEL        model both sides run                 (default gemini-3.7-flash-medium)
-    PEER_DEBATE_EFFORT       agy reasoning effort                 (default medium)
+    PEER_DEBATE_MODEL        model both sides run                 (default agy:gemini-3.8-flash-medium)
+    PEER_DEBATE_MODEL_A/_B   model for one side, overrides PEER_DEBATE_MODEL
+    PEER_DEBATE_EFFORT       reasoning effort both sides run      (default medium)
+    PEER_DEBATE_EFFORT_A/_B  effort for one side
     PEER_DEBATE_TIMEOUT      seconds per turn                     (default 3600)
+
+A model is `<cli>:<id>` with cli `agy` or `codex`; a bare id means agy. Sides may differ:
+`PEER_DEBATE_MODEL_A=agy:gemini-3.8-flash-medium PEER_DEBATE_MODEL_B=codex:gpt-5.6-terra` puts
+Gemini against a Codex model. What each side runs is fixed at `init` in `sides.json` and cannot
+drift between rounds through the environment.
 """
 from __future__ import annotations
 
@@ -40,9 +47,10 @@ from pathlib import Path
 
 HOME = Path.home()
 ROOT = Path(os.environ.get("PEER_DEBATE_ROOT", HOME / "peer-debates"))
-MODEL = os.environ.get("PEER_DEBATE_MODEL", "gemini-3.7-flash-medium")
+MODEL = os.environ.get("PEER_DEBATE_MODEL", "agy:gemini-3.8-flash-medium")
 EFFORT = os.environ.get("PEER_DEBATE_EFFORT", "medium")
 TURN_TIMEOUT = int(os.environ.get("PEER_DEBATE_TIMEOUT", "3600"))
+CLIS = ("agy", "codex")
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 # One writer at a time: round 0 runs both sides in threads, and a buffered append of a multi-kB
@@ -69,6 +77,41 @@ INJECTION_LABEL = (
 
 class Failed(Exception):
     """Anything the operator has to fix. Printed as one line, never a traceback."""
+
+
+def parse_model(spec: str) -> tuple[str, str]:
+    """`agy:gemini-3.8-flash-medium` -> ("agy", "gemini-3.8-flash-medium"); a bare id is agy."""
+    spec = spec.strip()
+    cli, sep, model = spec.partition(":")
+    if not sep:
+        return "agy", spec
+    if cli not in CLIS:
+        raise Failed(f"unknown cli {cli!r} in model {spec!r}; use one of {', '.join(CLIS)}")
+    if not model:
+        raise Failed(f"model {spec!r} names no model id")
+    return cli, model
+
+
+def sides_from_env() -> dict[str, dict[str, str]]:
+    """What each side runs, from the environment: per-side variables win over the shared one."""
+    out = {}
+    for side in ("A", "B"):
+        cli, model = parse_model(os.environ.get(f"PEER_DEBATE_MODEL_{side}", MODEL))
+        out[side] = {"cli": cli, "model": model,
+                     "effort": os.environ.get(f"PEER_DEBATE_EFFORT_{side}", EFFORT)}
+    return out
+
+
+def side_config(d: Path, side: str) -> dict[str, str]:
+    """The side's cli, model and effort as fixed at init; runs from before sides.json use the env."""
+    path = d / "sides.json"
+    if path.is_file():
+        try:
+            sides = json.loads(path.read_text(encoding="utf-8"))
+            return dict(sides[side])
+        except (ValueError, KeyError, TypeError) as exc:
+            raise Failed(f"{path} is unreadable ({exc}); fix or remove it")
+    return sides_from_env()[side]
 
 
 def now() -> str:
@@ -131,20 +174,124 @@ def parse_agy_result(stdout: str, stderr: str, side: str) -> tuple[str, str, str
     return reply.strip(), conversation, stamp
 
 
+def parse_codex_result(stdout: str, stderr: str, side: str) -> tuple[str, str, str]:
+    """Validate `codex exec --json` JSONL and return reply, thread id and usage stamp.
+
+    Measured on codex-cli 0.152.1: `thread.started` carries the thread id, each assistant message
+    is an `item.completed` with `item.type == "agent_message"`, `turn.completed` carries usage,
+    and a refused model arrives as `error` plus `turn.failed` with exit status 0.
+    """
+    thread = None
+    replies: list[str] = []
+    usage = None
+    errors: list[str] = []
+    for line in stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        kind = event.get("type")
+        if kind == "thread.started" and isinstance(event.get("thread_id"), str):
+            thread = event["thread_id"]
+        elif kind == "item.completed":
+            item = event.get("item") or {}
+            if item.get("type") == "agent_message" and isinstance(item.get("text"), str):
+                replies.append(item["text"])
+            elif item.get("type") == "error" and isinstance(item.get("message"), str):
+                # Advisory (e.g. a model-mismatch note on resume); loud only if no reply follows.
+                errors.append(item["message"])
+        elif kind == "turn.completed" and isinstance(event.get("usage"), dict):
+            usage = event["usage"]
+        elif kind in ("error", "turn.failed"):
+            message = event.get("message") or (event.get("error") or {}).get("message")
+            errors.append(str(message))
+    if not thread:
+        tail = stderr.strip().splitlines()[-3:]
+        detail = "\n  " + "\n  ".join(tail) if tail else ""
+        raise Failed(f"side {side} returned no codex thread id; nothing recorded{detail}")
+    if not replies or not replies[-1].strip():
+        detail = "\n  " + "\n  ".join(errors[-3:]) if errors else ""
+        raise Failed(f"side {side} returned an empty reply; nothing recorded{detail}")
+    if usage is None:
+        stamp = "usage=unavailable"
+    else:
+        stamp = (
+            f"in={usage.get('input_tokens', '?')} cached={usage.get('cached_input_tokens', '?')} "
+            f"thinking={usage.get('reasoning_output_tokens', '?')} "
+            f"out={usage.get('output_tokens', '?')} this-turn"
+        )
+    return replies[-1].strip(), thread, stamp
+
+
+def agy_command(exe: str, work: Path, msg_file: Path, model: str, effort: str,
+                conversation: str | None) -> list[str]:
+    cmd = [exe]
+    if conversation is not None:
+        cmd.extend(["--conversation", conversation])
+    cmd.extend([
+        "--print", f"Read {msg_file}. It is this turn's complete message. Answer it.",
+        "--add-dir", str(work),
+        "--output-format", "json",
+        "--model", model,
+        "--effort", effort,
+        "--mode", "accept-edits",
+        # Headless agy soft-denies tools that would normally prompt. This private experiment host
+        # deliberately gives both sides the full configured agy tool surface without interruptions.
+        "--dangerously-skip-permissions",
+        "--disable-slash-commands",
+        "--print-timeout", f"{TURN_TIMEOUT}s",
+    ])
+    return cmd
+
+
+def codex_command(exe: str, work: Path, msg_file: Path, model: str, effort: str,
+                  thread: str | None) -> list[str]:
+    cmd = [exe, "exec"]
+    if thread is not None:
+        # The model must be repeated on resume: without it codex resumes under its default model
+        # and only notes the mismatch (measured 0.152.1).
+        cmd.extend(["resume", thread])
+    else:
+        # `resume` accepts neither -C nor --add-dir nor --color (0.152.1); the working root is
+        # remembered by the thread, and the process cwd is the side's directory either way.
+        cmd.extend(["-C", str(work), "--add-dir", str(work), "--color", "never"])
+    cmd.extend([
+        "-m", model,
+        "-c", f"model_reasoning_effort={effort}",
+        # The SessionEnd hook on this host compacts the thread after every exec and holds its
+        # writer lock for minutes; a resume in that window fails with "already has an active
+        # writer". Hooks are therefore off for debate turns.
+        "-c", "features.hooks=false",
+        "--skip-git-repo-check",
+        # Same grant as the agy side: full tools, no sandbox, no prompts. See tool-policy.md.
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--json",
+        f"Read {msg_file}. It is this turn's complete message. Answer it.",
+    ])
+    return cmd
+
+
 def turn(run: str, side: str, message: str) -> str:
     """One turn against one side's persistent session. Returns the reply, records it."""
     if side not in ROLE:
         raise Failed(f"side must be A or B, not {side!r}")
     d = rundir(run)
+    cfg = side_config(d, side)
+    cli, model, effort = cfg["cli"], cfg["model"], cfg["effort"]
 
     # Each side works in its own directory. Sharing one made round 0 blind in name only: the
     # second side could read the first side's scripts and reply before answering.
     work = d / side
     work.mkdir(parents=True, exist_ok=True)
 
-    exe = shutil.which("agy")
+    exe = shutil.which(cli)
     if exe is None:
-        raise Failed("agy is not on PATH — run `debate.py check`")
+        raise Failed(f"{cli} is not on PATH — run `debate.py check`")
 
     conversation_file = d / f"conversation-{side}.txt"
     existing_conversation = None
@@ -161,29 +308,15 @@ def turn(run: str, side: str, message: str) -> str:
         turn_message = (
             f"# Binding role instructions\n\n{role}\n\n"
             f"Your debate working directory is `{work}`. Use absolute paths under that directory "
-            "for every script, datum and result. Do not use agy's scratch or brain directories.\n\n"
+            f"for every script, datum and result. Do not use {cli}'s scratch or brain directories.\n\n"
             f"# Turn message\n\n{message}"
         )
     with tempfile.NamedTemporaryFile("w", encoding="utf-8", suffix=".md", dir=str(work),
                                      delete=False) as fh:
         fh.write(turn_message)
         msg_file = Path(fh.name)
-    cmd = [exe]
-    if existing_conversation is not None:
-        cmd.extend(["--conversation", existing_conversation])
-    cmd.extend([
-        "--print", f"Read {msg_file}. It is this turn's complete message. Answer it.",
-        "--add-dir", str(work),
-        "--output-format", "json",
-        "--model", MODEL,
-        "--effort", EFFORT,
-        "--mode", "accept-edits",
-        # Headless agy soft-denies tools that would normally prompt. This private experiment host
-        # deliberately gives both sides the full configured agy tool surface without interruptions.
-        "--dangerously-skip-permissions",
-        "--disable-slash-commands",
-        "--print-timeout", f"{TURN_TIMEOUT}s",
-    ])
+    build = codex_command if cli == "codex" else agy_command
+    cmd = build(exe, work, msg_file, model, effort, existing_conversation)
     try:
         # encoding is explicit: text=True alone decodes with the locale codec, and on a
         # cp1252 console every µ, — or ° in a reply raises or silently corrupts.
@@ -195,7 +328,7 @@ def turn(run: str, side: str, message: str) -> str:
                      f"may already hold this prompt, so its history and the transcript can differ; "
                      f"nothing was recorded here")
     except OSError as exc:
-        raise Failed(f"could not run agy ({exc}) — run `debate.py check`")
+        raise Failed(f"could not run {cli} ({exc}) — run `debate.py check`")
     finally:
         msg_file.unlink(missing_ok=True)
 
@@ -205,10 +338,11 @@ def turn(run: str, side: str, message: str) -> str:
         tail = (proc.stderr or "").strip().splitlines()[-3:]
         raise Failed(f"side {side} exited with status {proc.returncode}; nothing recorded"
                      + ("\n  " + "\n  ".join(tail) if tail else ""))
-    reply, conversation, usage = parse_agy_result(proc.stdout, proc.stderr, side)
+    parse = parse_codex_result if cli == "codex" else parse_agy_result
+    reply, conversation, usage = parse(proc.stdout, proc.stderr, side)
     if existing_conversation is not None and conversation != existing_conversation:
-        raise Failed(f"side {side} resumed {existing_conversation} but agy returned {conversation}; "
-                     "nothing recorded")
+        raise Failed(f"side {side} resumed {existing_conversation} but {cli} returned "
+                     f"{conversation}; nothing recorded")
 
     conversation_tmp = d / f"conversation-{side}.txt.tmp"
     conversation_tmp.write_text(conversation + "\n", encoding="utf-8")
@@ -216,7 +350,7 @@ def turn(run: str, side: str, message: str) -> str:
 
     # Composed first, appended in one write, so two turns running at once cannot interleave.
     entry = (f"\n## {now()} -> {side}\n\n"
-             f"<!-- cli=agy model={MODEL} effort={EFFORT} {usage} -->\n\n{reply}\n")
+             f"<!-- cli={cli} model={model} effort={effort} {usage} -->\n\n{reply}\n")
     with _TRANSCRIPT_LOCK:
         with (d / "transcript.md").open("a", encoding="utf-8") as fh:
             fh.write(entry)
@@ -229,7 +363,7 @@ def turn(run: str, side: str, message: str) -> str:
 
 # Tools a debater is likely to reach for. What is absent shapes what it can honestly claim, so
 # the answer belongs in the run rather than in the operator's head.
-PROBED = ["agy", "python3", "git", "docker", "rg", "grep", "curl", "gnuplot", "sqlite3",
+PROBED = ["agy", "codex", "python3", "git", "docker", "rg", "grep", "curl", "gnuplot", "sqlite3",
           "codemap", "ast-grep", "pandoc", "latexmk"]
 
 
@@ -243,31 +377,43 @@ def _local_ip() -> str:
         return "no route to a network"
 
 
-def machine_facts() -> tuple[list[str], bool]:
+def _cli_version(cli: str, exe: str) -> str:
+    args = [exe, "changelog"] if cli == "agy" else [exe, "--version"]
+    try:
+        out = subprocess.run(args, capture_output=True, text=True, timeout=60).stdout
+        first = out.strip().splitlines()
+        return first[0].rstrip(":") if first else "unknown"
+    except (subprocess.SubprocessError, OSError):
+        return "unknown"
+
+
+def machine_facts(sides: dict[str, dict[str, str]] | None = None) -> tuple[list[str], bool]:
     """What this machine is and what a debater can reach on it. Returns lines plus readiness."""
     ok = True
-    agy = shutil.which("agy")
+    sides = sides or sides_from_env()
+    clis = sorted({cfg["cli"] for cfg in sides.values()})
+    exes = {cli: shutil.which(cli) for cli in clis}
     # Today's date first: a model answers from a training cutoff and will otherwise assume a
     # wrong "now" — which silently decides any question about versions, prices or recency.
     lines = [
         f"date and time   {now()}  (this is the real current time, not your training cutoff)",
         f"platform        {platform.system()} {platform.release()} ({platform.machine()})",
         f"python          {sys.version.split()[0]} ({sys.executable})",
-        f"agy             {agy or 'NOT FOUND — install agy and put it on PATH'}",
-        f"model/effort    {MODEL}, effort={EFFORT}",
-        "execution       agy headless, full configured tools, no terminal sandbox or prompts",
+    ]
+    for cli in clis:
+        exe = exes[cli]
+        lines.append(f"{cli:<15} {exe or f'NOT FOUND — install {cli} and put it on PATH'}")
+        if exe:
+            lines.append(f"{cli + ' version':<15} {_cli_version(cli, exe)}")
+        ok &= bool(exe)
+    for side, cfg in sides.items():
+        lines.append(f"side {side}          {cfg['cli']}:{cfg['model']}, effort={cfg['effort']}")
+    lines.extend([
+        "execution       headless, full configured tools, no sandbox or prompts, on both clis",
         f"turn limit      {TURN_TIMEOUT}s",
         f"run root        {ROOT} {'(exists)' if ROOT.is_dir() else '(will be created)'}",
-        "sessions        agy conversation ids stored in each run directory",
-    ]
-    if agy:
-        try:
-            v = subprocess.run([agy, "changelog"], capture_output=True, text=True,
-                               timeout=60).stdout.strip().splitlines()
-            lines.append(f"agy version     {v[0].rstrip(':') if v else 'unknown'}")
-        except (subprocess.SubprocessError, OSError):
-            lines.append("agy version     unknown")
-    ok &= bool(agy)
+        "sessions        one conversation/thread id per side, stored in the run directory",
+    ])
     roles_ok = all((ASSETS / r).is_file() for r in ROLE.values())
     lines.append(f"role prompts    {ASSETS} {'(ok)' if roles_ok else 'MISSING'}")
     ok &= roles_ok
@@ -321,18 +467,27 @@ def machine_facts() -> tuple[list[str], bool]:
     lines.append("on PATH         " + ", ".join(found))
     lines.append("absent          " + (", ".join(missing) or "none of the probed set"))
 
-    if agy:
+    # agy lists its models; codex has no such command, so a wrong codex id surfaces only in
+    # round 0 (as `turn.failed` — measured: gpt-5.4-terra is refused under a ChatGPT account).
+    agy_models = {cfg["model"] for cfg in sides.values() if cfg["cli"] == "agy"}
+    if agy_models and exes.get("agy"):
         try:
-            proc = subprocess.run([agy, "models"], capture_output=True, text=True, timeout=120)
-            if proc.returncode == 0 and any(
-                    line.split("\t", 1)[0] == MODEL for line in proc.stdout.splitlines()):
-                lines.append("model reachable listed by agy")
-            else:
-                lines.append(f"model reachable {MODEL} NOT LISTED — check the id")
-                ok = False
+            proc = subprocess.run([exes["agy"], "models"], capture_output=True, text=True,
+                                  timeout=120)
+            listed = {line.split("\t", 1)[0] for line in proc.stdout.splitlines()}
+            for model in sorted(agy_models):
+                if proc.returncode == 0 and model in listed:
+                    lines.append(f"model reachable {model} listed by agy")
+                else:
+                    lines.append(f"model reachable {model} NOT LISTED by agy — check the id")
+                    ok = False
         except (subprocess.SubprocessError, OSError) as exc:
             lines.append(f"model reachable could not ask agy: {exc}")
             ok = False
+    for cfg in sides.values():
+        if cfg["cli"] == "codex":
+            lines.append(f"model reachable {cfg['model']} not verifiable before round 0 (codex "
+                         "lists no models)")
     return lines, ok
 
 
@@ -354,12 +509,16 @@ def cmd_init(args) -> int:
         raise Failed(f"run already exists: {d}")
     d.mkdir(parents=True)
     shutil.copyfile(qfile, d / "question.md")
+    # Fixed here, read by every later turn: a model swapped through the environment mid-debate
+    # would otherwise resume a Gemini conversation under a Codex id and fail, or worse, not.
+    sides = sides_from_env()
+    (d / "sides.json").write_text(json.dumps(sides, indent=2) + "\n", encoding="utf-8")
     (d / "transcript.md").write_text(
         f"# peer-debate: {args.slug}\n\nQuestion: see question.md\n", encoding="utf-8")
 
     # The machine is part of the question: a side that does not know what it can run will
     # either claim what it cannot verify, or fail to compute what it could have.
-    facts, _ = machine_facts()
+    facts, _ = machine_facts(sides)
     (d / "environment.md").write_text(
         "# The machine this debate runs on\n\n```\n" + "\n".join(facts) + "\n```\n",
         encoding="utf-8")

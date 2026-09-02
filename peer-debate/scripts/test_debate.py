@@ -74,7 +74,7 @@ class DebateTests(unittest.TestCase):
         add_dir = argv.index("--add-dir")
         self.assertEqual(Path(argv[add_dir + 1]), self.run / "A")
         transcript = (self.run / "transcript.md").read_text(encoding="utf-8")
-        self.assertIn("cli=agy model=gemini-3.7-flash-medium effort=medium", transcript)
+        self.assertIn("cli=agy model=gemini-3.8-flash-medium effort=medium", transcript)
         self.assertIn("total=120 cumulative-for-this-side", transcript)
 
     @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/agy")
@@ -107,6 +107,104 @@ class DebateTests(unittest.TestCase):
             (self.run / "conversation-A.txt").read_text(encoding="utf-8"), "conv-old\n"
         )
         self.assertEqual((self.run / "transcript.md").read_text(encoding="utf-8"), before)
+
+    # --- codex transport -------------------------------------------------------------------
+
+    def codex_jsonl(self, text="codex answer\nSTATUS: converged", thread="01a0-thread"):
+        events = [
+            {"type": "thread.started", "thread_id": thread},
+            {"type": "turn.started"},
+            {"type": "item.completed", "item": {"id": "item_0", "type": "agent_message",
+                                                 "text": text}},
+            {"type": "turn.completed", "usage": {"input_tokens": 22900,
+                                                 "cached_input_tokens": 11008,
+                                                 "output_tokens": 6,
+                                                 "reasoning_output_tokens": 0}},
+        ]
+        return "\n".join(json.dumps(e) for e in events) + "\n"
+
+    def test_parse_model_defaults_to_agy_and_rejects_unknown_cli(self):
+        self.assertEqual(debate.parse_model("gemini-3.8-flash-medium"),
+                         ("agy", "gemini-3.8-flash-medium"))
+        self.assertEqual(debate.parse_model("codex:gpt-5.6-terra"), ("codex", "gpt-5.6-terra"))
+        with self.assertRaisesRegex(debate.Failed, "unknown cli"):
+            debate.parse_model("claude:opus")
+        with self.assertRaisesRegex(debate.Failed, "no model id"):
+            debate.parse_model("codex:")
+
+    def test_parse_codex_reads_last_message_thread_and_usage(self):
+        reply, thread, stamp = debate.parse_codex_result(self.codex_jsonl(), "", "B")
+        self.assertEqual(reply, "codex answer\nSTATUS: converged")
+        self.assertEqual(thread, "01a0-thread")
+        self.assertIn("in=22900 cached=11008", stamp)
+
+    def test_parse_codex_refused_model_is_loud(self):
+        # Measured on codex-cli 0.152.1: a refused model exits 0 with error + turn.failed.
+        stdout = "\n".join(json.dumps(e) for e in [
+            {"type": "thread.started", "thread_id": "t"},
+            {"type": "turn.started"},
+            {"type": "error", "message": "The 'gpt-5.4-terra' model is not supported"},
+            {"type": "turn.failed", "error": {"message": "The 'gpt-5.4-terra' model is not supported"}},
+        ])
+        with self.assertRaisesRegex(debate.Failed, "(?s)empty reply.*not supported"):
+            debate.parse_codex_result(stdout, "", "B")
+
+    def _sides(self, b="codex:gpt-5.6-terra"):
+        (self.run / "sides.json").write_text(json.dumps({
+            "A": {"cli": "agy", "model": "gemini-3.8-flash-medium", "effort": "medium"},
+            "B": {"cli": "codex", "model": b.split(":", 1)[1], "effort": "low"},
+        }), encoding="utf-8")
+
+    @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/codex")
+    @mock.patch.object(debate.subprocess, "run")
+    def test_codex_initial_turn_runs_exec_without_hooks(self, run, which):
+        self._sides()
+        run.return_value = subprocess.CompletedProcess([], 0, self.codex_jsonl(), "")
+
+        reply = debate.turn(self.run.name, "B", "question")
+
+        self.assertTrue(reply.startswith("codex answer"))
+        which.assert_called_with("codex")
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[1], "exec")
+        self.assertNotIn("resume", argv)
+        self.assertEqual(argv[argv.index("-m") + 1], "gpt-5.6-terra")
+        self.assertIn("model_reasoning_effort=low", argv)
+        self.assertIn("features.hooks=false", argv)
+        self.assertIn("--dangerously-bypass-approvals-and-sandbox", argv)
+        self.assertIn("--json", argv)
+        self.assertEqual(Path(argv[argv.index("-C") + 1]), self.run / "B")
+        self.assertEqual((self.run / "conversation-B.txt").read_text(encoding="utf-8"),
+                         "01a0-thread\n")
+        transcript = (self.run / "transcript.md").read_text(encoding="utf-8")
+        self.assertIn("cli=codex model=gpt-5.6-terra effort=low", transcript)
+
+    @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/codex")
+    @mock.patch.object(debate.subprocess, "run")
+    def test_codex_later_turn_resumes_thread_with_model(self, run, _which):
+        self._sides()
+        (self.run / "conversation-B.txt").write_text("01a0-thread\n", encoding="utf-8")
+        run.return_value = subprocess.CompletedProcess([], 0, self.codex_jsonl(), "")
+
+        debate.turn(self.run.name, "B", "reply")
+
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[1:4], ["exec", "resume", "01a0-thread"])
+        self.assertEqual(argv[argv.index("-m") + 1], "gpt-5.6-terra")
+        # resume rejects these (measured 0.152.1: exit 2 with usage text)
+        for flag in ("-C", "--add-dir", "--color"):
+            self.assertNotIn(flag, argv)
+        self.assertIn("--dangerously-bypass-approvals-and-sandbox", argv)
+
+    @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/agy")
+    @mock.patch.object(debate.subprocess, "run")
+    def test_sides_json_wins_over_environment(self, run, _which):
+        self._sides()
+        run.return_value = subprocess.CompletedProcess([], 0, agy_json(), "")
+        with mock.patch.dict(debate.os.environ, {"PEER_DEBATE_MODEL_A": "codex:other"}):
+            debate.turn(self.run.name, "A", "question")
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[argv.index("--model") + 1], "gemini-3.8-flash-medium")
 
 
 if __name__ == "__main__":

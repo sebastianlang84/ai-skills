@@ -6,6 +6,10 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ## [Unreleased]
 
+### Changed
+
+- `peer-debate` can now put two vendors against each other: `PEER_DEBATE_MODEL` takes `<cli>:<id>` with `agy` or `codex`, `PEER_DEBATE_MODEL_A`/`_B` set one side, and what each side runs is fixed in `sides.json` at `init`. Codex turns run `codex exec --json` with hooks off, because the SessionEnd compaction hook holds the thread's writer lock for minutes and a resume inside that window fails. Measured 2026-09-02: `gemini-3.8-flash-low` against `gpt-5.6-terra`, round 0 plus one exchange, both sides resumed. Default model moves to `agy:gemini-3.8-flash-medium`.
+
 ### Added
 
 - Added `peer-debate`, which runs two `agy` conversations under asymmetric proposer/refuter roles: blind opening turns execute concurrently, later turns relay in order until both sides converge or four exchanges are exhausted. It records persistent conversation ids, transcripts and token counters, rejects soft-denied or forked Agy results, and deliberately grants the full configured Agy tool surface without terminal sandbox or permission prompts on this private experiment host.

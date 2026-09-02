@@ -7,15 +7,17 @@ Open [`docs/debate-flow.html`](docs/debate-flow.html) in a browser for the contr
 
 ## What it is
 
-Two instances of one model argue one contestable question under opposed roles. The orchestrating
+Two model instances — one model twice, or Gemini via `agy` against GPT via `codex` — argue one
+contestable question under opposed roles. The orchestrating
 agent carries every turn between them and judges the result. The point is not to get two answers —
 it is to make each side attack the other's reasoning, which surfaces errors that neither would find
 alone and that the orchestrator, sharing the question but not the work, would not find either.
 
 ## Three decisions worth knowing
 
-**Nobody is running between turns.** Each turn starts a fresh `agy --print` process that exits once
-it has answered; what survives is an Agy conversation id, not a resident agent. There is no separate
+**Nobody is running between turns.** Each turn starts a fresh `agy --print` or `codex exec` process
+that exits once it has answered; what survives is a conversation or thread id, not a resident
+agent. There is no separate
 judge — judging happens inside the orchestrator. The two sides run concurrently only in blind round
 0; later turns are relayed in order.
 
@@ -34,8 +36,9 @@ round — it is a reviewer from a different vendor. That is the third exit in th
 ## Usage record
 
 Each Agy result reports cumulative input, output, thinking, cache-read and total tokens for that
-side. The driver stamps those counters into `transcript.md`. Agy does not report a monetary cost, so
-the transcript makes no cost claim.
+side; each Codex turn reports its own input, cached, reasoning and output tokens. The driver stamps
+those counters into `transcript.md`. Neither cli reports a monetary cost, so the transcript makes
+no cost claim.
 
 ## Requirements
 

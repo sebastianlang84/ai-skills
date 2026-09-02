@@ -1,6 +1,8 @@
 # Tool policy
 
-Both debaters run through `agy` with its full configured tool surface. The driver passes
+Both debaters run through their cli — `agy` or `codex` — with its full configured tool surface. A
+codex side gets `--dangerously-bypass-approvals-and-sandbox` and `features.hooks=false` (see
+SKILL.md, Tool policy). The driver passes
 `--dangerously-skip-permissions` because headless mode otherwise soft-denies any command, web or MCP
 tool that would require an interactive answer. It does not pass `--sandbox`.
 

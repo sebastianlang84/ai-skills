@@ -1,12 +1,14 @@
 ---
 name: peer-debate
-description: Answers an open, contestable question by making two independent model instances argue it out under asymmetric roles until they converge or hit a round cap, then adjudicating the result. Use when the user wants a question debated, stress-tested by two agents, worked out by a duo, or says "let two models argue this", "have them discuss until they agree", "peer debate", or in German „lass das ausdiskutieren", „zwei Modelle sollen sich einigen". Not for critiquing a finished artifact — one reviewer against an existing document or diff is adversarial-model-review. Not for interrogating the user's own thinking (grilling), and not for defect scans of a codebase (codebase-review).
+description: Answers an open, contestable question by making two independent model instances — one model on both sides, or two vendors via agy and codex — argue it out under asymmetric roles until they converge or hit a round cap, then adjudicating the result. Use when the user wants a question debated, stress-tested by two agents, worked out by a duo, or says "let two models argue this", "have them discuss until they agree", "peer debate", or in German „lass das ausdiskutieren", „zwei Modelle sollen sich einigen". Not for critiquing a finished artifact — one reviewer against an existing document or diff is adversarial-model-review. Not for interrogating the user's own thinking (grilling), and not for defect scans of a codebase (codebase-review).
 ---
 
 # Peer debate
 
-Two instances of one model argue one question. You are the transport between them and the judge of
-what they produce. The script moves turns; it decides nothing.
+Two independent model instances argue one question — by default two instances of one model, or
+one side on `agy` (Gemini) and the other on `codex` (GPT) when the user wants two vendors. You are
+the transport between them and the judge of what they produce. The script moves turns; it decides
+nothing.
 
 ## When this is the wrong tool
 
@@ -30,8 +32,11 @@ Without that the two sides converge on an essay.
 python3 ~/.agents/skills/peer-debate/scripts/debate.py check
 ```
 
-It names what is missing rather than failing mid-turn: `agy` on `PATH`, the configured model
-actually listed, and both role prompts present. Python 3 and `agy` are the only requirements.
+It names what is missing rather than failing mid-turn: each configured cli on `PATH`, an agy model
+actually listed, and both role prompts present. Python 3 plus `agy` and/or `codex` are the only
+requirements. A codex model id cannot be verified before round 0; a refused one fails round 0
+loudly (measured 2026-09-02: `gpt-5.4-terra` is refused under a ChatGPT account, `gpt-5.6-terra`
+runs).
 
 ### 3. Open the run
 
@@ -98,9 +103,19 @@ Every value below is an environment variable with a default.
 | Variable | Default | Meaning |
 |---|---|---|
 | `PEER_DEBATE_ROOT` | `~/peer-debates` | where run directories are created. Point it elsewhere to keep a debate's record beside the thing it is about |
-| `PEER_DEBATE_MODEL` | `gemini-3.7-flash-medium` | model both sides run. `agy models` lists valid ids; both sides must use the same one |
-| `PEER_DEBATE_EFFORT` | `medium` | reasoning effort passed to `agy` |
+| `PEER_DEBATE_MODEL` | `agy:gemini-3.8-flash-medium` | model both sides run, as `<cli>:<id>` with cli `agy` or `codex`; a bare id means agy. `agy models` lists agy ids |
+| `PEER_DEBATE_MODEL_A`, `PEER_DEBATE_MODEL_B` | unset | model for one side; set both to put two vendors against each other, e.g. `A=agy:gemini-3.8-flash-medium B=codex:gpt-5.6-terra` |
+| `PEER_DEBATE_EFFORT` | `medium` | reasoning effort for both sides (`PEER_DEBATE_EFFORT_A`/`_B` per side) |
 | `PEER_DEBATE_TIMEOUT` | `3600` | seconds per turn; a turn that hits it is killed and reported, not recorded |
+
+What each side runs is written to `sides.json` at `init` and read by every later turn, so a
+changed environment cannot swap a model mid-debate.
+
+**Two vendors change what convergence means.** With one model on both sides, agreement carries no
+independent evidence and the third exit below (cross-vendor review) exists for that reason. With
+agy against codex the sides no longer share a training set, so their agreement is worth more and
+their dissent is more often a real open point than a role artefact; the roles stay asymmetric
+regardless.
 
 **Material the debaters cannot reach.** They run as processes on this host and see only this host.
 When the subject lives elsewhere — another machine, a share nobody has mounted, a system behind a
@@ -112,9 +127,12 @@ there. That is deliberate: a debate in which nobody computes anything is an exch
 
 ### Tool policy
 
-Both sides receive Agys complete configured tool surface. The runner uses
-`--dangerously-skip-permissions` so headless turns can use shell, files, web and MCP without soft
-denials or interactive pauses; it deliberately does not enable Agys terminal sandbox. The role
+Both sides receive their cli's complete configured tool surface. The runner uses
+`--dangerously-skip-permissions` on agy and `--dangerously-bypass-approvals-and-sandbox` on codex so
+headless turns can use shell, files, web and MCP without soft denials or interactive pauses; it
+deliberately enables no sandbox on either. Codex turns run with `features.hooks=false`: the
+SessionEnd hook on this host compacts a thread after every `exec` and holds its writer lock for
+minutes, and a resume inside that window fails. The role
 prompts still require debate artifacts to stay under `A/` or `B/`. This broad grant is a conscious
 choice for this private experiment host. Details: [`references/tool-policy.md`](references/tool-policy.md).
 
@@ -127,15 +145,17 @@ roles produce agreement after one round, and that agreement is an artefact of th
 Run directory `~/peer-debates/<date>-<slug>/`:
 
 - `question.md` — as put to both sides
-- `environment.md` — the real current date, platform, `agy` version, model, execution policy,
-  capacity and numeric libraries. Each side receives a copy for round 0.
-- `transcript.md` — every turn, timestamped and stamped with model, effort and Agys cumulative token
-  counters for that side.
-- `conversation-A.txt`, `conversation-B.txt` — Agys persistent conversation ids
+- `sides.json` — cli, model and effort per side, fixed at `init`
+- `environment.md` — the real current date, platform, cli versions, model per side, execution
+  policy, capacity and numeric libraries. Each side receives a copy for round 0.
+- `transcript.md` — every turn, timestamped and stamped with cli, model, effort and token counters
+  (agy: cumulative for that side; codex: this turn).
+- `conversation-A.txt`, `conversation-B.txt` — the side's persistent agy conversation id or codex
+  thread id
 - `last-A.md`, `last-B.md` — each side's latest, what the next turn relays
 - `A/`, `B/` — one working directory per side, and what each wrote while computing. They are
   separate on purpose: in a shared directory the second side can read the first side's scripts and
   reply, which makes round 0 blind in name only.
 
-Each turn starts one `agy --print` process and resumes the side's stored conversation id. There is
-no resident debater process and no lock file.
+Each turn starts one `agy --print` or `codex exec` process and resumes the side's stored id. There
+is no resident debater process and no lock file.
