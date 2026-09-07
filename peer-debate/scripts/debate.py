@@ -17,14 +17,14 @@ wherever those differ.
 Configuration, all optional, all environment variables:
 
     PEER_DEBATE_ROOT         where run directories are created   (default ~/peer-debates)
-    PEER_DEBATE_MODEL        model both sides run                 (default agy:gemini-3.8-flash-high)
+    PEER_DEBATE_MODEL        model both sides run                 (default agy:gemini-3.8-flash-medium)
     PEER_DEBATE_MODEL_A/_B   model for one side, overrides PEER_DEBATE_MODEL
-    PEER_DEBATE_EFFORT       reasoning effort both sides run      (default high)
+    PEER_DEBATE_EFFORT       reasoning effort both sides run      (default medium)
     PEER_DEBATE_EFFORT_A/_B  effort for one side
     PEER_DEBATE_TIMEOUT      seconds per turn                     (default 3600)
 
 A model is `<cli>:<id>` with cli `agy` or `codex`; a bare id means agy. Sides may differ:
-`PEER_DEBATE_MODEL_A=agy:gemini-3.8-flash-high PEER_DEBATE_MODEL_B=codex:gpt-5.6-terra` puts
+`PEER_DEBATE_MODEL_A=agy:gemini-3.8-flash-medium PEER_DEBATE_MODEL_B=codex:gpt-5.6-terra` puts
 Gemini against a Codex model. What each side runs is fixed at `init` in `sides.json` and cannot
 drift between rounds through the environment.
 """
@@ -47,8 +47,8 @@ from pathlib import Path
 
 HOME = Path.home()
 ROOT = Path(os.environ.get("PEER_DEBATE_ROOT", HOME / "peer-debates"))
-MODEL = os.environ.get("PEER_DEBATE_MODEL", "agy:gemini-3.8-flash-high")
-EFFORT = os.environ.get("PEER_DEBATE_EFFORT", "high")
+MODEL = os.environ.get("PEER_DEBATE_MODEL", "agy:gemini-3.8-flash-medium")
+EFFORT = os.environ.get("PEER_DEBATE_EFFORT", "medium")
 TURN_TIMEOUT = int(os.environ.get("PEER_DEBATE_TIMEOUT", "3600"))
 CLIS = ("agy", "codex")
 
@@ -99,7 +99,21 @@ def sides_from_env() -> dict[str, dict[str, str]]:
         cli, model = parse_model(os.environ.get(f"PEER_DEBATE_MODEL_{side}", MODEL))
         out[side] = {"cli": cli, "model": model,
                      "effort": os.environ.get(f"PEER_DEBATE_EFFORT_{side}", EFFORT)}
+        validate_selection(out[side], side)
     return out
+
+
+def validate_selection(cfg: dict[str, str], side: str) -> None:
+    """Agy Gemini variant IDs already fix effort; never silently swap an explicit model."""
+    if cfg["cli"] != "agy":
+        return
+    effort = cfg["effort"]
+    if effort not in ("low", "medium", "high"):
+        raise Failed(f"side {side}: agy effort must be low, medium or high, got {effort!r}")
+    variant = re.fullmatch(r"gemini-.+-(low|medium|high)", cfg["model"])
+    if variant and variant.group(1) != effort:
+        raise Failed(f"side {side}: model {cfg['model']!r} conflicts with effort={effort}; "
+                     "choose a matching model ID from `agy models` and rerun check")
 
 
 def side_config(d: Path, side: str) -> dict[str, str]:
@@ -108,7 +122,9 @@ def side_config(d: Path, side: str) -> dict[str, str]:
     if path.is_file():
         try:
             sides = json.loads(path.read_text(encoding="utf-8"))
-            return dict(sides[side])
+            cfg = dict(sides[side])
+            validate_selection(cfg, side)
+            return cfg
         except (ValueError, KeyError, TypeError) as exc:
             raise Failed(f"{path} is unreadable ({exc}); fix or remove it")
     return sides_from_env()[side]
@@ -143,6 +159,20 @@ def rundir(name: str) -> Path:
     return hits[-1]
 
 
+def failure_detail(stdout: str, stderr: str) -> str:
+    """Keep structured CLI errors even when stderr is empty; omit response/usage payloads."""
+    try:
+        result = json.loads(stdout)
+    except (TypeError, ValueError):
+        result = None
+    error = result.get("error") if isinstance(result, dict) else None
+    if isinstance(error, dict):
+        error = error.get("message")
+    details = ([error.strip()] if isinstance(error, str) and error.strip() else [])
+    details.extend(stderr.strip().splitlines()[-3:])
+    return "\n  " + "\n  ".join(details)[:1000] if details else ""
+
+
 def parse_agy_result(stdout: str, stderr: str, side: str) -> tuple[str, str, str]:
     """Validate agy's headless JSON result and return reply, conversation id and usage stamp."""
     try:
@@ -152,7 +182,8 @@ def parse_agy_result(stdout: str, stderr: str, side: str) -> tuple[str, str, str
     if not isinstance(result, dict):
         raise Failed(f"side {side} returned a non-object agy result; nothing recorded")
     if result.get("status") != "SUCCESS":
-        raise Failed(f"side {side} returned agy status {result.get('status')!r}; nothing recorded")
+        raise Failed(f"side {side} returned agy status {result.get('status')!r}; nothing recorded"
+                     + failure_detail(stdout, stderr))
     reply = result.get("response")
     conversation = result.get("conversation_id")
     if not isinstance(reply, str) or not reply.strip():
@@ -335,9 +366,8 @@ def turn(run: str, side: str, message: str) -> str:
     # A killed or failed turn must be loud and must not be recorded: a silently empty turn reads
     # downstream as a side that had nothing to say.
     if proc.returncode != 0:
-        tail = (proc.stderr or "").strip().splitlines()[-3:]
         raise Failed(f"side {side} exited with status {proc.returncode}; nothing recorded"
-                     + ("\n  " + "\n  ".join(tail) if tail else ""))
+                     + failure_detail(proc.stdout or "", proc.stderr or ""))
     parse = parse_codex_result if cli == "codex" else parse_agy_result
     reply, conversation, usage = parse(proc.stdout, proc.stderr, side)
     if existing_conversation is not None and conversation != existing_conversation:
@@ -407,6 +437,7 @@ def machine_facts(sides: dict[str, dict[str, str]] | None = None) -> tuple[list[
             lines.append(f"{cli + ' version':<15} {_cli_version(cli, exe)}")
         ok &= bool(exe)
     for side, cfg in sides.items():
+        validate_selection(cfg, side)
         lines.append(f"side {side}          {cfg['cli']}:{cfg['model']}, effort={cfg['effort']}")
     lines.extend([
         "execution       headless, full configured tools, no sandbox or prompts, on both clis",
@@ -501,6 +532,7 @@ def cmd_check(_args) -> int:
 
 def cmd_init(args) -> int:
     check_slug(args.slug)
+    sides = sides_from_env()
     qfile = Path(args.question)
     if not qfile.is_file():
         raise Failed(f"no such question file: {qfile}")
@@ -511,7 +543,6 @@ def cmd_init(args) -> int:
     shutil.copyfile(qfile, d / "question.md")
     # Fixed here, read by every later turn: a model swapped through the environment mid-debate
     # would otherwise resume a Gemini conversation under a Codex id and fail, or worse, not.
-    sides = sides_from_env()
     (d / "sides.json").write_text(json.dumps(sides, indent=2) + "\n", encoding="utf-8")
     (d / "transcript.md").write_text(
         f"# peer-debate: {args.slug}\n\nQuestion: see question.md\n", encoding="utf-8")

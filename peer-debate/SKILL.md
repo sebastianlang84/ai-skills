@@ -26,15 +26,21 @@ question no answer can fail is not debatable.
 State in the question what a finished answer looks like — a number, a decision, a ranked list.
 Without that the two sides converge on an essay.
 
-### 2. Check the machine once
+### 2. Select the pair and check it
+
+Name both models, efforts and roles before starting. The default is two independent
+Gemini 3.8 Flash Medium instances, not two vendors. Start at medium; raise effort only
+after a concrete need or user instruction. Use the same environment for `check` and `init`.
+For Agy Gemini variants, the model suffix and effort must agree; changing effort alone
+can conflict with the selected model ID. `check` rejects that combination before a run.
 
 ```bash
 python3 ~/.agents/skills/peer-debate/scripts/debate.py check
 ```
 
-It names what is missing rather than failing mid-turn: each configured cli on `PATH`, an agy model
-actually listed, and both role prompts present. Python 3 plus `agy` and/or `codex` are the only
-requirements. A codex model id cannot be verified before round 0; a refused one fails round 0
+It checks selection compatibility, each configured CLI on `PATH`, Agy model listing,
+and both role prompts. A listed model does not prove a successful provider call.
+Python 3 plus `agy` and/or `codex` are the only requirements. A codex model id cannot be verified before round 0; a refused one fails round 0
 loudly (measured 2026-09-02: `gpt-5.4-terra` is refused under a ChatGPT account, `gpt-5.6-terra`
 runs).
 
@@ -103,13 +109,17 @@ Every value below is an environment variable with a default.
 | Variable | Default | Meaning |
 |---|---|---|
 | `PEER_DEBATE_ROOT` | `~/peer-debates` | where run directories are created. Point it elsewhere to keep a debate's record beside the thing it is about |
-| `PEER_DEBATE_MODEL` | `agy:gemini-3.8-flash-high` | model both sides run, as `<cli>:<id>` with cli `agy` or `codex`; a bare id means agy. `agy models` lists agy ids |
-| `PEER_DEBATE_MODEL_A`, `PEER_DEBATE_MODEL_B` | unset | model for one side; set both to put two vendors against each other, e.g. `A=agy:gemini-3.8-flash-high B=codex:gpt-5.6-terra` |
-| `PEER_DEBATE_EFFORT` | `high` | reasoning effort for both sides (`PEER_DEBATE_EFFORT_A`/`_B` per side). High by default, against the house rule of starting at medium: measured 2026-09-02 on one question with fresh context per run, the medium pair invented an architecture whose acceptance test was unreachable, the high pair read the repo and anchored its answer there, for 8 instead of 6 minutes |
+| `PEER_DEBATE_MODEL` | `agy:gemini-3.8-flash-medium` | model both sides run, as `<cli>:<id>` with cli `agy` or `codex`; a bare id means agy. `agy models` lists agy ids |
+| `PEER_DEBATE_MODEL_A`, `PEER_DEBATE_MODEL_B` | unset | model for one side; set both to put two vendors against each other, e.g. `PEER_DEBATE_MODEL_A=agy:gemini-3.8-flash-medium PEER_DEBATE_MODEL_B=codex:gpt-5.6-terra` |
+| `PEER_DEBATE_EFFORT` | `medium` | reasoning effort for both sides (`PEER_DEBATE_EFFORT_A`/`_B` per side); explicit Agy Gemini model variants must match |
 | `PEER_DEBATE_TIMEOUT` | `3600` | seconds per turn; a turn that hits it is killed and reported, not recorded |
 
 What each side runs is written to `sides.json` at `init` and read by every later turn, so a
 changed environment cannot swap a model mid-debate.
+
+Failed turns are not debate evidence. Read the reported CLI error before retrying.
+Fix selection errors explicitly; preserve failed runs and use a new slug after a failed
+round 0. Do not change `sides.json` to swap models inside an existing debate.
 
 **Two vendors change what convergence means.** With one model on both sides, agreement carries no
 independent evidence and the third exit below (cross-vendor review) exists for that reason. With

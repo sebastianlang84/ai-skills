@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import importlib.util
 import json
 import subprocess
@@ -44,6 +45,48 @@ class DebateTests(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
+    def test_default_selection_uses_medium(self):
+        with mock.patch.dict(debate.os.environ, {}, clear=True):
+            self.assertEqual(debate.sides_from_env()["A"], {
+                "cli": "agy", "model": "gemini-3.8-flash-medium", "effort": "medium"})
+
+    @mock.patch.object(debate.subprocess, "run")
+    def test_check_rejects_model_effort_conflict_before_probing(self, run):
+        env = {"PEER_DEBATE_MODEL_A": "agy:gemini-3.8-flash-high",
+               "PEER_DEBATE_EFFORT_A": "medium"}
+        with mock.patch.dict(debate.os.environ, env):
+            with self.assertRaisesRegex(debate.Failed, "side A.*conflicts.*medium"):
+                debate.cmd_check(None)
+        run.assert_not_called()
+
+    @mock.patch.object(debate, "machine_facts", return_value=([], True))
+    @mock.patch.object(debate, "turn", return_value="unused")
+    def test_init_rejects_conflict_without_creating_run(self, turn, facts):
+        question = debate.ROOT / "question.md"
+        question.write_text("Question", encoding="utf-8")
+        before = set(debate.ROOT.iterdir())
+        env = {"PEER_DEBATE_MODEL_B": "agy:gemini-3.8-flash-high",
+               "PEER_DEBATE_EFFORT_B": "medium"}
+        with mock.patch.dict(debate.os.environ, env):
+            with self.assertRaisesRegex(debate.Failed, "side B.*conflicts"):
+                debate.cmd_init(argparse.Namespace(slug="invalid", question=str(question)))
+        self.assertEqual(set(debate.ROOT.iterdir()), before)
+
+    @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/agy")
+    @mock.patch.object(debate.subprocess, "run")
+    def test_nonzero_json_error_is_visible_without_recording(self, run, _which):
+        before = (self.run / "transcript.md").read_text()
+        run.return_value = subprocess.CompletedProcess(
+            [], 1, json.dumps({"error": "invalid model selection: conflicts with effort"}), "")
+        with self.assertRaisesRegex(debate.Failed, "invalid model selection"):
+            debate.turn(self.run.name, "A", "question")
+        self.assertEqual((self.run / "transcript.md").read_text(), before)
+        self.assertFalse((self.run / "conversation-A.txt").exists())
+
+    def test_zero_exit_error_retains_diagnostic(self):
+        with self.assertRaisesRegex(debate.Failed, "model unavailable"):
+            debate.parse_agy_result('{"status":"ERROR","error":{"message":"model unavailable"}}', "", "A")
+
     def test_parse_rejects_headless_soft_denial(self):
         with self.assertRaisesRegex(debate.Failed, "empty reply"):
             debate.parse_agy_result(
@@ -74,7 +117,7 @@ class DebateTests(unittest.TestCase):
         add_dir = argv.index("--add-dir")
         self.assertEqual(Path(argv[add_dir + 1]), self.run / "A")
         transcript = (self.run / "transcript.md").read_text(encoding="utf-8")
-        self.assertIn("cli=agy model=gemini-3.8-flash-high effort=high", transcript)
+        self.assertIn("cli=agy model=gemini-3.8-flash-medium effort=medium", transcript)
         self.assertIn("total=120 cumulative-for-this-side", transcript)
 
     @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/agy")
