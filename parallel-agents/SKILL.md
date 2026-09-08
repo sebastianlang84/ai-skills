@@ -70,6 +70,16 @@ committed anything yet. When one of them is in your repo, say which files you ar
 
 Re-check the base **before merging**, not only before starting.
 
+## Delegated work
+
+- Give each worker a bounded task and explicit file ownership; serialize edits to the same file.
+- Check how the harness starts workers. For workers branching from HEAD, commit authorized prerequisites before spawning so the worker sees them. A stash alone does not put changes in HEAD. Read-only workers need no commit or worktree merely to start.
+- For isolated writing workers, provision an explicit worktree, branch, and absolute CWD, especially across repos. An earlier command's working directory does not retarget a later spawn. For shared-directory workers, enforce disjoint file ownership.
+- Workers stay within their assigned scope and worktree, never merge or push the base branch, and commit only on their own branch when authorized. Report branch, commit, base, files, checks, and possible collisions; for shared-directory work, report the uncommitted changes.
+- The coordinator checks for upstream changes before authorized integration, preserves both sides' intended behavior, and reruns the relevant gates. Remove only completed, task-owned worktrees and safely delete their merged branches; then prune worktree metadata.
+
+When a Claude subscription limit blocks ordinary work, use `gpt-5.6-terra` for an intended Sonnet role and `gpt-5.6-sol` for an intended Opus role. Never substitute providers inside a frozen cross-provider evaluation: preserve partial evidence and resume the named model after reset.
+
 ## If a Write is refused
 
 `scripts/warn-duplicate-write.py` runs as a `PreToolUse` hook on `Write`. When the file you are

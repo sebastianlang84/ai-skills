@@ -9,12 +9,14 @@ Portable default for Git decisions and task closeout. Follow repository-local po
 
 ## Core safety rules
 
+- Explicit approval includes standing authorization in active user instructions and approval already given in the session. Apply its exact scope and exclusions; do not ask again for covered operations. The approval requirements below apply only when authorization is missing.
 - Check branch and working-tree state before writing, committing, merging, rebasing, or pushing.
 - Without explicit user approval, run only read-only Git commands such as `git status`, `git diff`, `git log`, branch listing, and remote inspection.
 - Never run mutating Git commands without explicit approval: commit, push, merge, rebase, checkout/switch, branch/tag creation or deletion, reset, restore, stash, pull, or similar state-changing operations.
 - Treat `git pull` as mutating and approval-gated.
 - Stop and ask when the current branch, target branch, ownership, or merge/push policy is unclear.
 - Do not mix unrelated changes in one commit, branch, push, or handoff.
+- Stage explicit paths in repositories with nested worktrees; never use `git add -A` there. Ignore harness worktree directories to prevent accidental gitlinks.
 - Prefer small, verified, reviewable checkpoints over large unverified batches.
 - When work changes files, proactively propose the next Git operation instead of only saying nothing was committed or pushed.
 
@@ -82,6 +84,8 @@ If no version or changelog update is needed, state why.
 ## Commit, merge, rebase, push
 
 Commit only when a coherent slice is complete, testable, and worth preserving. Before committing, inspect `git status`, ensure only intended files are included, run the smallest relevant verification, follow the repo's commit style, and apply the release impact checklist including changelog/version decision.
+
+Use repo-local Git identity and existing commit history without asking. Only when both are absent, use `sebastianlang84 <sebastian.lang@gmx.at>`; never invent an author.
 
 Avoid commits for random snapshots, mixed unrelated changes, or known-broken states unless explicitly requested.
 

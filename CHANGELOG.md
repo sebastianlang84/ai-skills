@@ -8,6 +8,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- `git-workflow` recognizes standing authorization and owns Git identity and explicit staging rules. `parallel-agents` now covers worker context, handoff, cleanup, and provider fallback; `pi-extension-packaging` owns local Pi paths. These details moved out of global instructions. A stash is no longer treated as making changes available to workers branching from HEAD.
 - `using-brain` now routes freshness questions and visibly moved local sources through the Brain's
   report-only staleness audit, while keeping semantic truth assessment with source review.
 - `parallel-agents` gained `brain-lock.py`, an atomic multi-path claim over shared Brain files (kernel advisory locks, 15-minute default TTL, up to one hour), plus the rule to lock concept, index and `log.md` together before a Brain edit. `using-brain` already referenced the script; it had been sitting uncommitted since 2026-08-18.

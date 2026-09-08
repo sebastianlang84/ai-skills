@@ -7,6 +7,8 @@ description: Use this skill when designing, reviewing, restructuring, packaging,
 
 Use this skill to help choose and review clean, documented structures for Pi extensions and Pi Packages.
 
+Local layout on this machine: packages `~/.pi/agent/git/`, local extensions `~/.pi/agent/extensions/`, extension state `~/.pi/agent/state/<extension-name>/`, global subagents `~/.pi/agent/agents/`.
+
 ## Core distinctions
 
 - **Extension**: TypeScript module extending Pi with tools, commands, shortcuts, flags, events, or UI elements.
