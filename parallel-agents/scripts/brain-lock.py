@@ -4,6 +4,7 @@
 Agents acquire every Brain path they will edit in one call, then release the returned token after
 the edit and lint. A detached holder process owns POSIX advisory locks; the kernel releases them
 when it exits, and a TTL bounds abandoned holders.
+Renew the lease before expiry during longer edits; a live agent does not extend it automatically.
 """
 from __future__ import annotations
 
@@ -11,9 +12,11 @@ import argparse
 import fcntl
 import hashlib
 import json
+import math
 import os
 import select
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -89,6 +92,16 @@ def token_file(token: str) -> Path:
     return state_root() / "holders" / f"{token}.json"
 
 
+def renewal_address(token: str) -> str:
+    # Linux abstract sockets avoid filesystem socket-path limits and stale endpoints.
+    identity = f"{state_root().resolve()}:{token}".encode("utf-8")
+    return "\0brain-lock-" + hashlib.sha256(identity).hexdigest()
+
+
+def valid_ttl(ttl: float) -> bool:
+    return math.isfinite(ttl) and 0 < ttl <= MAX_TTL
+
+
 def read_json(path: Path) -> dict:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -108,6 +121,7 @@ def holder(token: str, ttl: float, owner: str, paths: list[str]) -> int:
     handles = []
     metadata: dict = {}
     stop = False
+    renewals = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
 
     def request_stop(_signum: int, _frame: object) -> None:
         nonlocal stop
@@ -133,6 +147,7 @@ def holder(token: str, ttl: float, owner: str, paths: list[str]) -> int:
             handles.append((rel, handle))
 
         now = time.time()
+        deadline = time.monotonic() + ttl
         metadata = {
             "token": token,
             "owner": owner,
@@ -149,13 +164,42 @@ def holder(token: str, ttl: float, owner: str, paths: list[str]) -> int:
             handle.write("\n")
             handle.flush()
         write_json_atomic(token_file(token), metadata)
+        renewals.bind(renewal_address(token))
         print("READY\t" + json.dumps(metadata), flush=True)
 
-        deadline = time.monotonic() + ttl
         while not stop and time.monotonic() < deadline:
-            time.sleep(min(0.2, max(0.01, deadline - time.monotonic())))
+            ready, _, _ = select.select([renewals], [], [], min(0.2, max(0, deadline - time.monotonic())))
+            if not ready:
+                continue
+            payload, sender = renewals.recvfrom(4096)
+            # Check expiry again after the wait: a late request cannot revive a lease.
+            if stop or time.monotonic() >= deadline:
+                break
+            try:
+                request = json.loads(payload)
+                extension = float(request["ttl"])
+                if request.get("token") != token or not valid_ttl(extension):
+                    continue
+            except (ValueError, TypeError, KeyError):
+                continue
+            deadline = time.monotonic() + extension
+            metadata["expires_at"] = time.time() + extension
+            for _rel, handle in handles:
+                handle.seek(0)
+                handle.truncate()
+                json.dump(metadata, handle, ensure_ascii=False, sort_keys=True)
+                handle.write("\n")
+                handle.flush()
+            write_json_atomic(token_file(token), metadata)
+            # Acknowledge from the holder only, with all original flocks still held.
+            try:
+                acknowledgment = {"token": token, "expires_at": metadata["expires_at"]}
+                renewals.sendto(json.dumps(acknowledgment).encode("utf-8"), sender)
+            except OSError:
+                pass  # A disconnected caller receives no success acknowledgment.
         return 0
     finally:
+        renewals.close()
         current = read_json(token_file(token))
         if current.get("pid") == os.getpid():
             token_file(token).unlink(missing_ok=True)
@@ -168,7 +212,7 @@ def holder(token: str, ttl: float, owner: str, paths: list[str]) -> int:
 
 
 def acquire(paths: list[str], ttl: float, owner: str | None) -> int:
-    if ttl <= 0 or ttl > MAX_TTL:
+    if not valid_ttl(ttl):
         print(f"TTL must be greater than 0 and at most {MAX_TTL} seconds", file=sys.stderr)
         return 2
     try:
@@ -207,6 +251,7 @@ def acquire(paths: list[str], ttl: float, owner: str | None) -> int:
     if line.startswith("READY\t"):
         print(f"acquired {', '.join(normalized)}")
         print(f"token {token}")
+        print(f"renew before expiry: {Path(__file__).resolve()} renew {token} --ttl {ttl:g}")
         print(f"release: {Path(__file__).resolve()} release {token}")
         return 0
     process.wait(timeout=READY_TIMEOUT)
@@ -223,6 +268,29 @@ def acquire(paths: list[str], ttl: float, owner: str | None) -> int:
         assert process.stderr is not None
         print(process.stderr.read().strip() or "Brain lock holder failed", file=sys.stderr)
     return 2
+
+
+def renew(token: str, ttl: float) -> int:
+    if not token or any(ch not in "0123456789abcdef" for ch in token):
+        print("invalid token", file=sys.stderr)
+        return 2
+    if not valid_ttl(ttl):
+        print(f"TTL must be greater than 0 and at most {MAX_TTL} seconds", file=sys.stderr)
+        return 2
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as client:
+            client.settimeout(READY_TIMEOUT)
+            client.bind("\0brain-lock-client-" + uuid.uuid4().hex)
+            client.connect(renewal_address(token))
+            client.send(json.dumps({"token": token, "ttl": ttl}).encode("utf-8"))
+            acknowledgment = json.loads(client.recv(4096))
+        if acknowledgment.get("token") != token or acknowledgment["expires_at"] <= time.time():
+            raise ValueError("invalid or expired acknowledgment")
+    except (OSError, ValueError, KeyError, TypeError):
+        print("renewal failed: lock expired, released, or holder did not acknowledge; stop editing", file=sys.stderr)
+        return 2
+    print(f"renewed {token} until {acknowledgment['expires_at']}")
+    return 0
 
 
 def release(token: str) -> int:
@@ -277,6 +345,9 @@ def parser() -> argparse.ArgumentParser:
     take.add_argument("--owner")
     give = commands.add_parser("release", help="release a lock token")
     give.add_argument("token")
+    extend = commands.add_parser("renew", help="renew an unexpired lease without releasing its locks")
+    extend.add_argument("token")
+    extend.add_argument("--ttl", type=float, default=DEFAULT_TTL)
     commands.add_parser("status", help="list live lock holders")
     hold = commands.add_parser("_hold", help=argparse.SUPPRESS)
     hold.add_argument("paths", nargs="+")
@@ -292,6 +363,8 @@ def main(argv: list[str] | None = None) -> int:
         return acquire(args.paths, args.ttl, args.owner)
     if args.command == "release":
         return release(args.token)
+    if args.command == "renew":
+        return renew(args.token, args.ttl)
     if args.command == "status":
         return status()
     return holder(args.token, args.ttl, args.owner, args.paths)

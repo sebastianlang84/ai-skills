@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import os
+import json
 import re
+import signal
 import subprocess
 import sys
 import tempfile
@@ -82,6 +84,66 @@ class BrainLockTest(unittest.TestCase):
         result = self.acquire(str(Path(self.temp.name) / "outside.md"))
         self.assertEqual(result.returncode, 2)
         self.assertIn("outside Brain", result.stderr)
+
+    def test_renew_keeps_same_holder_and_blocks_past_original_expiry(self) -> None:
+        self.assertEqual(self.acquire("a.md", "b.md", ttl="1").returncode, 0)
+        token = self.tokens[-1]
+        metadata_path = self.state / "holders" / f"{token}.json"
+        original = json.loads(metadata_path.read_text())
+        renewed = self.invoke("renew", token, "--ttl", "3")
+        self.assertEqual(renewed.returncode, 0, renewed.stderr)
+        current = json.loads(metadata_path.read_text())
+        self.assertEqual(current["pid"], original["pid"])
+        self.assertEqual(current["acquired_at"], original["acquired_at"])
+        self.assertGreater(current["expires_at"], original["expires_at"])
+        time.sleep(max(0, original["expires_at"] - time.time()) + 0.1)
+        for path in ("a.md", "b.md"):
+            self.assertEqual(self.acquire(path).returncode, 2)
+        self.assertEqual(self.invoke("release", token).returncode, 0)
+        self.assertEqual(self.acquire("a.md", "b.md").returncode, 0)
+
+    def test_expired_token_cannot_renew_or_disturb_new_holder(self) -> None:
+        self.assertEqual(self.acquire("a.md", ttl="0.25").returncode, 0)
+        expired = self.tokens[-1]
+        time.sleep(0.4)
+        self.assertEqual(self.acquire("a.md").returncode, 0)
+        failed = self.invoke("renew", expired, "--ttl", "3")
+        self.assertEqual(failed.returncode, 2)
+        self.assertIn("expired", failed.stderr)
+        self.assertEqual(self.acquire("a.md").returncode, 2)
+
+    def test_nonfinite_and_invalid_ttl_rejected(self) -> None:
+        self.assertEqual(self.acquire("a.md").returncode, 0)
+        for ttl in ("nan", "inf", "0", "-1", "3601"):
+            with self.subTest(ttl=ttl):
+                self.assertEqual(self.acquire("b.md", ttl=ttl).returncode, 2)
+                self.assertEqual(self.invoke("renew", self.tokens[0], "--ttl", ttl).returncode, 2)
+
+    def test_paused_holder_cannot_accept_renewal_after_expiry(self) -> None:
+        self.assertEqual(self.acquire("a.md", ttl="0.5").returncode, 0)
+        token = self.tokens[-1]
+        metadata = json.loads((self.state / "holders" / f"{token}.json").read_text())
+        pid = metadata["pid"]
+        os.kill(pid, signal.SIGSTOP)
+        try:
+            time.sleep(0.6)
+            process = subprocess.Popen(
+                (sys.executable, str(SCRIPT), "renew", token, "--ttl", "5"),
+                env=self.env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            time.sleep(0.1)
+        finally:
+            os.kill(pid, signal.SIGCONT)
+        _stdout, stderr = process.communicate(timeout=5)
+        self.assertEqual(process.returncode, 2, stderr)
+        self.assertEqual(self.acquire("a.md").returncode, 0)
+
+    def test_renewal_remains_finite(self) -> None:
+        self.assertEqual(self.acquire("a.md").returncode, 0)
+        result = self.invoke("renew", self.tokens[-1], "--ttl", "0.25")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        time.sleep(0.4)
+        self.assertEqual(self.acquire("a.md").returncode, 0)
 
 
 if __name__ == "__main__":

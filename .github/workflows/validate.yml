@@ -15,6 +15,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
+      - name: Test parallel agent coordination
+        run: |
+          python3 parallel-agents/scripts/test_coordination.py
+          python3 parallel-agents/scripts/test_brain_lock.py
       - name: Validate README and CHANGELOG metadata
         shell: bash
         run: |

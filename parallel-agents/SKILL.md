@@ -1,143 +1,80 @@
 ---
 name: parallel-agents
-description: Coordinating several agent sessions working the same repo or shared Brain at once — detecting live ownership, claiming Brain files, and stopping duplicate writes. Use when agents run in parallel, before editing shared Brain entries, when a merge turns up duplicate work, or when a Write is refused as a collision.
+description: Coordinate concurrent agents in shared repositories and the Brain. Check observed ownership, assign file scopes, isolate workers, and acquire write leases. Use before parallel edits or Brain writes, when worktree ownership is unclear, or when the Claude duplicate-write hook refuses a creation.
 ---
 
-# Parallel agents on one repo
+# Coordinate concurrent agents
 
-Three to five sessions run on this machine at once, in sibling worktrees of the same repo. The
-failure mode is not what the isolation rules address.
+## Check ownership before editing
 
-**Worktrees prevent interference. They do not prevent duplication.** Two sessions creating the same
-new file is invisible to Git — an add/add divergence does not exist until both sides do — so it
-surfaces at merge, after both sides have paid. That has happened once here, to two sessions that
-were each following the isolation rules perfectly.
-
-The argument, the incident and the list of what still has no rule live in
-`~/.agents/brain/preferences/parallel-agents-git.md`.
-
-## Who holds what, right now
+Run these helpers; they provide evidence, not permission:
 
 ```bash
-python3 ~/.agents/skills/parallel-agents/scripts/ownership.py         # this repo
-python3 ~/.agents/skills/parallel-agents/scripts/ownership.py --all   # every live session
+git worktree list
+python3 ~/.agents/skills/parallel-agents/scripts/ownership.py --json
+python3 ~/.agents/skills/parallel-agents/scripts/ownership.py --all --json
 ```
 
-Joins `git worktree list`, the harness session files (`~/.claude/sessions/<pid>.json`) and
-`kill -0` into worktree → branch → live session. **Nothing is stored**, so nothing goes stale and
-the answer is correct the instant a session dies. A registry file would have to be written,
-refreshed and cleaned up, and every one of those is a way for it to lie — a stale claim blocks real
-work with the authority of a fact. Pid reuse is checked, not assumed away, via the recorded process
-start time.
+`ownership.py` observes **Claude session records only**, checked against live process IDs and
+recorded start times when available. A missing owner means **unknown**, including for Codex and Pi.
+It cannot establish that a worktree is free. Its JSON rows expose coverage and ownership status;
+`--all` lists only observed Claude sessions.
 
-What follows from it:
+Combine it with the current harness's agent list, worktree changes, and direct coordination.
+An agent list may cover only the current team, not independent sessions or other harnesses.
+Do not mutate a live owner's branch. If relevant ownership remains unresolved, isolate your work
+and resolve ownership before integration. Git approval and history rules belong to `git-workflow`.
 
-- **A branch with a live owner is not yours** — do not push to it, rebase it, or check it out
-  elsewhere. `SendMessage` to the printed session name.
-- **A non-fast-forward push rejection**: live owner → stop and talk to them, someone is building on
-  the history you would rewrite. No owner → the branch is unattended, `fetch` and rebase, no human
-  needed.
-- It reports that a session is live, not what it is *thinking about*. Intent is what messaging is
-  for.
+## Assign work and integrate
 
-## Before writing to the shared Brain
+- Give each worker an explicit repository, absolute CWD, file scope and expected result. One writer
+  owns each file; agree shared contracts before concurrent edits.
+- Use an isolated worktree for overlapping scopes. Shared-directory workers must own disjoint files.
+  Workers do not merge or push the base branch; the coordinator handles integration.
+- Check what a spawned worker receives. If it starts from HEAD, commit authorized prerequisites
+  first; a stash does not make them available. Read-only workers need no extra checkout.
+- Coordinate through the current harness's messaging tools when they reach the relevant session.
+  A printed session name is not proof that a messaging tool can reach it.
+- Require a handoff with files, changes, checks, branch/commit if applicable, and unresolved issues.
+  Recheck upstream and ownership, inspect the integrated diff, and run the affected checks.
+- Remove only completed, task-owned worktrees and safely delete merged task branches.
 
-Lock every Brain file the edit touches — concept, index and `log.md` — in one atomic claim:
+## Lease Brain files before writing
+
+Claim all affected concept files, indexes and `log.md` together:
 
 ```bash
-python3 ~/.agents/skills/parallel-agents/scripts/brain-lock.py acquire \
-  preferences/example.md preferences/index.md log.md
-# edit, then run: python3 tools/lint.py
-python3 ~/.agents/skills/parallel-agents/scripts/brain-lock.py release <token>
+python3 ~/.agents/skills/parallel-agents/scripts/brain-lock.py acquire concept.md index.md log.md
+python3 ~/.agents/skills/parallel-agents/scripts/brain-lock.py status
+# Before expiry, if work needs more time:
+python3 ~/.agents/skills/parallel-agents/scripts/brain-lock.py renew TOKEN --ttl 900
+# After edits, validation and integration:
+python3 ~/.agents/skills/parallel-agents/scripts/brain-lock.py release TOKEN
 ```
 
-The holder uses kernel advisory locks, so two agents cannot claim the same path. Different paths
-remain parallel. Locks expire after 15 minutes if an agent disappears; use `--ttl` only when the
-critical section genuinely needs longer, up to one hour. A blocked claim means another agent owns
-that file now — inspect `brain-lock.py status` and coordinate rather than bypassing it.
+These are cooperative leases: writers must use the helper. Default lifetime is 15 minutes,
+maximum one hour per acquisition or renewal. **Expiry releases the lock even if you are still
+working.** Renew before expiry and require success before continuing. If renewal fails or the
+lease expires, stop writing, reacquire and inspect intervening changes before resuming. Do not
+silently assume ownership survives a long tool call. A blocked acquisition means another lease
+holds that path; inspect `status` and coordinate. `using-brain` owns content routing and validation.
 
-## Before substantial work
+## Claude duplicate-write hook
+
+`warn-duplicate-write.py` is a Claude `PreToolUse/Write` and `PostToolUse/Read` adapter. It must be
+registered in that harness; it does not enforce Codex/Pi writes. A repository opts in with:
 
 ```bash
-git worktree list                                 # sibling checkouts of this repo
-git branch -a --sort=-committerdate | head        # who has been working, and on what
-git fetch && git log --oneline -5 origin/<base>   # did the base move under you
+git config --local agents.duplicate-write-guard true
 ```
 
-`ListAgents` names the live sessions, and is the only probe that sees a session which has not
-committed anything yet. When one of them is in your repo, say which files you are taking
-(`SendMessage`) before writing, and answer in kind when someone tells you.
+The hook refuses a new file only when an observed live Claude session holds the same new path
+in an attached sibling worktree. Failed Git queries provide no collision evidence. On refusal,
+read the named sibling file, then coordinate or reuse the work. Reading records a content marker;
+changed content requires another read. A blind retry does not clear the refusal.
 
-Re-check the base **before merging**, not only before starting.
-
-## Delegated work
-
-- Give each worker a bounded task and explicit file ownership; serialize edits to the same file.
-- Check how the harness starts workers. For workers branching from HEAD, commit authorized prerequisites before spawning so the worker sees them. A stash alone does not put changes in HEAD. Read-only workers need no commit or worktree merely to start.
-- For isolated writing workers, provision an explicit worktree, branch, and absolute CWD, especially across repos. An earlier command's working directory does not retarget a later spawn. For shared-directory workers, enforce disjoint file ownership.
-- Workers stay within their assigned scope and worktree, never merge or push the base branch, and commit only on their own branch when authorized. Report branch, commit, base, files, checks, and possible collisions; for shared-directory work, report the uncommitted changes.
-- The coordinator checks for upstream changes before authorized integration, preserves both sides' intended behavior, and reruns the relevant gates. Remove only completed, task-owned worktrees and safely delete their merged branches; then prune worktree metadata.
-
-When a Claude subscription limit blocks ordinary work, use `gpt-5.6-terra` for an intended Sonnet role and `gpt-5.6-sol` for an intended Opus role. Never substitute providers inside a frozen cross-provider evaluation: preserve partial evidence and resume the named model after reset.
-
-## If a Write is refused
-
-`scripts/warn-duplicate-write.py` runs as a `PreToolUse` hook on `Write`. When the file you are
-about to create already exists in a sibling worktree as recent, newly added work, the write is
-**denied** and the message names the file to read.
-
-Do exactly that: read their version. The denial lifts as soon as you have (a `PostToolUse` hook on
-`Read` records it). **A plain retry stays denied** — retrying is not reading. Then decide
-deliberately: extend their version, or use `SendMessage` to agree who owns the file.
-
-If their version changes after you read it, the gate re-arms — you approved specific bytes, not a
-filename.
-
-## Why it denies instead of warning
-
-The first version allowed the write and attached a note. A cross-vendor review pointed out that
-"read their version first" is temporally impossible that way, and a live test confirmed it: the file
-is created, and the model only sees the note on the next turn. The merge risk was caught; the
-duplicated file and the duplicated work — the actual costs — were not.
-
-Denying costs the operator nothing. It cancels one tool call and hands the reason to the model,
-which can resolve it unattended. It is not a permission prompt and does not wake anyone.
-
-## What it deliberately does not do
-
-- **Weak evidence is silent.** Only a path that exists in an *attached sibling worktree*, is a *new
-  addition* there relative to the merge base, and whose worktree is held by a **live session** will
-  gate. Liveness is a fact from `ownership.py`, not the file-mtime guess the first version used, so
-  an abandoned worktree never blocks a legitimate recreation. An earlier draft also searched all
-  history; that reports a file deleted two years ago forever, so it was removed. A check that cries
-  wolf gets routed around.
-- **It fails open.** Every internal error, timeout or unreadable state allows the write. The whole
-  hook runs under a single 250 ms budget. Only a *detected* collision fails closed.
-- **It is opt-in per repository**, so no repo policy is baked into a machine-wide hook:
-
-  ```bash
-  git config --local agents.duplicate-write-guard true
-  ```
-
-  Local config lives in the common git dir, so every linked worktree inherits it. Enabled for
-  `~/dev/brain`.
-
-## Known gaps
-
-- A millisecond-wide check-then-write race remains; the real incident was minutes wide, so the
-  `O_EXCL` reservation that would close it is not bought yet.
-- Files created through Bash (`>`, `tee`, `cp`) bypass it — `Write` is the only deterministic event
-  that knows the intended path.
-- Different filenames for the same work defeat it entirely. This is an exact-path last line of
-  defence, not a solution to semantic duplication — that stays with cross-session messaging.
-
-Test it without waiting for a real collision:
-
-```bash
-echo '{"hook_event_name":"PreToolUse","tool_name":"Write","cwd":"<repo>","session_id":"t",
-       "tool_input":{"file_path":"<path>"}}' \
-  | python3 ~/.agents/skills/parallel-agents/scripts/warn-duplicate-write.py
-```
-
-Silence means no collision. Median 53 ms, p95 79 ms measured under load 4 with nine live sessions;
-bare Python start-up is 14 ms of that.
+Limits: existing-file edits, shell writes, simultaneous creations and differently named duplicate
+work are not protected. The read marker fingerprints the file after the Read event; it cannot
+prove that every byte was returned or understood. The Git probes share a 250 ms budget; this is
+not a hard deadline on every filesystem operation. Treat the hook as an additional check, not a
+substitute for file ownership or Brain leases.

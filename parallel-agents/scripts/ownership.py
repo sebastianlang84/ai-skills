@@ -1,33 +1,11 @@
 #!/usr/bin/env python3
 """Who holds which worktree and branch right now — derived, never stored.
 
-WHY THERE IS NO REGISTRY FILE
-`git-workflow` makes unclear ownership a stop condition three times and tells you to "define
-branch/worktree ownership before dispatch", but there was nothing to consult. The obvious fix is a
-registry agents write to when they start work. That is the wrong shape: a registry has to be
-written, refreshed, and cleaned up, and every one of those steps is a way for it to lie. A stale
-claim is worse than no claim, because it blocks work with the authority of a fact.
+Coverage is limited to Claude session records. Absence is UNKNOWN, never proof that a
+worktree is free: Codex, Pi and sessions without records are not observed. Combine this
+positive evidence with runtime-local agent lists and direct coordination.
 
-Everything needed is already on disk and maintained by something other than us:
-
-    git worktree list          worktree -> branch, maintained by git
-    ~/.claude/sessions/*.json  pid -> {sessionId, cwd, name, socket}, written by the harness
-    kill(pid, 0)               liveness, maintained by the kernel
-
-Joining those three answers the question with no state of our own. Nothing to garbage-collect,
-nothing to go stale, and it is correct the instant a session dies rather than after a timeout.
-
-PID REUSE IS CHECKED, NOT ASSUMED AWAY
-A recycled pid would report a dead session as live, and this is the one place where being wrong
-means blocking real work. The session file records `procStart`, which is field 22 of
-/proc/<pid>/stat — the process start time in clock ticks since boot. If the running process does not
-carry the same value, the pid was reused and the session is dead. Verified against a live session
-before this was relied on.
-
-Used as a library by the duplicate-write hook (liveness beats the mtime guess it used before), and
-runnable on its own:
-
-    ownership.py [PATH] [--json] [--all]
+Usage: ownership.py [PATH] [--json] [--all]
 """
 from __future__ import annotations
 
@@ -137,7 +115,13 @@ def survey(repo: str) -> list[dict]:
     sessions = live_sessions()
     trees = worktrees(repo)
     paths = [p for p, _ in trees]
-    return [{"worktree": p, "branch": b, "owner": owner_of(p, sessions, paths)} for p, b in trees]
+    rows = []
+    for p, b in trees:
+        owner = owner_of(p, sessions, paths)
+        rows.append({"worktree": p, "branch": b, "owner": owner,
+                     "coverage": "claude-only",
+                     "ownership_status": "observed" if owner else "unknown"})
+    return rows
 
 
 def _contains(parent: str, child: str) -> bool:
@@ -159,6 +143,7 @@ def _age(session: dict) -> str:
 
 
 def main(argv: list[str]) -> int:
+    print("Coverage: Claude records only; Codex/Pi are not observed. Missing owner = unknown, not free.", file=sys.stderr)
     as_json = "--json" in argv
     show_all = "--all" in argv
     rest = [a for a in argv if not a.startswith("--")]
@@ -186,7 +171,7 @@ def main(argv: list[str]) -> int:
         return 0
     for r in rows:
         owner = r["owner"]
-        who = f"{owner['name']} (live, started {_age(owner)} ago)" if owner else "no live session"
+        who = f"{owner['name']} (live, started {_age(owner)} ago)" if owner else "unknown (no Claude owner observed)"
         print(f"{r['branch']:<34} {who:<44} {r['worktree']}")
     return 0
 

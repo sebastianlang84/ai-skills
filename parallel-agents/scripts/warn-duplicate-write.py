@@ -1,61 +1,12 @@
 #!/usr/bin/env python3
-"""Hook: refuse to create a file another live session already has, until you have read theirs.
+"""Claude hook: check new same-path work in observed live sibling worktrees.
 
-Registered twice in ~/.claude/settings.json and dispatching on `hook_event_name`:
-  PreToolUse  / Write  — deny a colliding creation, naming the file to read first
-  PostToolUse / Read   — record that the sibling version was read, which lifts the denial
+Register PreToolUse/Write and PostToolUse/Read in Claude; opt in per repository with
+agents.duplicate-write-guard=true. Other harnesses, shell writes and edits are not covered.
+Unknown or failed Git probes never establish a collision. Reading a sibling records its
+post-event fingerprint; the marker is advisory and cannot prove full-content consumption.
 
-WHAT IT IS FOR
-Three to five agents run on this machine at once, in sibling git worktrees of one repo. Worktree
-isolation prevents *interference* — two agents disturbing each other's working tree — and does
-nothing about *duplication*. Two sessions creating the same new file is invisible to Git, because an
-add/add divergence does not exist until both sides do; it surfaces at merge, after both sides have
-paid. That happened on 2026-08-14 in ~/dev/brain to two sessions each following the isolation rules
-perfectly.
-
-WHY IT DENIES RATHER THAN WARNS
-The first version of this hook allowed the write and attached a note saying "read that version
-first". A cross-vendor review pointed out that this is temporally impossible, and a live test
-confirmed it: the write completes, and the model only sees the note on its next turn, next to the
-tool result. The merge risk was caught; the duplicated file and the duplicated work — the actual
-costs — were not. So a high-confidence collision is refused.
-
-Denying costs the operator nothing. Exit-style denial cancels one tool call and hands the reason
-back to the model, which can act on it unattended; it is not a permission prompt and does not wake
-anyone. The unlock is deliberately NOT "the model tried again": a blind retry stays denied. It is a
-successful Read of the named sibling file, which is the thing we actually wanted to happen.
-
-WHY ONLY HIGH-CONFIDENCE EVIDENCE
-An earlier draft also searched the whole history (`git log --all -- <path>`). That is worthless as
-evidence and was removed: it reports a file deleted two years ago forever, and the branch list it
-printed came from `--contains <commit>`, which says a branch contains the commit that touched the
-path — not that the branch tip has the file. Now the only evidence that gates is a path that exists
-in an *attached sibling worktree*, is a *new addition* there relative to the merge base, and that
-worktree is held by a **live session** — a fact from ownership.py (pid alive, start time still
-matching what the session recorded), not the file-mtime guess an earlier version used. An abandoned
-worktree therefore never blocks a legitimate recreation. Everything weaker is silent, because a
-check that cries wolf gets routed around.
-
-KNOWN GAPS, not papered over
-- A millisecond-wide check-then-write race remains: two hooks can both see absence before either
-  write lands. Closing it needs an O_EXCL reservation with expiry; the real incident was minutes
-  wide, so that complexity is not bought yet.
-- Files created by Bash (`>`, `tee`, `cp`) bypass this entirely — `Write` is the only deterministic
-  event that knows the intended path.
-- Two sessions appending to the same existing file (`log.md`) is untouched: the path exists, so this
-  never fires. That collision is Git's ordinary content conflict and it does surface at merge.
-- Choosing different filenames for the same work defeats it completely. This is an exact-path last
-  line of defence, not a solution to semantic duplication — that stays with cross-session messaging.
-
-FAILING OPEN, EXCEPT WHERE IT MATTERS
-Every internal error, timeout or unreadable state exits 0 and allows the write. This is advisory
-coordination, not protection from destruction, and a hook that breaks `Write` is worse than no hook.
-Only a *detected* high-confidence collision fails closed.
-
-OPT-IN PER REPOSITORY
-Silent unless the repo enables it:  git config --local agents.duplicate-write-guard true
-Local config lives in the common git dir, so every linked worktree of that repo inherits it, and no
-repository policy is hardcoded into a machine-wide hook.
+The Git calls share a deadline; local filesystem operations are not hard time-bounded.
 """
 import hashlib
 import json
@@ -68,7 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ownership  # noqa: E402 — sibling module, same directory
 
-BUDGET = 0.25  # hard ceiling for the whole hook, not per subprocess
+BUDGET = 0.25  # shared Git-probe budget, not a hard filesystem deadline
 STATE = Path.home() / ".agents" / "state" / "parallel-agents"
 STATE_TTL = 7 * 24 * 3600
 FINGERPRINT_MAX = 1 << 20  # hash contents below this; fall back to size+mtime above it
@@ -167,15 +118,23 @@ def collisions(repo: str, rel: str, dl: Deadline) -> list[dict]:
         if not candidate.exists():
             continue
 
-        tracked = git(wt, dl, "ls-files", "--error-unmatch", rel) is not None
+        tracked = git(wt, dl, "ls-files", "--", rel)
+        if tracked is None:
+            continue  # failed probe is not evidence of an untracked file
         if not tracked:
             kind, rank = "uncommitted — it exists only in that session's working tree", 0
         else:
             # Tracked: only interesting if it is NEW on that branch. A file both of us inherited
             # from the merge base is not duplicated work, it is shared history.
-            base = git(repo, dl, "merge-base", "HEAD", branch) or ""
-            if base and git(repo, dl, "cat-file", "-e", f"{base}:{rel}") is not None:
+            tip = git(wt, dl, "rev-parse", "HEAD")
+            if not tip:
                 continue
+            base = git(repo, dl, "merge-base", "HEAD", tip)
+            if not base:
+                continue
+            inherited = git(repo, dl, "ls-tree", "--name-only", base, "--", rel)
+            if inherited is None or inherited:
+                continue  # only a successful, empty tree query proves absence
             kind, rank = f"added on branch {branch}, not present at the merge base", 1
 
         # Only a LIVE session gates. An abandoned worktree must never block a legitimate
