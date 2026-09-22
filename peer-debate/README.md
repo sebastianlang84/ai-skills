@@ -7,7 +7,7 @@ Open [`docs/debate-flow.html`](docs/debate-flow.html) in a browser for the contr
 
 ## What it is
 
-Two model instances — one model twice, or Gemini via `agy` against GPT via `codex` — argue one
+Two model instances — one model twice, or two vendors among Gemini via `agy`, GPT via `codex` and Claude via `claude` — argue one
 contestable question under opposed roles. The orchestrating
 agent carries every turn between them and judges the result. The point is not to get two answers —
 it is to make each side attack the other's reasoning, which surfaces errors that neither would find
@@ -15,7 +15,7 @@ alone and that the orchestrator, sharing the question but not the work, would no
 
 ## Three decisions worth knowing
 
-**Nobody is running between turns.** Each turn starts a fresh `agy --print` or `codex exec` process
+**Nobody is running between turns.** Each turn starts a fresh `agy --print`, `claude -p` or `codex exec` process
 that exits once it has answered; what survives is a conversation or thread id, not a resident
 agent. There is no separate
 judge — judging happens inside the orchestrator. The two sides run concurrently only in blind round

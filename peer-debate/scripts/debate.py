@@ -23,7 +23,7 @@ Configuration, all optional, all environment variables:
     PEER_DEBATE_EFFORT_A/_B  effort for one side
     PEER_DEBATE_TIMEOUT      seconds per turn                     (default 3600)
 
-A model is `<cli>:<id>` with cli `agy` or `codex`; a bare id means agy. Sides may differ:
+A model is `<cli>:<id>` with cli `agy`, `codex` or `claude`; a bare id means agy. Sides may differ:
 `PEER_DEBATE_MODEL_A=agy:gemini-3.8-flash-medium PEER_DEBATE_MODEL_B=codex:gpt-5.6-terra` puts
 Gemini against a Codex model. What each side runs is fixed at `init` in `sides.json` and cannot
 drift between rounds through the environment.
@@ -50,7 +50,8 @@ ROOT = Path(os.environ.get("PEER_DEBATE_ROOT", HOME / "peer-debates"))
 MODEL = os.environ.get("PEER_DEBATE_MODEL", "agy:gemini-3.8-flash-medium")
 EFFORT = os.environ.get("PEER_DEBATE_EFFORT", "medium")
 TURN_TIMEOUT = int(os.environ.get("PEER_DEBATE_TIMEOUT", "3600"))
-CLIS = ("agy", "codex")
+CLIS = ("agy", "codex", "claude")
+CLAUDE_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 ASSETS = Path(__file__).resolve().parent.parent / "assets"
 # One writer at a time: round 0 runs both sides in threads, and a buffered append of a multi-kB
@@ -105,6 +106,9 @@ def sides_from_env() -> dict[str, dict[str, str]]:
 
 def validate_selection(cfg: dict[str, str], side: str) -> None:
     """Agy Gemini variant IDs already fix effort; never silently swap an explicit model."""
+    if cfg["cli"] == "claude" and cfg["effort"] not in CLAUDE_EFFORTS:
+        raise Failed(f"side {side}: claude effort must be one of {', '.join(CLAUDE_EFFORTS)}, "
+                     f"got {cfg['effort']!r}")
     if cfg["cli"] != "agy":
         return
     effort = cfg["effort"]
@@ -259,6 +263,46 @@ def parse_codex_result(stdout: str, stderr: str, side: str) -> tuple[str, str, s
     return replies[-1].strip(), thread, stamp
 
 
+def parse_claude_result(stdout: str, stderr: str, side: str) -> tuple[str, str, str]:
+    """Validate `claude -p --output-format json` and return reply, session id and usage stamp.
+
+    Measured on Claude Code 2.1.280: the output is a JSON list of events (system/init, assistant,
+    rate_limit_event, result); the `result` element carries session_id, result, usage, is_error
+    and subtype. An older single-object form is accepted as well.
+    """
+    try:
+        data = json.loads(stdout)
+    except (TypeError, ValueError) as exc:
+        raise Failed(f"side {side} returned invalid claude JSON ({exc}); nothing recorded"
+                     + failure_detail(stdout or "", stderr))
+    if isinstance(data, list):
+        results = [e for e in data if isinstance(e, dict) and e.get("type") == "result"]
+        data = results[-1] if results else None
+    if not isinstance(data, dict):
+        raise Failed(f"side {side} returned no claude result event; nothing recorded")
+    if data.get("is_error") or data.get("subtype") != "success":
+        raise Failed(f"side {side} returned claude {data.get('subtype')!r} "
+                     f"(is_error={data.get('is_error')}); nothing recorded"
+                     + failure_detail(str(data.get("result") or ""), stderr))
+    reply, session = data.get("result"), data.get("session_id")
+    if not isinstance(reply, str) or not reply.strip():
+        raise Failed(f"side {side} returned an empty reply; nothing recorded")
+    if not isinstance(session, str) or not session:
+        raise Failed(f"side {side} returned no claude session_id; nothing recorded")
+    usage = data.get("usage")
+    if not isinstance(usage, dict):
+        stamp = "usage=unavailable"
+    else:
+        stamp = (
+            f"turns={data.get('num_turns', '?')} in={usage.get('input_tokens', '?')} "
+            f"cached={usage.get('cache_read_input_tokens', '?')} "
+            f"cache_write={usage.get('cache_creation_input_tokens', '?')} "
+            f"out={usage.get('output_tokens', '?')} "
+            f"cost_usd={data.get('total_cost_usd', '?')} this-turn"
+        )
+    return reply.strip(), session, stamp
+
+
 def agy_command(exe: str, work: Path, msg_file: Path, model: str, effort: str,
                 conversation: str | None) -> list[str]:
     cmd = [exe]
@@ -307,6 +351,26 @@ def codex_command(exe: str, work: Path, msg_file: Path, model: str, effort: str,
     return cmd
 
 
+def claude_command(exe: str, work: Path, msg_file: Path, model: str, effort: str,
+                   session: str | None) -> list[str]:
+    cmd = [exe, "-p", f"Read {msg_file}. It is this turn's complete message. Answer it.",
+           "--output-format", "json", "--model", model, "--effort", effort,
+           # Same grant as the other sides: full tools, no prompts. See tool-policy.md.
+           "--dangerously-skip-permissions", "--add-dir", str(work)]
+    if session is not None:
+        # Claude Code keeps sessions per working directory; the side's cwd stays `work`.
+        cmd.extend(["--resume", session])
+    return cmd
+
+
+# Looked up at call time, so a test that patches one adapter function patches the dispatch too.
+ADAPTERS = {
+    "agy": (lambda *a: agy_command(*a), lambda *a: parse_agy_result(*a)),
+    "codex": (lambda *a: codex_command(*a), lambda *a: parse_codex_result(*a)),
+    "claude": (lambda *a: claude_command(*a), lambda *a: parse_claude_result(*a)),
+}
+
+
 def turn(run: str, side: str, message: str) -> str:
     """One turn against one side's persistent session. Returns the reply, records it."""
     if side not in ROLE:
@@ -346,7 +410,7 @@ def turn(run: str, side: str, message: str) -> str:
                                      delete=False) as fh:
         fh.write(turn_message)
         msg_file = Path(fh.name)
-    build = codex_command if cli == "codex" else agy_command
+    build, parse = ADAPTERS[cli]
     cmd = build(exe, work, msg_file, model, effort, existing_conversation)
     try:
         # encoding is explicit: text=True alone decodes with the locale codec, and on a
@@ -368,7 +432,6 @@ def turn(run: str, side: str, message: str) -> str:
     if proc.returncode != 0:
         raise Failed(f"side {side} exited with status {proc.returncode}; nothing recorded"
                      + failure_detail(proc.stdout or "", proc.stderr or ""))
-    parse = parse_codex_result if cli == "codex" else parse_agy_result
     reply, conversation, usage = parse(proc.stdout, proc.stderr, side)
     if existing_conversation is not None and conversation != existing_conversation:
         raise Failed(f"side {side} resumed {existing_conversation} but {cli} returned "
@@ -393,7 +456,7 @@ def turn(run: str, side: str, message: str) -> str:
 
 # Tools a debater is likely to reach for. What is absent shapes what it can honestly claim, so
 # the answer belongs in the run rather than in the operator's head.
-PROBED = ["agy", "codex", "python3", "git", "docker", "rg", "grep", "curl", "gnuplot", "sqlite3",
+PROBED = ["agy", "codex", "claude", "python3", "git", "docker", "rg", "grep", "curl", "gnuplot", "sqlite3",
           "codemap", "ast-grep", "pandoc", "latexmk"]
 
 
@@ -516,9 +579,9 @@ def machine_facts(sides: dict[str, dict[str, str]] | None = None) -> tuple[list[
             lines.append(f"model reachable could not ask agy: {exc}")
             ok = False
     for cfg in sides.values():
-        if cfg["cli"] == "codex":
-            lines.append(f"model reachable {cfg['model']} not verifiable before round 0 (codex "
-                         "lists no models)")
+        if cfg["cli"] in ("codex", "claude"):
+            lines.append(f"model reachable {cfg['model']} not verifiable before round 0 "
+                         f"({cfg['cli']} lists no models)")
     return lines, ok
 
 

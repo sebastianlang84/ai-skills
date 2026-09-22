@@ -34,7 +34,8 @@ minutes; blocking on it wastes the entire point. Fold the findings in when it la
 
 The script blocks by design — the *caller* backgrounds it. It is the Claude-to-GPT adapter and
 defaults to `gpt-6-sol` at `medium` reasoning effort in a read-only sandbox; override with
-`REVIEW_MODEL` or `REVIEW_REASONING_EFFORT`. From Codex/GPT, use the harness's Claude/Opus
+`REVIEW_MODEL` or `REVIEW_REASONING_EFFORT`. The call runs through `codex-call`; the thread id lands in `<output-file-stem>.thread`, and a
+follow-up question goes into that thread with `codex-call`'s `resume`. From Codex/GPT, use the harness's Claude/Opus
 background mechanism. If no foreign-vendor reviewer is available, report that instead of silently
 substituting a same-vendor model.
 

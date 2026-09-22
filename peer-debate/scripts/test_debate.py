@@ -170,8 +170,9 @@ class DebateTests(unittest.TestCase):
         self.assertEqual(debate.parse_model("gemini-3.8-flash-high"),
                          ("agy", "gemini-3.8-flash-high"))
         self.assertEqual(debate.parse_model("codex:gpt-5.6-terra"), ("codex", "gpt-5.6-terra"))
+        self.assertEqual(debate.parse_model("claude:claude-opus-5-5"), ("claude", "claude-opus-5-5"))
         with self.assertRaisesRegex(debate.Failed, "unknown cli"):
-            debate.parse_model("claude:opus")
+            debate.parse_model("pi:glm")
         with self.assertRaisesRegex(debate.Failed, "no model id"):
             debate.parse_model("codex:")
 
@@ -248,6 +249,78 @@ class DebateTests(unittest.TestCase):
             debate.turn(self.run.name, "A", "question")
         argv = run.call_args.args[0]
         self.assertEqual(argv[argv.index("--model") + 1], "gemini-3.8-flash-high")
+
+
+    @staticmethod
+    def claude_json(text="claude answer\nSTATUS: contested — one point", session="sess-a",
+                    as_list=True, **result):
+        # Shape measured on Claude Code 2.1.280: a list of events ending in `result`.
+        event = {"type": "result", "subtype": "success", "is_error": False, "result": text,
+                 "session_id": session, "num_turns": 3, "total_cost_usd": 0.12,
+                 "usage": {"input_tokens": 40, "cache_read_input_tokens": 38000,
+                           "cache_creation_input_tokens": 100, "output_tokens": 900}} | result
+        events = [{"type": "system", "subtype": "init", "session_id": session},
+                  {"type": "assistant", "message": {"content": []}}, event]
+        return json.dumps(events if as_list else event)
+
+    def _claude_sides(self):
+        (self.run / "sides.json").write_text(json.dumps({
+            "A": {"cli": "claude", "model": "claude-opus-5-5", "effort": "medium"},
+            "B": {"cli": "codex", "model": "gpt-6-sol", "effort": "medium"},
+        }), encoding="utf-8")
+
+    def test_parse_claude_reads_list_and_object_forms(self):
+        for as_list in (True, False):
+            reply, session, stamp = debate.parse_claude_result(
+                self.claude_json(as_list=as_list), "", "A")
+            self.assertEqual((reply.splitlines()[0], session), ("claude answer", "sess-a"))
+            self.assertIn("cached=38000", stamp)
+
+    def test_parse_claude_errors_are_loud(self):
+        for bad in (self.claude_json(is_error=True), self.claude_json(subtype="error_max_turns"),
+                    self.claude_json(text="  "), self.claude_json(session=""),
+                    json.dumps([{"type": "assistant"}]), "not json"):
+            with self.assertRaises(debate.Failed):
+                debate.parse_claude_result(bad, "", "A")
+
+    def test_claude_effort_is_validated(self):
+        debate.validate_selection({"cli": "claude", "model": "m", "effort": "xhigh"}, "A")
+        with self.assertRaisesRegex(debate.Failed, "claude effort"):
+            debate.validate_selection({"cli": "claude", "model": "m", "effort": "ultra"}, "A")
+
+    @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/claude")
+    @mock.patch.object(debate.subprocess, "run")
+    def test_claude_initial_turn_then_resume(self, run, which):
+        self._claude_sides()
+        run.return_value = subprocess.CompletedProcess([], 0, self.claude_json(), "")
+
+        debate.turn(self.run.name, "A", "question")
+
+        which.assert_called_with("claude")
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[1], "-p")
+        self.assertEqual(argv[argv.index("--model") + 1], "claude-opus-5-5")
+        self.assertEqual(argv[argv.index("--effort") + 1], "medium")
+        self.assertEqual(argv[argv.index("--output-format") + 1], "json")
+        self.assertIn("--dangerously-skip-permissions", argv)
+        self.assertNotIn("--resume", argv)
+        self.assertEqual(run.call_args.kwargs["cwd"], self.run / "A")
+        self.assertEqual((self.run / "conversation-A.txt").read_text(encoding="utf-8"), "sess-a\n")
+        self.assertIn("cli=claude model=claude-opus-5-5", (self.run / "transcript.md").read_text())
+
+        debate.turn(self.run.name, "A", "reply")
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[argv.index("--resume") + 1], "sess-a")
+
+    @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/claude")
+    @mock.patch.object(debate.subprocess, "run")
+    def test_claude_fork_is_not_recorded(self, run, _which):
+        self._claude_sides()
+        (self.run / "conversation-A.txt").write_text("sess-a\n", encoding="utf-8")
+        run.return_value = subprocess.CompletedProcess([], 0, self.claude_json(session="sess-b"), "")
+        with self.assertRaisesRegex(debate.Failed, "resumed sess-a"):
+            debate.turn(self.run.name, "A", "reply")
+        self.assertFalse((self.run / "last-A.md").exists())
 
 
 if __name__ == "__main__":

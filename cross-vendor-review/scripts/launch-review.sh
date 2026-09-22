@@ -17,16 +17,22 @@ cwd="${3:-$PWD}"
 model="${REVIEW_MODEL:-gpt-6-sol}"
 reasoning_effort="${REVIEW_REASONING_EFFORT:-medium}"
 
+# A failed run must not leave the previous review behind as if it were this one.
+rm -f "$out" "${out%.*}.thread"
+
 [ -r "$prompt" ] || { echo "prompt file not readable: $prompt" >&2; exit 2; }
 command -v codex >/dev/null 2>&1 || { echo "codex CLI not found — no cross-vendor reviewer available" >&2; exit 2; }
 
 mkdir -p "$(dirname "$out")"
 
-# read-only: the reviewer reads the design, it never touches it.
-# --skip-git-repo-check: the review target is often a directory tree, not one repo.
-cd "$cwd" && codex exec \
-  -m "$model" \
-  -c model_reasoning_effort="$reasoning_effort" \
-  --sandbox read-only \
-  --skip-git-repo-check \
-  - < "$prompt" > "$out" 2> "${out%.*}.err"
+# codex-call owns the invocation: read-only sandbox, hooks off, thread kept for follow-ups.
+# It blocks here; the caller backgrounds this script.
+call="$HOME/.agents/skills/codex-call/scripts/codex_call.py"
+raw="${out%.*}.call"
+python3 "$call" new --cwd "$cwd" --label cross-vendor-review \
+  --model "$model" --effort "$reasoning_effort" "$prompt" > "$raw" 2> "${out%.*}.err"
+# codex-call prints `thread: <id>`, `result: <path>`, a blank line, then the answer. The output file
+# keeps its old contract (the answer only); the thread id goes beside it for a follow-up.
+sed -n '1s/^thread: //p' "$raw" > "${out%.*}.thread"
+tail -n +4 "$raw" > "$out"
+rm -f "$raw"
