@@ -8,6 +8,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- `using-brain` is loaded in every session by a session-start hook (`~/.agents/scripts/brain-session-context.py`) in Claude Code, Codex, and Pi: read the Brain before working, write qualifying learning before finishing. The description drops the self-contained-task skip; the explain, retrieval-improvement, and layer-alignment sections moved to `references/maintenance.md`, cutting the injected body from 9.5 KB to 5.6 KB.
 - `cross-vendor-review` defaults to Codex `gpt-6-sol` (`REVIEW_MODEL` still overrides), following Sebastian's 2026-09-22 rule that every review runs on this model. It replaced `gpt-6-astra` (2026-09-16), which had replaced `gpt-5.6-sol`.
 - `parallel-agents` now reports Claude-only ownership coverage and treats absent owners as unknown. Git probe failures no longer establish duplicate-write collisions. Brain write leases gain acknowledged renewal without releasing their locks; expiry and unsupported harnesses are explicit. The skill was shortened and obsolete universal messaging/model assumptions removed. CI runs the coordination and lease regression tests.
 
