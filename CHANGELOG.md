@@ -8,7 +8,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
-- `cross-vendor-review` defaults to Codex `gpt-6-astra` instead of `gpt-5.6-sol` (`REVIEW_MODEL` still overrides). Sebastian asked on 2026-09-16 that every review use this model.
+- `cross-vendor-review` defaults to Codex `gpt-6-sol` (`REVIEW_MODEL` still overrides), following Sebastian's 2026-09-22 rule that every review runs on this model. It replaced `gpt-6-astra` (2026-09-16), which had replaced `gpt-5.6-sol`.
 - `parallel-agents` now reports Claude-only ownership coverage and treats absent owners as unknown. Git probe failures no longer establish duplicate-write collisions. Brain write leases gain acknowledged renewal without releasing their locks; expiry and unsupported harnesses are explicit. The skill was shortened and obsolete universal messaging/model assumptions removed. CI runs the coordination and lease regression tests.
 
 - `git-workflow` recognizes standing authorization and owns Git identity and explicit staging rules. `parallel-agents` now covers worker context, handoff, cleanup, and provider fallback; `pi-extension-packaging` owns local Pi paths. These details moved out of global instructions. A stash is no longer treated as making changes available to workers branching from HEAD.

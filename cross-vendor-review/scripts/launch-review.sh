@@ -7,14 +7,14 @@
 #
 #   launch-review.sh <prompt-file> <output-file> [cwd]
 #
-# REVIEW_MODEL overrides the model (default gpt-6-astra).
+# REVIEW_MODEL overrides the model (default gpt-6-sol).
 # REVIEW_REASONING_EFFORT overrides the effort (default medium).
 set -euo pipefail
 
 prompt="${1:?usage: launch-review.sh <prompt-file> <output-file> [cwd]}"
 out="${2:?usage: launch-review.sh <prompt-file> <output-file> [cwd]}"
 cwd="${3:-$PWD}"
-model="${REVIEW_MODEL:-gpt-6-astra}"
+model="${REVIEW_MODEL:-gpt-6-sol}"
 reasoning_effort="${REVIEW_REASONING_EFFORT:-medium}"
 
 [ -r "$prompt" ] || { echo "prompt file not readable: $prompt" >&2; exit 2; }
