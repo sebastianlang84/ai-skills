@@ -6,6 +6,10 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ## [Unreleased]
 
+### Added
+
+- `t3-threads`: find, read and message other T3 Code threads. `scripts/t3-threads.mjs` lists, searches and shows threads from T3's SQLite projection read-only; `scripts/t3-send.mjs` (moved from the `~/dev/harness-comm` prototype) sends a turn through the T3 server's WebSocket RPC and waits for the reply. Written after an agent twice mistook T3 threads for ChatGPT/Codex chats.
+
 ### Changed
 
 - `using-brain` is loaded in every session by a session-start hook (`~/.agents/scripts/brain-session-context.py`) in Claude Code, Codex, and Pi: read the Brain before working, write qualifying learning before finishing. The description drops the self-contained-task skip; the explain, retrieval-improvement, and layer-alignment sections moved to `references/maintenance.md`, cutting the injected body from 9.5 KB to 5.6 KB.
