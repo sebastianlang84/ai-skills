@@ -12,6 +12,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- `peer-debate`: codex sides run with `codex --search`, so they get the native web search the agy and claude sides already had.
 - `codex-call`: reviews and scouts are called directly from the main session; the Haiku wrapper agents `~/.claude/agents/reviewer.md` and `scout.md` were removed. Their rules moved to `references/review-rules.md` and `references/scout-rules.md`; scout follow-ups must repeat `--model gpt-6-luna --effort low`, and the calling session evaluates every answer.
 - `using-brain` is loaded in every session by a session-start hook (`~/.agents/scripts/brain-session-context.py`) in Claude Code, Codex, and Pi: read the Brain before working, write qualifying learning before finishing. The description drops the self-contained-task skip; the explain, retrieval-improvement, and layer-alignment sections moved to `references/maintenance.md`, cutting the injected body from 9.5 KB to 5.6 KB.
 - `cross-vendor-review`'s launcher and the `reviewer`/`scout` agents in `~/.claude/agents/` call Codex through `codex-call` instead of each carrying its own `codex exec` line. The launcher keeps its interface and output; the thread id for a follow-up is written beside the output as `<stem>.thread`. The agents no longer pass `--ephemeral`, which had made every follow-up impossible.

@@ -326,7 +326,9 @@ def agy_command(exe: str, work: Path, msg_file: Path, model: str, effort: str,
 
 def codex_command(exe: str, work: Path, msg_file: Path, model: str, effort: str,
                   thread: str | None) -> list[str]:
-    cmd = [exe, "exec"]
+    # `--search` is a top-level flag (not accepted after `exec`); it gives the codex side the native
+    # web_search tool the agy and claude sides already have.
+    cmd = [exe, "--search", "exec"]
     if thread is not None:
         # The model must be repeated on resume: without it codex resumes under its default model
         # and only notes the mismatch (measured 0.152.1).
