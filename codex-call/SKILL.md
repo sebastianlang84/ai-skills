@@ -14,7 +14,14 @@ read-only sandbox, hooks off, thread kept. Prompts go in as a file or `-` for st
 - Follow up in the same thread: `python3 $S resume <thread-id> --detach <prompt-file>`, then `wait`.
 - Without `--detach` a call blocks and prints the same output. Only do that for calls under 10 min.
 
-Hand the answer on unchanged. `--model`, `--effort`, `--sandbox` or `CODEX_CALL_MODEL` /
+Call it directly from the main session; no wrapper subagent. For a review, append
+`references/review-rules.md` to the prompt file. For scouting, pass `--model gpt-6-luna --effort low`
+and append `references/scout-rules.md`; pass the same two flags to every `resume` of a scout thread,
+or the follow-up silently runs on the sol/medium defaults. For long calls use `--detach` and run `wait` as a background
+Bash command.
+
+Quote the answer unchanged. The calling session still evaluates it: fix each finding or refute it
+with evidence before reporting. `--model`, `--effort`, `--sandbox` or `CODEX_CALL_MODEL` /
 `CODEX_CALL_EFFORT` override the pins. `list` shows recent calls from
 `~/.agents/state/codex-call/calls.jsonl`.
 
