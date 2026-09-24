@@ -25,6 +25,11 @@ still pick the wrong option or misjudge a probability.
 
 ## When to use it
 
+First check whether a rule or script decides it: a regex, a keyword list, a number check. In
+Market Digest a fixed rule (number + named subject + valuation word) picked web-verification
+targets as well as Jev did, so Jev was dropped there. Jev earns its place only when the judgement
+needs meaning that surface features miss.
+
 Good fits are decisions a knowledgeable person could make in a few seconds with the right context,
 where the answer space is known in advance:
 
