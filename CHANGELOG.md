@@ -13,6 +13,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- `parallel-agents`: ownership checks also read `kb board --repo <repo>`, the shared ticket board (`~/dev/agent-kanban`) that records claims from Claude Code, Codex and Pi sessions.
 - `jev`: check a rule or script first; in Market Digest a fixed rule matched Jev on web-verification targets.
 - `peer-debate`: codex sides run with `codex --search`, so they get the native web search the agy and claude sides already had.
 - `codex-call`: reviews and scouts are called directly from the main session; the Haiku wrapper agents `~/.claude/agents/reviewer.md` and `scout.md` were removed. Their rules moved to `references/review-rules.md` and `references/scout-rules.md`; scout follow-ups must repeat `--model gpt-6-luna --effort low`, and the calling session evaluates every answer.

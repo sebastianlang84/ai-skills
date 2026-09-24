@@ -20,7 +20,8 @@ recorded start times when available. A missing owner means **unknown**, includin
 It cannot establish that a worktree is free. Its JSON rows expose coverage and ownership status;
 `--all` lists only observed Claude sessions.
 
-Combine it with the current harness's agent list, worktree changes, and direct coordination.
+Combine it with `kb board --repo <repo>` (claims from Claude, Codex and Pi sessions), the current
+harness's agent list, worktree changes, and direct coordination.
 An agent list may cover only the current team, not independent sessions or other harnesses.
 Do not mutate a live owner's branch. If relevant ownership remains unresolved, isolate your work
 and resolve ownership before integration. Git approval and history rules belong to `git-workflow`.
