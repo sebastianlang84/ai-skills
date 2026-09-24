@@ -8,6 +8,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Added
 
+- `jev`: what the Jev decision model is, when it fits (typed decisions with probabilities: routing, screening, scoring, guardrails, bulk labels) and when not, how to call it through the `jev` MCP server or `jev_client.decide`, question design, and its separate 0.03 €/day ledger. Includes the Market Digest measurement of 2026-09-24.
 - `t3-threads`: find, read and message other T3 Code threads. `scripts/t3-threads.mjs` lists, searches and shows threads from T3's SQLite projection read-only; `scripts/t3-send.mjs` (moved from the `~/dev/harness-comm` prototype) sends a turn through the T3 server's WebSocket RPC and waits for the reply. Written after an agent twice mistook T3 threads for ChatGPT/Codex chats.
 
 ### Changed
