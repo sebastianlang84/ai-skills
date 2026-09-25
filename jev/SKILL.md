@@ -40,7 +40,7 @@ where the answer space is known in advance:
 - **Guardrails and checks:** personal data present, prompt injection, policy violation, a tool call
   that looks implausible, an answer that misses the question (several `noul` in one call).
 - **Bulk work:** labelling or enriching large record sets, where a frontier model is too slow or
-  too expensive. The default cap covers about 900 items a day at the measured cost; more needs a
+  too expensive. The default cap covers about 9,000 items a day at the measured cost; more needs a
   raised cap (see Budget).
 
 It pays off when volume or latency matters, when a probability is useful (threshold, sort, send
@@ -128,7 +128,7 @@ and the client does not compare it with the requested version.
 
 ## Budget and safety
 
-- Jev has its own ledger, `~/.agents/state/jev/budget.sqlite3`, with a default cap of 0.03 €/day
+- Jev has its own ledger, `~/.agents/state/jev/budget.sqlite3`, with a default cap of 0.30 €/day
   (`JEV_DAILY_LIMIT_EUR`), so it cannot take budget from the GLM source preparation.
 - Raising the cap or adding a recurring job needs Sebastian's approval, because metered API spend
   is an exception here.

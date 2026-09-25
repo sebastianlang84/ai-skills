@@ -13,6 +13,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- `jev`: default daily cap raised to 0.30 €/day (Sebastian, 2026-09-25), about 9,000 items a day.
 - `parallel-agents`: ownership checks also read `kb board --repo <repo>`, the shared ticket board (`~/dev/agent-kanban`) that records claims from Claude Code, Codex and Pi sessions.
 - `jev`: check a rule or script first; in Market Digest a fixed rule matched Jev on web-verification targets.
 - `peer-debate`: codex sides run with `codex --search`, so they get the native web search the agy and claude sides already had.
