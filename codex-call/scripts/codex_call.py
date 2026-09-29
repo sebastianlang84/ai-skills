@@ -34,7 +34,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
-MODEL = os.environ.get("CODEX_CALL_MODEL", "gpt-6-sol")
+MODEL = os.environ.get("CODEX_CALL_MODEL", "gpt-6.1-sol")
 EFFORT = os.environ.get("CODEX_CALL_EFFORT", "medium")
 ROOT = Path(os.environ.get("CODEX_CALL_ROOT", Path.home() / ".agents/state/codex-call"))
 SANDBOXES = ("read-only", "workspace-write", "danger-full-access")

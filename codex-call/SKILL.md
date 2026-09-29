@@ -1,11 +1,11 @@
 ---
 name: codex-call
-description: Call Codex (gpt-6-sol) for a review, a question, or a follow-up in an existing Codex thread. Use for every Codex call instead of writing `codex exec` by hand.
+description: Call Codex (gpt-6.1-sol) for a review, a question, or a follow-up in an existing Codex thread. Use for every Codex call instead of writing `codex exec` by hand.
 ---
 
 # codex-call
 
-`S=~/.agents/skills/codex-call/scripts/codex_call.py` pins model `gpt-6-sol`, effort `medium`,
+`S=~/.agents/skills/codex-call/scripts/codex_call.py` pins model `gpt-6.1-sol`, effort `medium`,
 read-only sandbox, hooks off, thread kept. Prompts go in as a file or `-` for stdin.
 
 - Start: `python3 $S new --cwd <repo> --label <name> --detach <prompt-file>` prints a call dir.

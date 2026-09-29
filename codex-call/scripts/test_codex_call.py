@@ -38,7 +38,7 @@ class CodexCallTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def args(self, **kw):
-        base = dict(prompt=str(self.prompt), label="t", model="gpt-6-sol", effort="medium",
+        base = dict(prompt=str(self.prompt), label="t", model="gpt-6.1-sol", effort="medium",
                     sandbox="read-only", detach=False, cwd=None)
         return argparse.Namespace(**(base | kw))
 
@@ -65,7 +65,7 @@ class CodexCallTests(unittest.TestCase):
         call, meta = self.call(cwd=self.tmp.name)
         cmd = self.calls[0]
         self.assertEqual(cmd[:4], ["/usr/bin/codex", "exec", "-C", str(Path(self.tmp.name).resolve())])
-        for pin in (["-s", "read-only"], ["-m", "gpt-6-sol"], ["-c", "features.hooks=false"],
+        for pin in (["-s", "read-only"], ["-m", "gpt-6.1-sol"], ["-c", "features.hooks=false"],
                     ["-c", "model_reasoning_effort=medium"]):
             self.assertIn(pin, [cmd[i:i + 2] for i in range(len(cmd) - 1)])
         self.assertIn("--json", cmd)
@@ -76,7 +76,7 @@ class CodexCallTests(unittest.TestCase):
         _, meta = self.call(parent="t-9", stream=events("turn.completed", thread="t-9"))
         cmd = self.calls[0]
         self.assertEqual(cmd[1:4], ["exec", "resume", "t-9"])
-        self.assertIn("gpt-6-sol", cmd)
+        self.assertIn("gpt-6.1-sol", cmd)
         self.assertIn("sandbox_mode=read-only", cmd)
         for forbidden in ("-s", "-C", "--add-dir", "--color", "--ephemeral"):
             self.assertNotIn(forbidden, cmd)

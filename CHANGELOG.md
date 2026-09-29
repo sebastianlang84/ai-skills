@@ -13,6 +13,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- `codex-call`, `cross-vendor-review`: default reviewer model is now `gpt-6.1-sol` (Sebastian, 2026-09-29); needs Codex CLI ≥ 0.159, selftest passes on 0.159.0.
 - `jev`: default daily cap raised to 0.30 €/day (Sebastian, 2026-09-25), about 9,000 items a day.
 - `parallel-agents`: ownership checks also read `kb board --repo <repo>`, the shared ticket board (`~/dev/agent-kanban`) that records claims from Claude Code, Codex and Pi sessions.
 - `jev`: check a rule or script first; in Market Digest a fixed rule matched Jev on web-verification targets.
