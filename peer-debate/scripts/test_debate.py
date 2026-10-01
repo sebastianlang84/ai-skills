@@ -210,7 +210,7 @@ class DebateTests(unittest.TestCase):
         self.assertTrue(reply.startswith("codex answer"))
         which.assert_called_with("codex")
         argv = run.call_args.args[0]
-        self.assertEqual(argv[1], "exec")
+        self.assertEqual(argv[1:3], ["--search", "exec"])
         self.assertNotIn("resume", argv)
         self.assertEqual(argv[argv.index("-m") + 1], "gpt-5.6-terra")
         self.assertIn("model_reasoning_effort=low", argv)
@@ -233,7 +233,7 @@ class DebateTests(unittest.TestCase):
         debate.turn(self.run.name, "B", "reply")
 
         argv = run.call_args.args[0]
-        self.assertEqual(argv[1:4], ["exec", "resume", "01a0-thread"])
+        self.assertEqual(argv[1:5], ["--search", "exec", "resume", "01a0-thread"])
         self.assertEqual(argv[argv.index("-m") + 1], "gpt-5.6-terra")
         # resume rejects these (measured 0.152.1: exit 2 with usage text)
         for flag in ("-C", "--add-dir", "--color"):
