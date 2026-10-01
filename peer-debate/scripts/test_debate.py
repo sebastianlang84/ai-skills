@@ -266,7 +266,7 @@ class DebateTests(unittest.TestCase):
     def _claude_sides(self):
         (self.run / "sides.json").write_text(json.dumps({
             "A": {"cli": "claude", "model": "claude-opus-5-5", "effort": "medium"},
-            "B": {"cli": "codex", "model": "gpt-6-sol", "effort": "medium"},
+            "B": {"cli": "codex", "model": "gpt-6.1-sol", "effort": "medium"},
         }), encoding="utf-8")
 
     def test_parse_claude_reads_list_and_object_forms(self):
