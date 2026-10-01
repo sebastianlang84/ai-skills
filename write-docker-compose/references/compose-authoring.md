@@ -2,18 +2,13 @@
 
 ## Core guardrails
 
-1. Do not put passwords, tokens, API keys, private keys, or other secrets directly in committed Compose files.
-2. Separate secrets from non-secrets. A common pattern is:
-   - `.env` for gitignored runtime secrets
-   - `.config.env` or service-local `.config.env` for gitignored or environment-specific non-secret values
-   - `*.example` files for committed placeholders and documentation
-3. Prefer explicit `--env-file` arguments in run instructions instead of relying on unstated shell state.
-4. Do not add host port exposure without rationale and matching documentation.
-5. Prefer internal Docker networking over host exposure when only containers need access.
-6. Name volumes and bind mounts clearly. Document backup-relevant persistent data.
-7. Keep Compose changes isolated to the affected service or stack.
-8. Validate with `docker compose ... config` before considering the work complete.
-9. Do not paste rendered secrets into chat, docs, logs, or audit output.
+1. Apply `secrets-env` for secret classification, env-file boundaries, ignore rules, committed examples, and leak checks; this reference keeps only the Compose-specific rules.
+2. Pass every env layer as an explicit `--env-file` argument in run instructions instead of relying on unstated shell state. For `${VAR}` interpolation, shell variables override `--env-file` values and a later `--env-file` overrides an earlier one; `environment:` overrides `env_file:` inside the container.
+3. Do not add host port exposure without rationale and matching documentation.
+4. Prefer internal Docker networking over host exposure when only containers need access.
+5. Name volumes and bind mounts clearly. Document backup-relevant persistent data.
+6. Keep Compose changes isolated to the affected service or stack.
+7. Validate with `docker compose ... config` before considering the work complete. Its output contains interpolated secrets: send it to `/dev/null` or redact it.
 
 ## Context checklist
 
@@ -38,14 +33,6 @@ Before editing, determine:
 - Use `env_file` or variable substitution intentionally; avoid mixing many config sources without documenting precedence.
 - Avoid broad default exposure such as `0.0.0.0` bindings unless explicitly required.
 - Keep local-development conveniences out of production Compose files unless clearly profiled or documented.
-
-## Secrets and env checklist
-
-- real secrets are absent from tracked files
-- `.env*` and service-local runtime env files are gitignored when they can contain sensitive values
-- committed examples use fake placeholders only
-- required variables are discoverable from examples or docs
-- validation output is redacted or not shown when it could include secrets
 
 ## Validation examples
 

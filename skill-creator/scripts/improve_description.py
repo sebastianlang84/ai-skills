@@ -61,11 +61,11 @@ def improve_description(
     """Call Claude to improve the description based on eval results."""
     failed_triggers = [
         r for r in eval_results["results"]
-        if r["should_trigger"] and not r["pass"]
+        if r["should_trigger"] and not r["pass"] and r.get("runs", 1) > 0
     ]
     false_triggers = [
         r for r in eval_results["results"]
-        if not r["should_trigger"] and not r["pass"]
+        if not r["should_trigger"] and not r["pass"] and r.get("runs", 1) > 0
     ]
 
     # Build scores summary
@@ -111,7 +111,8 @@ Current scores ({scores_summary}):
             if "results" in h:
                 prompt += "Train results:\n"
                 for r in h["results"]:
-                    status = "PASS" if r["pass"] else "FAIL"
+                    # runs == 0: only timeouts/CLI errors, no routing evidence either way
+                    status = "NO DATA" if r.get("runs", 1) == 0 else ("PASS" if r["pass"] else "FAIL")
                     prompt += f'  [{status}] "{r["query"][:80]}" (triggered {r["triggers"]}/{r["runs"]})\n'
             if h.get("note"):
                 prompt += f'Note: {h["note"]}\n'

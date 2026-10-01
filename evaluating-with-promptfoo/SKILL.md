@@ -1,6 +1,6 @@
 ---
 name: evaluating-with-promptfoo
-description: Run and preserve Promptfoo evaluations with pinned isolated tooling, frozen cases, provider-aware signals, and readable result records. Use when the user names Promptfoo, asks to rerun an existing Promptfoo suite, or chooses Promptfoo for cross-harness prompt, skill, tool-routing, or agent evaluation. Not for generic evaluation with no Promptfoo requirement; pair with autoresearch when tuning.
+description: Run and preserve Promptfoo evaluations with pinned isolated tooling, frozen cases, provider-aware signals, and readable result records. Use when the user asks to create, run, rerun, or interpret a Promptfoo evaluation, including a cross-harness prompt, skill, tool-routing, or agent evaluation run with Promptfoo. Not for generic evaluation with no Promptfoo requirement; pair with autoresearch when tuning.
 ---
 
 # Evaluating with Promptfoo
@@ -105,9 +105,10 @@ The summary records question, setup, versions, hashes, result table, cost/tokens
 invalid pilots, verdict and exact re-run command. Secret-scan export files before committing them;
 best-effort provider redaction is not a proof that an export is safe.
 
-The Brain owns the durable conclusion. Use `using-brain` to add or update one `Attested
-Computation`, then add one row to `checks/promptfoo/index.md`. Link to raw evidence; do not copy raw
-JSON, complete prompts or transcripts into the Brain.
+The Brain owns a durable conclusion. Persist one only when it qualifies under `using-brain`;
+otherwise keep the run evidence in the research repository. A qualifying conclusion adds or updates
+one `Attested Computation` and one row in `checks/promptfoo/index.md`. Link to raw evidence; do not
+copy raw JSON, complete prompts or transcripts into the Brain.
 
 ## Completion
 
@@ -118,7 +119,8 @@ Stop only when:
 - functional and instrumentation metrics are reported separately;
 - invalid pilots and retries cannot be mistaken for the canonical run;
 - the research summary contains the re-run command;
-- the Brain result index points to the canonical check and raw location;
+- if a conclusion qualified for the Brain, its result index points to the canonical check and raw
+  location;
 - relevant repo checks and secret scans pass.
 
 Current local readout: `~/.agents/brain/checks/promptfoo/index.md`.

@@ -7,13 +7,6 @@ description: Create, audit, validate, repair, and improve portable agent skills.
 
 Use this skill to create and improve skills as durable, portable artifacts. Keep `SKILL.md` concise: it should route, instruct, and point to deeper files instead of becoming a knowledge dump.
 
-Do not read the large best-practice references by default. Read them only for `skill-creator` self-edits, deep audits, or when the user explicitly asks for their extra rigor.
-
-When editing `skill-creator` itself, first read these ground-truth references from this skill folder and use them as the quality bar:
-
-- `references/anthropic_skill_best_practices.md`
-- `references/progressive_skill_best_practices_supabase_workshop.md`
-
 ## Mental model
 
 ```text
@@ -40,19 +33,9 @@ Default to:
 - global: `~/.agents/skills/<skill-name>/`
 - repo-local: `<repo>/.agents/skills/<skill-name>/`
 
-Treat other runtime-specific entrypoints, symlinks, metadata files, or discovery hooks as adapter glue unless the user explicitly chooses them as source of truth.
+Treat other runtime-specific entrypoints, symlinks, metadata files, or discovery hooks as adapter glue unless the user explicitly chooses them as source of truth. On this machine `~/.claude/skills` and similar harness directories are symlinks into `~/.agents/skills/`, as declared in the global `AGENTS.md`; if tooling writes a second global store elsewhere, relocate rather than maintain two.
 
-## When to use
-
-Use this skill when the user wants to:
-
-- create a new skill
-- audit, validate, repair, simplify, or restructure an existing skill
-- rewrite or review `SKILL.md`
-- improve trigger/frontmatter language
-- add, remove, or reorganize `scripts/`, `references/`, or `assets/`
-- make a skill more portable across agents
-- decide whether guidance belongs in a skill, script, MCP/tool, AGENTS.md, or memory
+## Inventory
 
 For simple inventory or installation checks, inspect files directly; do not invent a large workflow.
 
@@ -71,8 +54,6 @@ npx skills list
 npx skills check
 npx skills update
 ```
-
-On this machine the canonical global store is `~/.agents/skills/`, as declared in the global `AGENTS.md`. Harness-specific directories such as `~/.claude/skills` are symlinks into it, not separate stores. If tooling writes a second global store elsewhere, relocate rather than maintain two.
 
 ## Required workflow
 
@@ -125,7 +106,7 @@ Neither is free — one spends context, the other spends the user's memory. See 
 
 Frontmatter and naming requirements:
 
-- `name`: lowercase letters, numbers, and hyphens only; max 64 characters; no XML tags; avoid reserved runtime names such as `anthropic` or `claude`
+- `name`: lowercase letters, numbers, and hyphens only; max 64 characters; no XML tags; must not contain the reserved words `anthropic` or `claude`
 - Prefer gerund names (`verb-ing-noun`, e.g. `managing-databases`) for new skills because they describe the capability; noun phrases and action-oriented names are acceptable when established or clearer
 - Keep naming patterns consistent within a skill collection; avoid vague names such as `helper`, `utils`, or `tools`
 - `description`: non-empty; max 1024 characters; no XML tags
@@ -141,6 +122,7 @@ In the body:
 - put large or conditional detail in references
 - state whether scripts should be executed or read as reference
 - isolate runtime-specific instructions under clear adapter labels
+- keep a `Gotchas` section built only from observed failures and update it when the skill fails; never invent entries
 
 ### 6. Prune before finishing
 
@@ -153,6 +135,7 @@ Full pass and the failure modes it catches: `references/skill-design-theory.md`.
 Default to agent-agnostic guidance. If the user targets Claude, Codex, Cursor, Pi, or another runtime, add adapter notes without making them the universal workflow.
 
 Read `references/agent_adapters.md` when adding runtime-specific adapters or deciding portability trade-offs.
+For Claude Code targets, read `references/claude-code-adapter.md`: listing budget, Claude-Code-only frontmatter, `${CLAUDE_SKILL_DIR}`, compaction, and when a rule belongs in a hook.
 
 ### 8. Validate after meaningful edits
 
@@ -162,7 +145,7 @@ Run:
 python3 ~/.agents/skills/skill-creator/scripts/quick_validate.py <path/to/skill-folder>
 ```
 
-This checks structure and frontmatter; it does not prove the skill is useful. For important skills, also test realistic tasks and compare behavior before/after the skill.
+This checks structure and frontmatter; it does not prove the skill is useful. Accept a new or behaviour-changing skill only after at least three realistic scenarios have run on each target harness and model, with every failure recorded alongside its fix or its reason for staying open.
 
 ## Quality bar
 

@@ -55,7 +55,7 @@ For every skill inspected, check:
 - Are inputs, outputs, and stopping conditions clear?
 - Is detail moved to `references/` or `assets/` instead of the main `SKILL.md`?
 - Would the description accidentally trigger on nearby but unrelated tasks?
-- Has at least one positive and one negative trigger prompt been tested?
+- Has `skill-creator` been used to evaluate at least three realistic scenarios — intended activation, non-activation, and workflow completion — on the target harnesses/models?
 
 Identify bloat, redundancy, missing authority, unclear ownership, and false-trigger risk.
 

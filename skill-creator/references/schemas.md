@@ -4,6 +4,17 @@ This document defines the JSON schemas used by skill-creator.
 
 ---
 
+## Contents
+
+- [evals.json](#evalsjson)
+- [history.json](#historyjson)
+- [grading.json](#gradingjson)
+- [metrics.json](#metricsjson)
+- [timing.json](#timingjson)
+- [benchmark.json](#benchmarkjson)
+- [comparison.json](#comparisonjson)
+- [analysis.json](#analysisjson)
+
 ## evals.json
 
 Defines the evals for a skill. Located at `evals/evals.json` within the skill directory.

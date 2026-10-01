@@ -6,7 +6,7 @@
 2. Use multi-stage builds when build tools, compilers, generated assets, or development dependencies are needed. Name stages, for example `AS build` and `AS runtime`.
 3. The final stage must run as a non-root user. Prefer an official image's existing user when suitable.
 4. Do not bake secrets into the image. Do not use `ENV` for tokens, passwords, API keys, or private material. Do not copy secret files.
-5. Require a `.dockerignore` in the build context. At minimum exclude VCS metadata, dependency folders, build outputs, env files, logs, and editor files.
+5. Require a `.dockerignore` in the build context. At minimum exclude VCS metadata, dependency folders, outputs rebuilt inside the image, env files, logs, and editor files; keep prebuilt artifacts a `COPY` needs.
 6. Use exec-form `CMD` or `ENTRYPOINT` for correct signal handling.
 7. Set `WORKDIR` early; do not rely on `/`.
 8. Copy dependency manifests before application source so dependency layers can be cached.
@@ -69,6 +69,7 @@ Adapt this structure to the stack. Compiled binaries often need only the binary 
 ```gitignore
 .git
 node_modules
+# outputs rebuilt inside the image; remove a line when a COPY needs that prebuilt artifact
 dist
 build
 *.env

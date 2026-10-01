@@ -1,6 +1,6 @@
 ---
 name: using-brain
-description: Read and extend the shared Brain at ~/.agents/brain in every session — retrieve prior local decisions, preferences, methods, patterns, and repo knowledge before working, and record durable learning before finishing. A session-start hook loads this skill in Claude Code, Codex, and Pi; invoke it explicitly when the hook did not run. Also use when the user asks what the Brain knows or how it works, or before changing Brain structure, retrieval, categories, provenance, or trust. Do not use it for a project-local knowledge system with its own rules.
+description: Read and extend the shared Brain at ~/.agents/brain in every session — retrieve prior local decisions, preferences, methods, patterns, and repo knowledge before working, and record durable learning before finishing. A session-start hook loads this skill in Claude Code, Codex, and Pi; invoke it explicitly when the hook did not run, unless `BRAIN_SESSION_CONTEXT=0` suppressed it in an isolated automated run. Also use when the user asks what the Brain knows or how it works, or before changing Brain structure, retrieval, categories, provenance, or trust. Do not use it for a project-local knowledge system with its own rules.
 ---
 
 # Using the shared Brain
@@ -16,6 +16,9 @@ Use it in every session, without exception:
 - **Before finishing**, apply [Decide whether to write](#decide-whether-to-write) to what the session
   produced, and follow [Write](#write) for every qualifying item. Skip the write only when nothing
   qualifies; never lower the bar to have something to write.
+
+Respect `BRAIN_SESSION_CONTEXT=0` in isolated automated runs; intentional suppression is not a failed
+hook.
 
 The Brain's purpose, architecture, retrieval model, and construction recipe live in
 [`brain-architecture.md`](/home/wasti/.agents/brain/brain-architecture.md). Its schema and trust

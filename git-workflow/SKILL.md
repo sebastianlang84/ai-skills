@@ -97,7 +97,7 @@ Push only after explicit user approval and according to repo policy. Before push
 
 ## Sub-agent isolation
 
-Read-only sub-agents usually need no Git isolation. For write-capable or parallel agents, define allowed files, branch/worktree ownership, and review/integration path before dispatch. Use a separate worktree when scopes overlap or clean review boundaries matter.
+Use `parallel-agents` for ownership checks, worker scopes, and isolation; this skill owns Git operations and integration.
 
 ## Task closeout
 

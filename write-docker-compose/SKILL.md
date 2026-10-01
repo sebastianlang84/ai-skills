@@ -20,4 +20,4 @@ Use this skill for creating or materially changing `docker-compose.yml`, `compos
 - Compose file with explicit, reviewable services, images/builds, ports, volumes, networks, and env sources.
 - Secrets are not committed in YAML.
 - Non-secret defaults are separated from secret runtime values.
-- Operational docs or examples are updated only when startup, exposure, config, or backups change and the user has included that scope.
+- Affected operational docs and examples are updated whenever startup, exposure, config, or backups change.

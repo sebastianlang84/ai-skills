@@ -1,5 +1,14 @@
 # Workflow: Audit
 
+## Contents
+
+- [Step 1 — Scope the audit](#step-1--scope-the-audit)
+- [Step 2 — Discover and read](#step-2--discover-and-read)
+- [Step 3 — Check subagent/context-isolation design when relevant](#step-3--check-subagentcontext-isolation-design-when-relevant)
+- [Step 4 — Identify issues](#step-4--identify-issues)
+- [Step 5 — Report findings](#step-5--report-findings)
+- [Step 6 — Fix if approved](#step-6--fix-if-approved)
+
 Run this workflow to assess an existing repo's agent-context setup without making changes unless explicitly approved. Load `references/review-checklist.md` and work through it systematically.
 
 ## Step 1 — Scope the audit

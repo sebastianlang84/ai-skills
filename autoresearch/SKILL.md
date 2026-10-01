@@ -90,11 +90,11 @@ Next step:
 
 ## Local default: CodeMap retrieval-quality work
 
-In this environment, if the user mentions autoresearch together with CodeMap, retrieval, search quality, context, indexing, chunking, ranking, symbols, or `/home/wasti/dev/autoresearch`, default to this interpretation:
+Apply this local default only when the user explicitly names CodeMap or `/home/wasti/dev/autoresearch`:
 
 - `/home/wasti/dev/autoresearch` is the CodeMap retrieval-quality benchmark workspace.
 - It is a small realistic benchmark corpus and experiment-protocol workspace.
 - The goal is to improve CodeMap retrieval quality through quantitative benchmark loops.
-- The CodeMap implementation target is usually `/home/wasti/.pi/agent/git/github.com/sebastianlang84/pi-ext-codemap`.
+- The CodeMap implementation target is usually the checkout at `/home/wasti/dev/codemap`; read its repo rules before experimenting.
 - Useful CodeMap levers include indexed files/extensions/ignores, chunking, symbol extraction, query planning, ranking, benchmark ground truth, and index-version rebuild behavior.
 - Use fixed retrieval metrics such as MRR@5, recall@5, top-1 accuracy, expected coverage, and latency; classify misses before proposing changes.

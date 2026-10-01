@@ -2,6 +2,19 @@
 
 Stand: geprüft gegen Pi-Dokumentation und Referenzpaket `badlogic/pi-package-test`.
 
+## Inhalt
+
+- [1. Begriffe](#1-begriffe)
+- [2. Wie Pi Extensions findet](#2-wie-pi-extensions-findet)
+- [3. Loader-Fakten](#3-loader-fakten)
+- [4. Empfohlene Struktur für eine einzelne Extension](#4-empfohlene-struktur-für-eine-einzelne-extension)
+- [5. Empfohlene Struktur für ein Pi Package mit mehreren Ressourcen](#5-empfohlene-struktur-für-ein-pi-package-mit-mehreren-ressourcen)
+- [6. Entscheidung: `src/` oder `extensions/`?](#6-entscheidung-src-oder-extensions)
+- [7. Anwendung auf typische Repos](#7-anwendung-auf-typische-repos)
+- [8. Prüf-Commands](#8-prüf-commands)
+- [9. Praktische Regeln](#9-praktische-regeln)
+- [10. Beleggrundlage](#10-beleggrundlage)
+
 ## 1. Begriffe
 
 **Extension**
@@ -204,7 +217,7 @@ pi-memory/
 └── AGENTS.md
 ```
 
-`AGENTS.md` ist eine repo-interne Agent-Datei, aber keine Pi-Ressource, solange sie nicht über `pi.skills`, `pi.prompts` usw. eingebunden wird. Dauerhafte Projekt-/Handoff-Notizen gehören in Pi in die pi-memory Tools statt in ein committetes `MEMORY.md`.
+`AGENTS.md` ist eine repo-interne Agent-Datei, aber keine Pi-Ressource, solange sie nicht über `pi.skills`, `pi.prompts` usw. eingebunden wird. Dauerhaftes Wissen gehört über `using-brain` in den Brain, Sessionübergaben über `handoff` und die bestehenden Pi-Handoff-Regeln — nicht in ein committetes `MEMORY.md`.
 
 ### `pi-subagents`
 

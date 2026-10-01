@@ -28,7 +28,7 @@ Spend disproportionate effort here. **Be aggressive. Be creative. Refuse to give
 9. **Bisection harness.** If the bug appeared between two known states (commit, dataset, image tag, config), automate "boot at state X, check, repeat" so you can `git bisect run` it.
 10. **Differential loop.** Run the same input through old-version vs new-version (or two configs) and diff outputs.
 
-> **On this machine, logs are a weak signal.** System log access is restricted (no `journalctl`, no `/var/log` reads, no `dmesg`). Treat that as a feature of this skill, not an obstacle: it forces you to Phase 1 instead of grepping. Where a service's own file-based logs *are* readable, they are evidence — but a readable log is still not a loop.
+> **Logs are evidence, not a loop.** Check which logs are readable (`journalctl --user`, the system journal, a service's own log files, `/var/log`); use them. If access is denied, continue with other probes. A readable log still does not replace Phase 1.
 
 Build the right feedback loop, and the bug is 90% fixed.
 
@@ -48,7 +48,9 @@ The goal is not a clean repro but a **higher reproduction rate**. Loop the trigg
 
 ### When you genuinely cannot build a loop
 
-Stop and say so explicitly. List what you tried. Ask the user for: (a) access to whatever environment reproduces it, (b) a captured artifact (HAR, log dump, payload, screen recording with timestamps), or (c) permission to add temporary instrumentation. Do **not** proceed to hypothesise without a loop.
+Stop and say so explicitly. List what you tried. Ask the user for: (a) access to whatever environment reproduces it, (b) a captured artifact (HAR, log dump, payload, screen recording with timestamps), or (c) permission to add temporary instrumentation.
+
+If a reproducer is impossible (one-off data loss, a rare production crash with a dump), you may continue on a bounded evidence path: keep every hypothesis explicitly provisional, name for each the read-only check that would discriminate it (a log query, a dump inspection, a source read), and never claim a confirmed fix without a reproducer.
 
 ### Completion criterion — a tight loop that goes red
 
@@ -59,7 +61,7 @@ Phase 1 is done when you can name **one command** — a script path, a test invo
 - [ ] **Fast** — seconds, not minutes.
 - [ ] **Agent-runnable** — you can run it unattended.
 
-If you catch yourself reading code to build a theory before this command exists, **stop — jumping straight to a hypothesis is the exact failure this skill prevents.** No red-capable command, no Phase 2.
+If you catch yourself reading code to build a theory before this command exists, **stop — jumping straight to a hypothesis is the exact failure this skill prevents.** No red-capable command, no Phase 2 — the only exception is the bounded evidence path above.
 
 ## Phase 2 — Reproduce + minimise
 

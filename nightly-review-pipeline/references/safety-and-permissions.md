@@ -27,8 +27,8 @@ version-sensitive and easy to get subtly wrong.
   branch and worktree are discarded — no PR, no residue.
 - **No auto-merge.** Ever. You review and merge (or close) each PR yourself.
 - No force-push; each finding maps to its own branch, deduped so the same bug is not re-PR'd nightly.
-- If `AUTO_FIX=0`, the bug lens is pure review: it records findings in the repo's task file (or
-  `REPORTS_DIR/` when `REPORT_IN_REPO=0`) and opens nothing.
+- If `AUTO_FIX=0`, or the repo has no test command, the bug lens is pure review: it records
+  findings under `REPORTS_DIR/` (or in the repo's task file when `REPORT_IN_REPO=1`) and opens nothing.
 
 ## Runaway-cost guards
 
@@ -41,7 +41,7 @@ version-sensitive and easy to get subtly wrong.
 ## Preconditions to check before enabling the timer
 
 - `gh auth status` is logged in and the account can push + open PRs on every target repo's remote.
-- Each repo has a **real** `TEST_CMD`; without it, fixes open PRs **unverified** (a loud warning is
-  logged). Prefer review-only (`AUTO_FIX=0`) for repos with no usable test suite.
+- Each repo that should get fixes has a **real** `TEST_CMD`; without one the orchestrator skips
+  auto-fix for that repo and logs it (review only).
 - The repos are ones where an occasional bad draft PR is acceptable noise. Do not point auto-fix at
   anything where an unreviewed branch/PR could trigger deploys or notify other people.

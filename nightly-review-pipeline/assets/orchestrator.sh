@@ -4,7 +4,8 @@
 # The scheduler (systemd timer / cron) fires this once a night. THIS script decides,
 # per repo and per lens, whether to actually spend a `claude` run — using saved state
 # and adaptive backoff — then dedups findings, renders markdown, and (bug lens only)
-# opens draft-PR fixes for high-confidence findings whose tests pass.
+# opens draft-PR fixes for high-confidence findings whose tests pass. A repo without a test
+# command gets review only: no fix is attempted, so no unverified PR can open.
 #
 # STARTER TEMPLATE: run with --dry-run first, set per-repo test commands, and verify the
 # `claude` flag syntax for your installed version. No `set -e`: one failing sub-step must
@@ -44,10 +45,12 @@ source "$CONFIG"
 : "${FIX_MAX_TURNS:=60}"
 : "${FIX_TIMEOUT:=2400}"
 : "${TEST_TIMEOUT:=1200}"
+declare -p REPOS >/dev/null 2>&1 || REPOS=()
 # Where review findings are written:
-#   REPORT_IN_REPO=1 -> into the repo, reusing its EXISTING task/ideas file (case-detected)
-#   REPORT_IN_REPO=0 -> out of the repo, under REPORTS_DIR/<repo-slug>/ (no repo side effects)
-: "${REPORT_IN_REPO:=1}"
+#   REPORT_IN_REPO=0 -> out of the repo, under REPORTS_DIR/<repo-slug>/ (default; no repo side effects)
+#   REPORT_IN_REPO=1 -> into the repo, reusing its EXISTING task/ideas file (case-detected).
+#                       Opt-in only: the file is rewritten without coordinating with its owners.
+: "${REPORT_IN_REPO:=0}"
 : "${REPORTS_DIR:=$STATE_DIR/reports}"
 : "${TASK_FILE:=TODO.md}"     # bug lens target basename (matched case-insensitively in-repo)
 : "${IDEAS_FILE:=IDEAS.md}"   # usability lens target basename
@@ -147,7 +150,9 @@ write_report(){ # $1 target  $2 lens  $3 jsonl
 }
 
 # Run one review lens. Writes new (deduped) items to $sd/$lens.new.jsonl and echoes their count.
-# Echoes -1 if the lens was skipped (backoff) or failed.
+# Echoes -1 if the lens was skipped (backoff) and -2 if the review failed. A failed review (claude
+# error, no result, invalid JSON, or anything but an array of objects) leaves last-sha and the
+# backoff state untouched and makes the whole run exit nonzero.
 run_review(){ # $1 repo  $2 statedir  $3 lens  $4 promptfile  $5 new_commits  $6 last_sha  $7 cur_sha
   local repo=$1 sd=$2 lens=$3 pf=$4 newc=$5 last=$6 sha=$7
   : > "$sd/$lens.new.jsonl"
@@ -176,15 +181,18 @@ run_review(){ # $1 repo  $2 statedir  $3 lens  $4 promptfile  $5 new_commits  $6
   if ! "$RUN_CLAUDE" --cwd "$repo" --prompt-file "$prompt" --raw "$raw" --log "$RUN_LOG" \
         --output-format json --permission-mode plan \
         --max-turns "$REVIEW_MAX_TURNS" --timeout "$REVIEW_TIMEOUT"; then
-    log "  [$lens] claude run failed (see log)"; echo "-1"; return
+    log "  [$lens] REVIEW FAILED: claude run failed (see log)"; echo "-2"; return
   fi
 
   local items="$sd/$lens.items.json"
   if ! jq -e '.result' "$raw" >/dev/null 2>&1; then
-    log "  [$lens] no .result field in claude output"; echo "0"; return
+    log "  [$lens] REVIEW FAILED: no .result field in claude output"; echo "-2"; return
   fi
-  if ! jq -r '.result' "$raw" | strip_fences | jq -c 'if type=="array" then . else [] end' > "$items" 2>>"$RUN_LOG"; then
-    log "  [$lens] model result was not valid JSON; skipping"; echo "0"; return
+  if ! jq -r '.result' "$raw" | strip_fences | jq -cs 'if length == 1 then .[0] else error("expected one JSON document") end' > "$items" 2>>"$RUN_LOG"; then
+    log "  [$lens] REVIEW FAILED: model result was not valid JSON"; echo "-2"; return
+  fi
+  if ! jq -e 'type=="array" and all(.[]; type=="object")' "$items" >/dev/null 2>&1; then
+    log "  [$lens] REVIEW FAILED: model result is not a JSON array of findings"; echo "-2"; return
   fi
   echo "$sha" > "$sd/$lens.last-sha"
 
@@ -242,16 +250,13 @@ fix_one(){ # $1 repo  $2 statedir  $3 finding_json  $4 test_cmd
     git -C "$repo" branch -D "$branch" >>"$RUN_LOG" 2>&1; return
   fi
 
-  if [[ -n "$testcmd" ]]; then
-    if ! ( cd "$wt" && timeout "${TEST_TIMEOUT}s" bash -lc "$testcmd" ) >>"$RUN_LOG" 2>&1; then
-      log "    fix $id: TESTS FAILED — discarding (no PR)"
-      git -C "$repo" worktree remove --force "$wt" >>"$RUN_LOG" 2>&1
-      git -C "$repo" branch -D "$branch" >>"$RUN_LOG" 2>&1; return
-    fi
-    log "    fix $id: tests passed"
-  else
-    log "    fix $id: no test command set — opening PR UNVERIFIED (set a test cmd!)"
+  # do_fixes never calls this without a test command; an empty one still fails closed.
+  if [[ -z "$testcmd" ]] || ! ( cd "$wt" && timeout "${TEST_TIMEOUT}s" bash -lc "$testcmd" ) >>"$RUN_LOG" 2>&1; then
+    log "    fix $id: TESTS FAILED or no test command — discarding (no PR)"
+    git -C "$repo" worktree remove --force "$wt" >>"$RUN_LOG" 2>&1
+    git -C "$repo" branch -D "$branch" >>"$RUN_LOG" 2>&1; return
   fi
+  log "    fix $id: tests passed"
 
   ( cd "$wt" \
     && git add -A \
@@ -281,6 +286,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>" ) >>"$RUN_LOG" 2>&1
 do_fixes(){ # $1 repo  $2 statedir  $3 test_cmd
   local repo=$1 sd=$2 testcmd=$3 obj sev conf
   [[ "$AUTO_FIX" == "1" ]] || { log "  auto-fix disabled"; return; }
+  [[ -n "$testcmd" ]] || { log "  auto-fix skipped: no test command for $repo (review only)"; return; }
   [[ -s "$sd/bug.new.jsonl" ]] || return
   while IFS= read -r obj; do
     sev=$(jq -r '.severity // "low"' <<<"$obj")
@@ -292,12 +298,34 @@ do_fixes(){ # $1 repo  $2 statedir  $3 test_cmd
   done < "$sd/bug.new.jsonl"
 }
 
+# ---- config validation -----------------------------------------------------
+# Fail the whole run on a bad entry: a silently skipped repo looks like a quiet night.
+validate_repos(){
+  local entry repo lenses testcmd lens errors=0 _lenses
+  if [[ "${#REPOS[@]}" -eq 0 ]]; then
+    log "CONFIG ERROR: REPOS is empty in $CONFIG"; return 1
+  fi
+  for entry in "${REPOS[@]}"; do
+    IFS='|' read -r repo lenses testcmd <<< "$entry"
+    if [[ "$repo" != /* ]] || ! git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      log "CONFIG ERROR: not an absolute path to a git repo: '$repo'"; errors=$((errors + 1)); continue
+    fi
+    IFS=',' read -ra _lenses <<< "$lenses"
+    [[ "${#_lenses[@]}" -gt 0 ]] || { log "CONFIG ERROR: no lenses for $repo"; errors=$((errors + 1)); }
+    for lens in "${_lenses[@]}"; do
+      case "$lens" in bug|usability) ;; *) log "CONFIG ERROR: unknown lens '$lens' for $repo"; errors=$((errors + 1));; esac
+    done
+  done
+  [[ "$errors" -eq 0 ]]
+}
+
 # ---- main loop -------------------------------------------------------------
 log "=== nightly-review run start (dry_run=$DRY_RUN, config=$CONFIG) ==="
+validate_repos || { log "=== nightly-review aborted: fix the config ==="; exit 2; }
+FAILED_REVIEWS=0
 for entry in "${REPOS[@]}"; do
   IFS='|' read -r repo lenses testcmd <<< "$entry"
   [[ -n "${testcmd:-}" ]] || testcmd="$TEST_CMD_DEFAULT"
-  if [[ ! -d "$repo/.git" ]]; then log "skip: not a git repo: $repo"; continue; fi
   sd="$STATE_DIR/$(slug "$repo")"; mkdir -p "$sd"
   log "repo: $repo  (lenses: $lenses)"
   git -C "$repo" fetch --quiet origin >>"$RUN_LOG" 2>&1 || true
@@ -311,6 +339,7 @@ for entry in "${REPOS[@]}"; do
     case "$lens" in
       bug)
         cnt=$(run_review "$repo" "$sd" bug "$PROMPT_DIR/bug-review.prompt.md" "$newc" "$last" "$sha")
+        [[ "$cnt" == "-2" ]] && { FAILED_REVIEWS=$((FAILED_REVIEWS + 1)); continue; }
         [[ "$cnt" == "-1" ]] && continue
         write_report "$(resolve_target "$repo" bug)" bug "$sd/bug.new.jsonl"
         update_cadence "$sd" bug "$cnt" "$newc"
@@ -318,6 +347,7 @@ for entry in "${REPOS[@]}"; do
         ;;
       usability)
         cnt=$(run_review "$repo" "$sd" usability "$PROMPT_DIR/usability-review.prompt.md" "$newc" "$last" "$sha")
+        [[ "$cnt" == "-2" ]] && { FAILED_REVIEWS=$((FAILED_REVIEWS + 1)); continue; }
         [[ "$cnt" == "-1" ]] && continue
         write_report "$(resolve_target "$repo" usability)" usability "$sd/usability.new.jsonl"
         update_cadence "$sd" usability "$cnt" "$newc"
@@ -326,4 +356,7 @@ for entry in "${REPOS[@]}"; do
     esac
   done
 done
+if [[ "$FAILED_REVIEWS" -gt 0 ]]; then
+  log "=== nightly-review run done: $FAILED_REVIEWS review(s) FAILED ==="; exit 1
+fi
 log "=== nightly-review run done ==="

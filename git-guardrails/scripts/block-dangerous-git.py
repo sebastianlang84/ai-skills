@@ -21,14 +21,18 @@ import shlex
 import subprocess
 import sys
 
+# Force-push is judged on tokens, not by a regex: a regex cannot tell a bare --force standing
+# beside --force-with-lease from the lease itself, and missed `+main` without a colon.
+FORCE_PUSH = ("force-push overwrites remote history that others may already have",
+              "use --force-with-lease, which refuses if the remote moved")
+PLUS_REFSPEC = ("a leading + in a refspec is a force-push in disguise",
+                "use --force-with-lease, which refuses if the remote moved")
+SEGMENT_SPLIT = re.compile(r"[;&|\n()]")
+# push options whose value is the next word
+PUSH_VALUE_OPTIONS = {"-o", "--push-option", "--repo", "--receive-pack", "--exec"}
+
 # (pattern, what it destroys, what to do instead)
 RULES = [
-    (r"\bgit\b[^;&|]*\bpush\b(?=[^;&|]*(?:\s--force\b|\s-f\b))(?![^;&|]*--force-with-lease)",
-     "force-push overwrites remote history that others may already have",
-     "use --force-with-lease, which refuses if the remote moved"),
-    (r"\bgit\b[^;&|]*\bpush\b[^;&|]*\s\+[A-Za-z0-9_./-]*:",
-     "a leading + in a refspec is a force-push in disguise",
-     "use --force-with-lease, which refuses if the remote moved"),
     (r"\bgit\b[^;&|]*\bpush\b[^;&|]*(?:\s--delete\b|\s:[A-Za-z0-9_./-]+)",
      "deleting a remote branch or tag",
      "ask the operator to delete it, or delete only branches already contained "
@@ -58,8 +62,8 @@ RULES = [
 ]
 
 COMPILED = [(re.compile(p), why, alt) for p, why, alt in RULES]
-DELETE_RULE = 2         # index into RULES — remote branch deletion
-BRANCH_DELETE_RULE = 7  # index into RULES — local forced branch deletion
+DELETE_RULE = 0         # index into RULES — remote branch deletion
+BRANCH_DELETE_RULE = 5  # index into RULES — local forced branch deletion
 assert RULES[DELETE_RULE][1].startswith("deleting a remote branch")
 assert RULES[BRANCH_DELETE_RULE][1].startswith("branch -D")
 
@@ -88,6 +92,129 @@ def _git(repo, *args, timeout=15):
     except (OSError, subprocess.SubprocessError):
         return None
     return p.stdout.strip() if p.returncode == 0 else None
+
+
+SEPARATORS = set(";&|()\n")
+
+
+def _command_words(command: str):
+    """Split a command line into the word lists of its simple commands, the way bash does.
+
+    Quotes and backslashes are honoured, so a separator inside a quoted value (`-o ';'`) does
+    not cut a command in two. `#` starts a comment only at the start of a word, so a ref such
+    as `topic#123` stays whole. An unterminated quote keeps the rest as one word.
+    """
+    words, word, in_word, quote = [], [], False, None
+    i, n = 0, len(command)
+    while i < n:
+        ch = command[i]
+        if quote == "'":
+            if ch == "'":
+                quote = None
+            else:
+                word.append(ch)
+        elif quote == '"':
+            if ch == '"':
+                quote = None
+            elif ch == "\\" and i + 1 < n and command[i + 1] in '"\\$`\n':
+                i += 1
+                if command[i] != "\n":
+                    word.append(command[i])
+            else:
+                word.append(ch)
+        elif ch == "$" and i + 1 < n and command[i + 1] == "'":  # $'…' is a quote too
+            pass
+        elif ch in "'\"":
+            quote, in_word = ch, True
+        elif ch == "\\" and i + 1 < n:
+            i += 1
+            if command[i] != "\n":  # backslash-newline continues the line
+                word.append(command[i])
+                in_word = True
+        elif ch == "#" and not in_word:
+            while i < n and command[i] != "\n":
+                i += 1
+            continue
+        elif ch in " \t\r" or ch in SEPARATORS:
+            if in_word:
+                words.append("".join(word))
+                word, in_word = [], False
+            if ch in SEPARATORS and words:
+                yield words
+                words = []
+        else:
+            word.append(ch)
+            in_word = True
+        i += 1
+    if in_word:
+        words.append("".join(word))
+    if words:
+        yield words
+
+
+# git's global options that take the next word as their value
+GIT_VALUE_OPTIONS = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--config-env"}
+
+
+def _git_subcommand(tokens, i):
+    """Index of git's subcommand in tokens, starting after `git`, skipping global options."""
+    while i < len(tokens):
+        t = tokens[i]
+        if t in GIT_VALUE_OPTIONS:
+            i += 2
+        elif t.startswith("-"):
+            i += 1
+        else:
+            return i
+    return None
+
+
+def _push_args(command: str):
+    """Yield the argument tokens of every `git … push` in the command line.
+
+    Quoted words that contain spaces (`bash -c "git push …"`) are searched again, so wrapping
+    a push in a string does not hide it. Unbalanced quotes fall back to plain words.
+    """
+    for tokens in _command_words(command):
+        for i, t in enumerate(tokens):
+            if any(c.isspace() for c in t):  # `bash -c "git push …"`, tabs included
+                yield from _push_args(t)
+            elif os.path.basename(t) == "git":
+                sub = _git_subcommand(tokens, i + 1)
+                if sub is not None and tokens[sub] == "push":
+                    yield tokens[sub + 1:]
+
+
+# The earlier whole-line patterns stay as a second net: the token check misses shapes the
+# patterns catch (`git>/dev/null push …`, quotes broken by message masking), and the patterns
+# miss what the token check catches (`--force` beside a lease, `+ref` without a colon).
+LEGACY_FORCE_PATTERNS = [
+    re.compile(r"\bgit\b[^;&|]*\bpush\b(?=[^;&|]*(?:\s--force\b|\s-f\b))(?![^;&|]*--force-with-lease)"),
+    re.compile(r"\bgit\b[^;&|]*\bpush\b[^;&|]*\s\+[A-Za-z0-9_./-]*:"),
+]
+
+
+def forced_push(command: str):
+    """(why, alt) if any push is forced — bare --force/-f, even beside a lease, or a + refspec."""
+    for args in _push_args(command):
+        takes_value = False
+        for t in args:
+            if takes_value:  # the value of -o/--push-option/--repo/…, not a flag or refspec
+                takes_value = False
+                continue
+            if t in PUSH_VALUE_OPTIONS:
+                takes_value = True
+                continue
+            # -f may sit in a short cluster (-uf); text after -o is its value, not flags
+            short_force = (t.startswith("-") and not t.startswith("--")
+                           and "f" in t[1:].split("o", 1)[0])
+            if t == "--force" or short_force:
+                return FORCE_PUSH
+            if t.startswith("+"):
+                return PLUS_REFSPEC
+    if any(p.search(command) for p in LEGACY_FORCE_PATTERNS):
+        return FORCE_PUSH
+    return None
 
 
 def _parse_push_delete(command: str):
@@ -204,8 +331,8 @@ def deletion_is_provably_merged(command: str, cwd: str) -> bool:
       * the sha is read from the LIVE remote (`ls-remote`), not from a possibly stale
         remote-tracking ref, so a branch someone pushed to since the last fetch cannot be
         deleted on the strength of an old view;
-      * containment is `merge-base --is-ancestor` against the remote's default branch. A
-        squash merge is NOT an ancestor and so stays blocked, even though the change landed;
+      * containment is `_absorbed_into` the remote's default branch: ancestry, or for a
+        squash merge an in-memory merge that leaves the base tree unchanged;
       * the default branch itself, tags, wildcard remotes and unparsable command lines are
         never eligible.
     """
@@ -325,6 +452,9 @@ def branch_delete_is_provably_absorbed(command: str, cwd: str) -> bool:
 
 def check(command: str, cwd: str = ""):
     command = MESSAGE_ARG.sub(r"\1\2MSG", command)
+    forced = forced_push(command)
+    if forced:
+        return forced
     for idx, (pattern, why, alt) in enumerate(COMPILED):
         if not pattern.search(command):
             continue

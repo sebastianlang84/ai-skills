@@ -1,6 +1,6 @@
 ---
 name: t3-threads
-description: Find, read and message other T3 Code threads on this machine (Claude, Codex or any harness T3 runs). Use when the user mentions T3 Code or a T3 thread, or, while working inside T3 Code, names another thread by its title ("den X-Thread einlesen") and wants it read, summarised, continued or written to. Not for ChatGPT, claude.ai or e-mail threads.
+description: Find, read, summarize or message another T3 Code thread on this machine (Claude, Codex or any harness T3 runs). Use when the user asks to find, read, summarize or message another T3 Code thread, or, while working inside T3 Code, names another thread by its title ("den X-Thread einlesen") and wants it read, summarised, continued or written to. Not for installing or updating T3 Code, and not for ChatGPT, claude.ai or e-mail threads.
 ---
 
 # t3-threads
@@ -27,12 +27,23 @@ The current thread is in the list too (usually `running`); do not mistake it for
 ## Write (only on the user's explicit request, with their text)
 
 Sending starts a turn in the other thread and can change files there, so send exactly what the user
-asked for. Get a short-lived bearer token into a private file first; it carries admin scope
-(`access:write`), so never print it and keep the TTL short:
+asked for. `t3` is usually not on `PATH`: T3 runs from an npx cache, and several cached versions
+coexist. Resolve the binary of the running server first (same version as the server), then `PATH`,
+then the newest npx cache, and verify it before issuing a token:
+
+```bash
+pid=$(pgrep -f '^[^ ]*/@t3code/t3-linux-x64/t3 serve' | head -1)
+T3_BIN=${pid:+$(readlink -f /proc/$pid/exe)}
+[ -n "$T3_BIN" ] || T3_BIN=$(command -v t3 || ls -t ~/.npm/_npx/*/node_modules/@t3code/t3-linux-x64/t3 2>/dev/null | head -1)
+"$T3_BIN" --version   # must print `t3 v…`; if not, stop and issue no token
+```
+
+Then get a short-lived bearer token into a private file; it carries admin scope (`access:write`),
+so never print it and keep the TTL short:
 
 ```bash
 T=<session scratchpad>/t3.token
-(umask 077; rm -f "$T"; t3 auth session issue --ttl 15m --label t3-threads --token-only > "$T")
+(umask 077; rm -f "$T"; "$T3_BIN" auth session issue --ttl 15m --label t3-threads --token-only > "$T")
 T3_TOKEN_FILE="$T" $D/t3-send.mjs send <threadId> "<text>"
 T3_TOKEN_FILE="$T" $D/t3-send.mjs new <projectId> <instanceId> <model> "<text>"
 ```

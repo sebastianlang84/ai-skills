@@ -5,7 +5,7 @@ description: Resolve an in-progress git merge or rebase conflict hunk by hunk, b
 
 # Resolving Merge Conflicts
 
-Resolve by **intent**, not by picking whichever side looks tidier. Follow `git-workflow` for approval gates: resolving conflicts in the working tree is repair work, but finishing the operation (commit, `--continue`, `--abort`) is a mutating Git action and needs explicit user approval.
+Resolve by **intent**, not by picking whichever side looks tidier. Follow `git-workflow` for approval gates: resolving conflicts in the working tree is repair work, but finishing the operation (commit, `--continue`, `--abort`) is a mutating Git action: do it when existing authorization covers that exact operation, otherwise request approval.
 
 ## Process
 
@@ -17,6 +17,6 @@ Resolve by **intent**, not by picking whichever side looks tidier. Follow `git-w
 
 4. **Run the project's automated checks.** Discover them first (test/typecheck/lint/format scripts, CI config), then run them. Fix what the merge broke — and only that.
 
-5. **Report, then ask.** State: files resolved, which intent won in each incompatible hunk and why, check results, and anything you could not resolve confidently. Then propose the exact finishing command (`git merge --continue`, `git rebase --continue`, or the commit) and wait for approval.
+5. **Report, then finish.** State: files resolved, which intent won in each incompatible hunk and why, check results, and anything you could not resolve confidently. If existing authorization covers the exact finishing command (`git merge --continue`, `git rebase --continue`, or the commit), run it; otherwise propose that command and request approval.
 
 **Never `--abort` on your own initiative.** Aborting throws away the resolution work and is the user's call. If the conflict cannot be resolved responsibly, say so and hand back the analysis.

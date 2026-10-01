@@ -80,15 +80,6 @@ Use PRDs for:
 - product-level constraints
 - feature status and links to canonical docs
 
-Avoid using PRDs for:
-
-- implementation details
-- every small code change
-- full API reference
-- bugfix history
-- internal class/function explanations
-- release notes
-
 ## ADR threshold
 
 Offer an ADR only when **all three** hold:
@@ -150,15 +141,6 @@ i++;
 ## Boundary with managing-agent-context
 
 If the change concerns agent instructions, skill routing, memory ownership, tool exposure, MCP/extension context policy, hooks/CI enforcement, or context bloat, use the `managing-agent-context` workflow instead of treating it as ordinary code documentation.
-
-## Avoid
-
-- Duplicating the same explanation across PRD, README, changelog, and feature docs.
-- Recording completed work in TODO.
-- Adding ADRs for routine implementation choices.
-- Putting feature documentation in `AGENTS.md`.
-- Treating memory as canonical product, user, developer, changelog, TODO, or enforcement documentation.
-- Creating new documentation structures when existing repo conventions are sufficient.
 
 ## Output style
 

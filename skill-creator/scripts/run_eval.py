@@ -39,14 +39,15 @@ def run_single_query(
     timeout: int,
     project_root: str,
     model: str | None = None,
-) -> bool:
-    """Run a single query and return whether the skill was triggered.
+) -> str:
+    """Run a single query and return "triggered", "not_triggered", "timeout" or "error".
 
     Creates a command file in .claude/commands/ so it appears in Claude's
     available_skills list, then runs `claude -p` with the raw query.
     Uses --include-partial-messages to detect triggering early from
     stream events (content_block_start) rather than waiting for the
     full assistant message, which only arrives after tool execution.
+    Timeouts and CLI failures are reported as such, never as "not_triggered".
     """
     unique_id = uuid.uuid4().hex[:8]
     clean_name = f"{skill_name}-skill-{unique_id}"
@@ -90,29 +91,33 @@ def run_single_query(
             env=env,
         )
 
-        triggered = False
         start_time = time.time()
         buffer = ""
-        # Track state for stream event detection
+        # Track the tool_use block being streamed; only Skill/Read inputs can name the skill
         pending_tool_name = None
         accumulated_json = ""
+        exited = False
 
         try:
-            while time.time() - start_time < timeout:
+            # Scan the whole bounded turn: unrelated tool calls (Bash, a Brain Read)
+            # may come before the Skill call and must not end the measurement.
+            while not exited:
+                if time.time() - start_time >= timeout:
+                    return "timeout"
                 if process.poll() is not None:
+                    exited = True
                     remaining = process.stdout.read()
                     if remaining:
                         buffer += remaining.decode("utf-8", errors="replace")
-                    break
-
-                ready, _, _ = select.select([process.stdout], [], [], 1.0)
-                if not ready:
-                    continue
-
-                chunk = os.read(process.stdout.fileno(), 8192)
-                if not chunk:
-                    break
-                buffer += chunk.decode("utf-8", errors="replace")
+                    buffer += "\n"
+                else:
+                    ready, _, _ = select.select([process.stdout], [], [], 1.0)
+                    if not ready:
+                        continue
+                    chunk = os.read(process.stdout.fileno(), 8192)
+                    if not chunk:
+                        exited = True
+                    buffer += chunk.decode("utf-8", errors="replace")
 
                 while "\n" in buffer:
                     line, buffer = buffer.split("\n", 1)
@@ -132,26 +137,19 @@ def run_single_query(
 
                         if se_type == "content_block_start":
                             cb = se.get("content_block", {})
-                            if cb.get("type") == "tool_use":
-                                tool_name = cb.get("name", "")
-                                if tool_name in ("Skill", "Read"):
-                                    pending_tool_name = tool_name
-                                    accumulated_json = ""
-                                else:
-                                    return False
+                            tool_name = cb.get("name", "") if cb.get("type") == "tool_use" else ""
+                            pending_tool_name = tool_name if tool_name in ("Skill", "Read") else None
+                            accumulated_json = ""
 
                         elif se_type == "content_block_delta" and pending_tool_name:
                             delta = se.get("delta", {})
                             if delta.get("type") == "input_json_delta":
                                 accumulated_json += delta.get("partial_json", "")
                                 if clean_name in accumulated_json:
-                                    return True
+                                    return "triggered"
 
-                        elif se_type in ("content_block_stop", "message_stop"):
-                            if pending_tool_name:
-                                return clean_name in accumulated_json
-                            if se_type == "message_stop":
-                                return False
+                        elif se_type == "content_block_stop":
+                            pending_tool_name = None
 
                     # Fallback: full assistant message
                     elif event.get("type") == "assistant":
@@ -162,20 +160,20 @@ def run_single_query(
                             tool_name = content_item.get("name", "")
                             tool_input = content_item.get("input", {})
                             if tool_name == "Skill" and clean_name in tool_input.get("skill", ""):
-                                triggered = True
-                            elif tool_name == "Read" and clean_name in tool_input.get("file_path", ""):
-                                triggered = True
-                            return triggered
+                                return "triggered"
+                            if tool_name == "Read" and clean_name in tool_input.get("file_path", ""):
+                                return "triggered"
 
                     elif event.get("type") == "result":
-                        return triggered
+                        return "error" if event.get("is_error") else "not_triggered"
         finally:
             # Clean up process on any exit path (return, exception, timeout)
             if process.poll() is None:
                 process.kill()
                 process.wait()
 
-        return triggered
+        # The stream ended without a result event: the CLI failed, not the description
+        return "error"
     finally:
         if command_file.exists():
             command_file.unlink()
@@ -210,39 +208,48 @@ def run_eval(
                 )
                 future_to_info[future] = (item, run_idx)
 
-        query_triggers: dict[str, list[bool]] = {}
+        query_statuses: dict[str, list[str]] = {}
         query_items: dict[str, dict] = {}
         for future in as_completed(future_to_info):
             item, _ = future_to_info[future]
             query = item["query"]
             query_items[query] = item
-            if query not in query_triggers:
-                query_triggers[query] = []
+            if query not in query_statuses:
+                query_statuses[query] = []
             try:
-                query_triggers[query].append(future.result())
+                query_statuses[query].append(future.result())
             except Exception as e:
                 print(f"Warning: query failed: {e}", file=sys.stderr)
-                query_triggers[query].append(False)
+                query_statuses[query].append("error")
 
-    for query, triggers in query_triggers.items():
+    for query, statuses in query_statuses.items():
         item = query_items[query]
-        trigger_rate = sum(triggers) / len(triggers)
+        triggers = statuses.count("triggered")
+        # Timeouts and CLI errors are evidence of neither triggering nor not triggering
+        runs = triggers + statuses.count("not_triggered")
         should_trigger = item["should_trigger"]
-        if should_trigger:
+        if runs == 0:
+            trigger_rate, did_pass = None, False
+        elif should_trigger:
+            trigger_rate = triggers / runs
             did_pass = trigger_rate >= trigger_threshold
         else:
+            trigger_rate = triggers / runs
             did_pass = trigger_rate < trigger_threshold
         results.append({
             "query": query,
             "should_trigger": should_trigger,
             "trigger_rate": trigger_rate,
-            "triggers": sum(triggers),
-            "runs": len(triggers),
+            "triggers": triggers,
+            "runs": runs,
+            "timeouts": statuses.count("timeout"),
+            "errors": statuses.count("error"),
             "pass": did_pass,
         })
 
     passed = sum(1 for r in results if r["pass"])
     total = len(results)
+    inconclusive = sum(1 for r in results if r["runs"] == 0)
 
     return {
         "skill_name": skill_name,
@@ -252,6 +259,7 @@ def run_eval(
             "total": total,
             "passed": passed,
             "failed": total - passed,
+            "inconclusive": inconclusive,
         },
     }
 
@@ -301,6 +309,8 @@ def main():
         for r in output["results"]:
             status = "PASS" if r["pass"] else "FAIL"
             rate_str = f"{r['triggers']}/{r['runs']}"
+            if r["timeouts"] or r["errors"]:
+                rate_str += f" (timeouts={r['timeouts']} errors={r['errors']})"
             print(f"  [{status}] rate={rate_str} expected={r['should_trigger']}: {r['query'][:70]}", file=sys.stderr)
 
     print(json.dumps(output, indent=2))

@@ -29,6 +29,11 @@ systemd .timer  ──fires──▶  orchestrator.sh  ──per repo, per lens�
 Each lens is a separate, bounded `claude -p` run (own prompt, timeout, permission mode, log).
 A repo enables whichever lenses make sense for it, in the config.
 
+**Open item (house rules):** adversarial reviews on this machine go through `codex-call`
+(`gpt-6.1-sol`), not Claude. The templates still run the review lenses through `run-claude.sh`;
+before scheduling here, replace that call with a `codex-call` wrapper that hands the answer to the
+orchestrator in the same `.result` JSON contract. Claude stays the fix agent.
+
 - **`bug`** — correctness/security bug screen. Read-only review (`--permission-mode plan`).
   New, deduped, high-confidence findings become auto-fix **draft PRs**; all findings are also
   recorded as checkboxes in the repo's task file (see "Where findings go" below).
@@ -39,10 +44,13 @@ A repo enables whichever lenses make sense for it, in the config.
 
 Findings are written into a **marker-delimited managed block**
 (`<!-- nightly-review:<lens>:start -->` … `:end`), so the pipeline owns that block and never
-touches your own content. With `REPORT_IN_REPO=1` (default) it **reuses the repo's existing file,
-case-insensitively** — an existing `TODO.md` is appended to, never a competing `todo.md` — falling
-back to `TASK_FILE`/`IDEAS_FILE` if none exists. With `REPORT_IN_REPO=0` it writes out of the repo
-under `REPORTS_DIR/<repo-slug>/` instead, leaving the repo's working tree completely untouched.
+touches your own content. By default (`REPORT_IN_REPO=0`) it writes out of the repo under
+`REPORTS_DIR/<repo-slug>/`, leaving the repo's working tree completely untouched. Only when the
+owner sets `REPORT_IN_REPO=1` does it **reuse the repo's existing file, case-insensitively** — an
+existing `TODO.md` is appended to, never a competing `todo.md` — falling back to
+`TASK_FILE`/`IDEAS_FILE` if none exists. That mode rewrites the file without coordinating with
+other writers, so enable it only after a `parallel-agents` ownership check shows nobody else edits
+that file.
 - **metrics is not a lens** — it is an *output*. When the bug or usability lens notices something
   whose quality can only be judged by measuring it (retrieval quality, recall, latency, memory hit
   rate), it emits a `metric-suggestion` item into `IDEAS.md`. You decide later whether to build an
@@ -55,6 +63,10 @@ lens is due again. After K consecutive empty runs it backs off (doubling the int
 so a quiet repo that yields nothing stops burning nightly runs — and wakes up automatically on the
 next commit. Details and tuning: `references/adaptive-cadence.md`.
 
+A review that errors, returns invalid JSON, or returns anything but a JSON array of findings counts
+as **failed**, not empty: it is logged as `REVIEW FAILED`, leaves the last-reviewed commit and the
+backoff state unchanged, and makes the run exit nonzero.
+
 ## Setup
 
 1. **Prerequisites** (verify first): `claude` on PATH, `gh` authenticated (`gh auth status`),
@@ -65,12 +77,14 @@ next commit. Details and tuning: `references/adaptive-cadence.md`.
    cp ~/.claude/skills/nightly-review-pipeline/assets/config.example.sh ~/.config/nightly-review/config.sh
    $EDITOR ~/.config/nightly-review/config.sh   # set REPOS, lenses per repo, test commands, thresholds
    ```
+   The template ships with `REPOS=()`. The orchestrator refuses to start (exit 2) while `REPOS` is
+   empty or any entry is not an absolute path to a git repo with known lenses.
 3. **Dry-run** to confirm decisions without spending runs or touching repos:
    ```bash
    ~/.claude/skills/nightly-review-pipeline/assets/orchestrator.sh --config ~/.config/nightly-review/config.sh --dry-run
    ```
 4. **One real manual run** on a single repo (edit REPOS down to one first) and inspect the repo's
-   task/ideas file (or `REPORTS_DIR/` if `REPORT_IN_REPO=0`), any draft PRs, and the log under
+   report under `REPORTS_DIR/` (or the repo's task/ideas file if `REPORT_IN_REPO=1`), any draft PRs, and the log under
    `~/.local/state/nightly-review/logs/`.
 5. **Install the timer** (systemd user units):
    ```bash
@@ -91,7 +105,8 @@ modes, why fixes never touch `main` or auto-merge, and how to cap runaway cost.
 - Fixes happen only in a **throwaway git worktree** on a `nightly/fix-<id>` branch off the base
   branch, never on `main`; the agent edits (`--permission-mode acceptEdits`) but the **orchestrator**
   runs tests, commits, pushes, and opens the PR.
-- A fix PR is opened **only if the repo's test command passes**. No auto-merge, ever.
+- A fix PR is opened **only if the repo's test command passes**. A repo without a test command
+  (entry field and `TEST_CMD_DEFAULT` both empty) is review only: no fix is attempted. No auto-merge, ever.
 - Every `claude` run is bounded by `--max-turns` and a wall-clock `timeout`; everything is logged.
 - Findings are deduped by hash so the same issue is not re-reported or re-PR'd every night.
 

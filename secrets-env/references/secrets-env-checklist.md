@@ -51,11 +51,14 @@ Rules:
 
 ## Targeted checks
 
-Use repository-appropriate searches and avoid printing values unnecessarily. Examples:
+Use repository-appropriate searches that never print values. List file names first, then show key names only:
 
 ```bash
-rg -n --hidden --glob '!*.lock' --glob '!.git/**' 'API_KEY|TOKEN|PASSWORD|SECRET|PRIVATE_KEY|BEGIN [A-Z ]*PRIVATE KEY'
+rg -l --hidden --glob '!*.lock' --glob '!.git/**' 'API_KEY|TOKEN|PASSWORD|SECRET|PRIVATE_KEY|BEGIN [A-Z ]*PRIVATE KEY' .
+rg -n -o --hidden -e '^(export )?[A-Z0-9_]*(KEY|TOKEN|PASSWORD|SECRET)[A-Z0-9_]*=' -e 'BEGIN [A-Z ]*PRIVATE KEY' <file>
 rg -n --hidden --glob '!.git/**' '^\.env|\.env$|\.config\.env$' .gitignore
 ```
+
+`-o` stops each match at the `=`, so the value is never printed. A listed file without a key-name hit uses another syntax (YAML, JSON); inspect it with a pattern that likewise ends before the value.
 
 If a likely real secret is found, do not reproduce it. Report path, line number when safe, variable name if safe, and recommended containment steps.

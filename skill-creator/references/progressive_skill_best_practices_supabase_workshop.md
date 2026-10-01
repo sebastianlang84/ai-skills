@@ -2,6 +2,30 @@
 
 **Quelle:** „Skill Issue / Level Up Your Skills: How We Used AI to Make Agents Actually Good at Supabase“ — Pedro Rodrigues, Supabase
 
+## Inhalt
+
+- [Kurzfazit](#kurzfazit)
+- [1. Was ein Skill ist](#1-was-ein-skill-ist)
+- [2. Progressive Disclosure](#2-progressive-disclosure)
+- [3. Skill vs. MCP](#3-skill-vs-mcp)
+- [4. Scripts in Skills vs. MCP Tools](#4-scripts-in-skills-vs-mcp-tools)
+- [5. Gute Skill-Beschreibungen](#5-gute-skill-beschreibungen)
+- [6. Skill-Loading ist nicht garantiert](#6-skill-loading-ist-nicht-garantiert)
+- [7. Supabase-Beispiel: RLS und Views](#7-supabase-beispiel-rls-und-views)
+- [8. Skills als agentische Dokumentation](#8-skills-als-agentische-dokumentation)
+- [9. Skills testen: Eval-Zyklus](#9-skills-testen-eval-zyklus)
+- [10. Eval-Struktur](#10-eval-struktur)
+- [11. Vorsicht: Evals können selbst falsch sein](#11-vorsicht-evals-können-selbst-falsch-sein)
+- [12. Große Datenbank-Schemata progressiv laden](#12-große-datenbank-schemata-progressiv-laden)
+- [13. Produktionsregeln für Skills](#13-produktionsregeln-für-skills)
+- [14. Best Practices für Skill-Inhalte](#14-best-practices-für-skill-inhalte)
+- [15. Anti-Patterns](#15-anti-patterns)
+- [16. Ableitung für Pi / pi-coding-agent](#16-ableitung-für-pi--pi-coding-agent)
+- [17. Skill + Subagent-Strategie](#17-skill--subagent-strategie)
+- [18. Minimal-MCP-Variante](#18-minimal-mcp-variante)
+- [19. Konkrete Skill-Templates](#19-konkrete-skill-templates)
+- [20. Finaler Merksatz](#20-finaler-merksatz)
+
 ## Kurzfazit
 
 Skills sind keine MCP-Alternative, sondern eine **progressive Context- und Workflow-Schicht** für Agenten.

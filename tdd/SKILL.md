@@ -1,6 +1,6 @@
 ---
 name: tdd
-description: Test-driven development with red-green-refactor loop. Use when user wants to build features or fix bugs using TDD, mentions "red-green-refactor", wants integration tests, or asks for test-first development.
+description: Test-driven development with red-green-refactor loop. Use when the user explicitly asks to build features or fix bugs with TDD, mentions "red-green-refactor", or asks for test-first development.
 ---
 
 # Test-Driven Development
@@ -48,22 +48,17 @@ RIGHT (vertical):
 
 When exploring the codebase, take test names and interface vocabulary from the project's own terms in the code, so the tests read in the same language as what they exercise.
 
-**Agree the seams first.** A **seam** is the public boundary a test observes behaviour through, without reaching inside. Before writing any test, write down which seams you intend to test and confirm them with the user. No test is written at an unconfirmed seam — you can't test everything, and agreeing the seams up front is how the effort lands on critical paths instead of every edge case.
-
-Ask: "What's the public interface, and which seams should we test?"
+**Choose the seams first.** A **seam** is the public boundary a test observes behaviour through, without reaching inside. Before writing any test, write down which seams you intend to test. Infer them from the requested behaviour and the existing public interfaces; ask the user only when a product or interface decision remains unresolved. You can't test everything, and choosing the seams up front is how the effort lands on critical paths instead of every edge case.
 
 Before writing any code:
 
-- [ ] Confirm with user what interface changes are needed
-- [ ] Confirm with user which seams are under test
+- [ ] Name the interface changes the requested behaviour needs
+- [ ] Name the seams under test
 - [ ] Identify opportunities for [deep modules](deep-modules.md) (small interface, deep implementation)
 - [ ] Design interfaces for [testability](interface-design.md)
 - [ ] List the behaviors to test (not implementation steps)
-- [ ] Get user approval on the plan
 
-Ask: "What should the public interface look like? Which behaviors are most important to test?"
-
-**You can't test everything.** Confirm with the user exactly which behaviors matter most. Focus testing effort on critical paths and complex logic, not every possible edge case.
+**You can't test everything.** Rank the behaviors by how much they matter. Focus testing effort on critical paths and complex logic, not every possible edge case.
 
 ### 2. Tracer Bullet
 
@@ -108,7 +103,7 @@ After all tests pass, look for [refactor candidates](refactoring.md):
 
 ```
 [ ] Test describes behavior, not implementation
-[ ] Test uses public interface only, at a pre-agreed seam
+[ ] Test uses public interface only, at a named seam
 [ ] Test would survive internal refactor
 [ ] Expected value comes from an independent source, not recomputed like the code
 [ ] Code is minimal for this test

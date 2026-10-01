@@ -16,9 +16,8 @@ Jev: state + questions with fixed answer spaces -> typed decisions + probabiliti
 ```
 
 Think of it as an `if` whose condition is a semantic judgement:
-`if p("transaction looks suspicious") > 0.95: ...`. It reads text and JSON only, up to 32k input
-tokens, and bills input only (0.042 $ per million tokens). Measured here: about 0.00003 $ and a
-median of 340 ms per item with two questions per call.
+`if p("transaction looks suspicious") > 0.95: ...`. It reads text and JSON only and bills input
+only; the dated limits, price and measured cost are under Budget and safety.
 
 "Zero hallucinations", as TypeSafe puts it, only means the output always fits the schema. Jev can
 still pick the wrong option or misjudge a probability.
@@ -68,7 +67,7 @@ So in Market Digest it serves as a pre-filter, not a judge. Status and reversal 
 
 ## How to call it
 
-- **MCP:** tool `jev_decide` on server `jev`, registered in Claude Code and Codex. Code:
+- **MCP:** `jev:jev_decide`, registered in Claude Code and Codex. Code:
   `~/.agents/mcp/jev/server.py`.
 - **Python:** put `~/.agents/mcp/jev` on `sys.path` and call
   `jev_client.decide(state, questions, label="<job>")`. Use this for batches. A
@@ -138,6 +137,9 @@ and the client does not compare it with the requested version.
 - `decide` sends only `typesafe/jev-1.13` and rejects any other model name, because the budget
   reservation is priced for it. OpenRouter may still serve a newer snapshot under that name. If
   the price or the snapshot changes, update `jev_client.py` and re-check the thresholds.
-- TypeSafe gives 70–500 ms latency and the price as early-access figures, which may change.
+- Early-access figures as of 2026-09-24, which may change; verify them before integrating: up to
+  32k input tokens, input billed only at 0.042 $ per million tokens, 70–500 ms latency per
+  TypeSafe. Measured here: about 0.00003 $ and a median of 340 ms per item with two questions per
+  call.
 - The key comes from `OPENROUTER_API_KEY` or the market-digest `.env`. It is never printed or
   returned, and `JevError` messages have the key redacted.

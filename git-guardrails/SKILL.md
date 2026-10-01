@@ -16,7 +16,7 @@ The script is [scripts/block-dangerous-git.py](scripts/block-dangerous-git.py).
 
 | Blocked | Still allowed |
 |---|---|
-| `push --force` / `-f` / `+refspec` | `push --force-with-lease` (refuses if the remote moved) |
+| `push --force` / `-f` (also beside `--force-with-lease`) / `+refspec` | `push --force-with-lease` (refuses if the remote moved) |
 | `push --delete`, `push :ref` | the same, when every named branch is *provably contained* in the remote's default branch (see below) |
 | `reset --hard` | `reset` soft/mixed |
 | `clean -f` (any bundling) | `clean -n` |
@@ -47,7 +47,7 @@ What it does **not** preserve is the branch's own history — commit messages, a
 Both rules are built to answer "no" whenever they are not certain:
 
 - For the remote case the sha comes from **`ls-remote`, the live remote** — never from a remote-tracking ref, which may be stale and hide commits pushed since the last fetch. For the local case the branch must resolve under `refs/heads/`.
-- A conflict, an unrelated history, or any git failure during the in-memory merge answers "cannot prove" and stays blocked. So does a branch whose change the default branch has since reverted.
+- A conflict, an unrelated history, or any git failure during the in-memory merge answers "cannot prove" and stays blocked. So does a squash-merged (non-ancestral) branch whose change the default branch has since reverted. A branch integrated by fast-forward or merge commit and then reverted is different: it is still an ancestor, so question 1 releases it — its commits survive in the base's history even though the current tree no longer carries the change.
 - One unqualified ref voids the whole batch — deletions are not partially allowed.
 - Never: tags, the default branch itself, the checked-out branch, URL remotes, `--mirror`/`--all`/`--tags`, `-r`/`-a` on `git branch`, or a command line carrying any shell metacharacter (composition and substitution defeat single-command parsing). `cd repo && git push --delete x` is therefore blocked; write `git -C repo push --delete x`.
 - Any probe that errors, any option the parser does not recognise, any repo it cannot locate → blocked.
@@ -80,7 +80,7 @@ Pointing at the repo copy means `git pull` updates the guard. Note that `~/.clau
 
 ## Adjust the list
 
-Edit `RULES` in the script: each entry is `(regex, what it destroys, what to do instead)`. The last two strings are what the model is told, so write the alternative as an instruction it can follow.
+Edit `RULES` in the script: each entry is `(regex, what it destroys, what to do instead)`. The last two strings are what the model is told, so write the alternative as an instruction it can follow. Force-push is the exception: `forced_push` judges the tokenized push arguments, because a regex could not separate a bare `--force` from the lease beside it. The earlier whole-line patterns stay as a second net for shapes the tokenizer misses; when either fires, the push is refused. That errs toward refusal: a forced push named only in echoed text, a comment, or as the value of a clustered `-qo` is refused too.
 
 ## Verify after any change
 
@@ -90,9 +90,9 @@ Run the suite first — it builds real repositories, because the exceptions are 
 python3 /home/wasti/.agents/skills/git-guardrails/scripts/test_block_dangerous_git.py
 ```
 
-It covers both directions of both exceptions: a squash-merged branch is released, a branch carrying work the default branch lacks is not, and neither is one whose change was landed and then reverted.
+It covers both directions of both exceptions: a squash-merged branch is released, a branch carrying work the default branch lacks is not, and neither is one that was squash-merged and then reverted.
 
-The script has no side effects, so single cases can also be tested directly — a rule that does not fire is worse than no rule:
+The hook never executes the requested Git operation, but the absorption check (`merge-tree --write-tree`) may write objects into the repository's object database. Single cases without a `cwd` touch no repository and can be tested directly — a rule that does not fire is worse than no rule:
 
 ```bash
 printf '{"tool_input":{"command":"git reset --hard"}}' | python3 scripts/block-dangerous-git.py; echo "exit=$?"   # expect 2

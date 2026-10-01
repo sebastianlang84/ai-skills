@@ -73,6 +73,46 @@ def squash_merge(work, name):
 print("plain rules")
 check("force push blocked", blocked("git push --force origin main", ""))
 check("force-with-lease allowed", not blocked("git push --force-with-lease origin main", ""))
+check("a bare --force beside a lease is still blocked",
+      blocked("git push --force --force-with-lease origin main", ""))
+check("-f inside a short-flag cluster is blocked", blocked("git push -uf origin main", ""))
+check("force on a continued line is blocked",
+      blocked("git push \\\n  --force origin main", ""))
+check("a push-option value is not a flag cluster",
+      not blocked("git push -o -foo origin main", ""))
+check("a separator inside a quoted value does not split the push",
+      blocked("git push -o '(ci)' --force origin main", ""))
+check("a quoted ; does not split the push",
+      blocked('git push -o "a;b" origin +main', ""))
+check("a quoted value that is only a separator does not split the push",
+      blocked("git push -o ';' --force origin main", ""))
+check("a quoted pipe value does not split the push",
+      blocked("git push -o '|' origin +main", ""))
+check("# inside a ref is not a comment",
+      blocked("git push origin topic#123 --force", ""))
+check("a force flag in a trailing comment is refused (conservative)",
+      blocked("git push origin main  # --force would be wrong", ""))
+check("a redirect glued to git does not hide the push",
+      blocked("git>/dev/null push --force origin main", ""))
+check("a tab-separated wrapped push is searched",
+      blocked("bash -c 'git\tpush\t--force\torigin\tmain'", ""))
+check("a quote broken by message masking does not hide the force",
+      blocked("git push -o '--message x' origin main --force", ""))
+check("an ANSI-C quoted force flag is blocked",
+      blocked("git push $'--force' origin main", ""))
+check("push as a log search term is not a push",
+      not blocked("git log --grep push -Sfix", ""))
+check("push as a grep pattern is not a push",
+      not blocked("git grep -e push -e +bug", ""))
+check("global options before push are skipped",
+      blocked("git -C /tmp -c x.y=z push --force origin main", ""))
+check("separate commands are still separate",
+      not blocked("git push origin main; echo --force", ""))
+check("force after a push-option value is still blocked",
+      blocked("git push -o ci.skip --force origin main", ""))
+check("a + refspec without a colon is blocked", blocked("git push origin +main", ""))
+check("a + refspec inside bash -c is blocked", blocked("bash -c 'git push origin +main'", ""))
+check("a plain push with -u is allowed", not blocked("git push -u origin main", ""))
 check("reset --hard blocked", blocked("git reset --hard origin/main", ""))
 check("clean -f blocked", blocked("git clean -fd", ""))
 check("filter-branch blocked", blocked("git filter-branch --tree-filter x HEAD", ""))

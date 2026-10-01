@@ -13,6 +13,15 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- All skills audited against the current Anthropic skill best practices and the Claude Code skills reference (2026-10-02, gpt-6.1-sol audit and review rounds):
+  - `git-guardrails`: forced pushes are judged on bash-like tokens (quotes, `$'…'`, continued lines, real subcommand) with the earlier whole-line patterns kept as a second net. `git push origin +main`, `--force` beside `--force-with-lease`, `-uf`, quoted separators and tab-wrapped pushes are now refused; it errs toward refusal for echoed text and comments. The docs no longer claim the absorption check has no side effects.
+  - `skill-creator`: `quick_validate.py` rejects empty `name`/`description` and names containing `anthropic`/`claude`; `run_eval.py` scans the whole turn and records timeouts and CLI errors apart from non-triggering, and the description optimizer ignores runs without data. New `references/claude-code-adapter.md` (1,536-char listing cap, Claude-Code-only fields, `paths`, `context: fork`, hooks, compaction). A skill is accepted only after three realistic scenarios; a Gotchas section is built from observed failures only.
+  - `secrets-env`: the secret scan lists files and key names, never values.
+  - `nightly-review-pipeline`: no auto-fix without a test command, malformed review output counts as a failed review, configured repos are validated at start, reports default outside the repo.
+  - `newsletter-delivery`: current `/digests/latest` and `/runs` endpoints and reader artifacts; OpenClaw requirement and Risk Tracker path removed; notes that the private send helper lost its sender module.
+  - `cross-vendor-review`: launches only on an explicit request; `launch-review.sh` appends codex-call's review rules to every prompt.
+  - Stale paths and facts fixed in `autoresearch`, `diagnosing-bugs`, `jev`, `t3-threads` (checked `T3_BIN`), `tool-update-checker` (tool kinds moved to a reference); autonomy conflicts removed from `tdd` and `resolving-merge-conflicts`; narrower triggers for `evaluating-with-promptfoo`, `tdd`, `t3-threads`; duplicated guidance replaced by pointers in `code-documentation`, `git-workflow`, `improve-codebase-architecture`, `write-docker-compose`; TOCs on long references.
+
 - `codex-call`, `cross-vendor-review`: default reviewer model is now `gpt-6.1-sol` (Sebastian, 2026-09-29); needs Codex CLI ≥ 0.159, selftest passes on 0.159.0.
 - `peer-debate`: test fixture names `gpt-6.1-sol`; `gpt-6-sol` is banned everywhere (Sebastian, 2026-10-01). Tests now expect the top-level `--search` flag before `exec`.
 - `jev`: default daily cap raised to 0.30 €/day (Sebastian, 2026-09-25), about 9,000 items a day.

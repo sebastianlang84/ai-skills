@@ -1,6 +1,6 @@
 ---
 name: cross-vendor-review
-description: Get a narrowly scoped adversarial second opinion from another vendor's model on a substantial design, plan, or architecture decision. Use when the user explicitly asks for something to be "gegengelesen", a second opinion, a Codex/Opus review, or a devil's advocate; or when an expensive-to-reverse decision has a named unresolved risk and the verdict could change the decision. Not for routine implementation, small or reversible changes, code diffs, general reassurance, or automatic review after every change.
+description: Get a narrowly scoped adversarial second opinion from another vendor's model on a substantial design, plan, or architecture decision. Use when the user explicitly asks for something to be "gegengelesen", a second opinion, a Codex/Opus review, or a devil's advocate. Not for routine implementation, small or reversible changes, code diffs, general reassurance, or automatic review after every change.
 ---
 
 # Cross-vendor review
@@ -10,18 +10,9 @@ what the design *is*, not at a diff. Same-vendor review catches anchoring, not b
 
 ## Gate the launch
 
-An explicit user request authorizes one review; still narrow it to the decision they care about.
-Without an explicit request, launch only when all are true:
-
-1. The decision is substantial and expensive to reverse, or controls a real security, data-loss, or
-   correctness boundary.
-2. One concrete uncertainty remains after reading the source and running the available deterministic
-   checks.
-3. A plausible contrary verdict would change the design or stop the work.
-
-If any condition is missing, do not spend the foreign-model call. A passing routine change does not
-earn a review merely because a reviewer is available. Review one decision against the smallest
-evidence set that can settle it; do not submit the whole workstream for general reassurance.
+Launch only on an explicit user request. That request authorizes one review; still narrow it to the
+decision they care about. Review one decision against the smallest evidence set that can settle it;
+do not submit the whole workstream for general reassurance.
 
 ## Background an approved review
 
@@ -42,7 +33,9 @@ substituting a same-vendor model.
 ## Write the prompt from the design, not from the diff
 
 The reviewer has no shared context and will read only what you point it at. Copy
-[`references/prompt-scaffold.md`](references/prompt-scaffold.md) and fill in its five parts:
+[`references/prompt-scaffold.md`](references/prompt-scaffold.md) and fill in its five parts. The prompt
+goes through `codex-call`; `scripts/launch-review.sh` appends its
+[`references/review-rules.md`](../codex-call/references/review-rules.md) to every review prompt.
 
 1. **Explicit paths to read** — repos, specs, the files that carry the decision. A vague pointer
    produces a vague review.
@@ -59,8 +52,8 @@ The reviewer has no shared context and will read only what you point it at. Copy
 
 Reviewers assert confidently and are sometimes wrong about what the code actually does. Verify a
 finding against the source before acting on it, and say plainly which ones you confirmed, which you
-rejected and why. Fold the confirmed ones in; a durable one belongs in the knowledge base
-(`~/.agents/brain`), not only in the chat.
+rejected and why. Fold the confirmed ones in; for a durable one, apply `using-brain`'s admission and write
+workflow instead of leaving it only in the chat.
 
 ## Decide when to stop *before* launching the first round
 
