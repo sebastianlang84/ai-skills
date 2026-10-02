@@ -38,12 +38,35 @@ class DebateTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         debate.ROOT = Path(self.tmp.name)
+        debate.LEGACY_ROOT = None
         self.run = debate.ROOT / "2026-08-31-test"
         self.run.mkdir()
         (self.run / "transcript.md").write_text("# test\n", encoding="utf-8")
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_timeout_kills_the_whole_process_tree(self):
+        with mock.patch.object(debate, "TURN_TIMEOUT", -29):  # communicate(timeout=1)
+            started = __import__("time").monotonic()
+            with self.assertRaises(subprocess.TimeoutExpired):
+                debate.run_process(["bash", "-c", "sleep 30 & wait"], self.run)
+            self.assertLess(__import__("time").monotonic() - started, 10)
+
+    def test_same_slug_in_both_roots_prefers_the_current_root(self):
+        legacy = Path(self.tmp.name) / "legacy"
+        (legacy / "2026-08-31-test").mkdir(parents=True)
+        debate.LEGACY_ROOT = legacy
+        self.assertEqual(debate.rundir("test"), self.run)
+        self.assertEqual(debate.rundir("2026-08-31-test"), self.run)
+
+    def test_runs_in_the_legacy_root_still_resolve(self):
+        legacy = Path(self.tmp.name) / "legacy"
+        (legacy / "2026-09-02-old-topic").mkdir(parents=True)
+        debate.LEGACY_ROOT = legacy
+        self.assertEqual(debate.rundir("old-topic"), legacy / "2026-09-02-old-topic")
+        self.assertEqual(debate.rundir("2026-09-02-old-topic"), legacy / "2026-09-02-old-topic")
+        self.assertEqual(debate.rundir("test"), self.run)
 
     def test_default_selection_uses_medium(self):
         with mock.patch.dict(debate.os.environ, {}, clear=True):
@@ -73,7 +96,7 @@ class DebateTests(unittest.TestCase):
         self.assertEqual(set(debate.ROOT.iterdir()), before)
 
     @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/agy")
-    @mock.patch.object(debate.subprocess, "run")
+    @mock.patch.object(debate, "run_process")
     def test_nonzero_json_error_is_visible_without_recording(self, run, _which):
         before = (self.run / "transcript.md").read_text()
         run.return_value = subprocess.CompletedProcess(
@@ -100,7 +123,7 @@ class DebateTests(unittest.TestCase):
             debate.parse_agy_result("[]", "", "B")
 
     @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/agy")
-    @mock.patch.object(debate.subprocess, "run")
+    @mock.patch.object(debate, "run_process")
     def test_initial_turn_records_conversation_and_usage(self, run, _which):
         run.return_value = subprocess.CompletedProcess([], 0, agy_json(), "")
 
@@ -121,7 +144,7 @@ class DebateTests(unittest.TestCase):
         self.assertIn("total=120 cumulative-for-this-side", transcript)
 
     @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/agy")
-    @mock.patch.object(debate.subprocess, "run")
+    @mock.patch.object(debate, "run_process")
     def test_later_turn_resumes_same_conversation(self, run, _which):
         (self.run / "conversation-B.txt").write_text("conv-b\n", encoding="utf-8")
         run.return_value = subprocess.CompletedProcess(
@@ -135,7 +158,7 @@ class DebateTests(unittest.TestCase):
         self.assertEqual(argv[index + 1], "conv-b")
 
     @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/agy")
-    @mock.patch.object(debate.subprocess, "run")
+    @mock.patch.object(debate, "run_process")
     def test_conversation_fork_is_not_recorded(self, run, _which):
         (self.run / "conversation-A.txt").write_text("conv-old\n", encoding="utf-8")
         before = (self.run / "transcript.md").read_text(encoding="utf-8")
@@ -199,49 +222,64 @@ class DebateTests(unittest.TestCase):
             "B": {"cli": "codex", "model": b.split(":", 1)[1], "effort": "low"},
         }), encoding="utf-8")
 
+    def codex_call_stdout(self, thread="01a0-thread"):
+        """What codex-call prints for a finished call; its event stream sits beside last.md."""
+        call = self.run / f"call-{thread}"
+        call.mkdir(exist_ok=True)
+        (call / "events.jsonl").write_text(self.codex_jsonl(thread=thread), encoding="utf-8")
+        (call / "last.md").write_text("codex answer\nSTATUS: converged\n", encoding="utf-8")
+        return f"thread: {thread}\nresult: {call / 'last.md'}\n\ncodex answer\nSTATUS: converged\n"
+
     @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/codex")
-    @mock.patch.object(debate.subprocess, "run")
-    def test_codex_initial_turn_runs_exec_without_hooks(self, run, which):
+    @mock.patch.object(debate, "run_process")
+    def test_codex_initial_turn_goes_through_codex_call(self, run, which):
         self._sides()
-        run.return_value = subprocess.CompletedProcess([], 0, self.codex_jsonl(), "")
+        run.return_value = subprocess.CompletedProcess([], 0, self.codex_call_stdout(), "")
 
         reply = debate.turn(self.run.name, "B", "question")
 
         self.assertTrue(reply.startswith("codex answer"))
         which.assert_called_with("codex")
         argv = run.call_args.args[0]
-        self.assertEqual(argv[1:3], ["--search", "exec"])
-        self.assertNotIn("resume", argv)
-        self.assertEqual(argv[argv.index("-m") + 1], "gpt-5.6-terra")
-        self.assertIn("model_reasoning_effort=low", argv)
-        self.assertIn("features.hooks=false", argv)
-        self.assertIn("--dangerously-bypass-approvals-and-sandbox", argv)
-        self.assertIn("--json", argv)
-        self.assertEqual(Path(argv[argv.index("-C") + 1]), self.run / "B")
+        self.assertEqual(Path(argv[1]), debate.CODEX_CALL)
+        self.assertEqual(argv[2], "new")
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.6-terra")
+        self.assertEqual(argv[argv.index("--effort") + 1], "low")
+        self.assertEqual(argv[argv.index("--sandbox") + 1], "danger-full-access")
+        self.assertIn("--search", argv)
+        self.assertEqual(Path(argv[argv.index("--cwd") + 1]), self.run / "B")
+        self.assertNotIn("--dangerously-bypass-approvals-and-sandbox", argv)
         self.assertEqual((self.run / "conversation-B.txt").read_text(encoding="utf-8"),
                          "01a0-thread\n")
         transcript = (self.run / "transcript.md").read_text(encoding="utf-8")
         self.assertIn("cli=codex model=gpt-5.6-terra effort=low", transcript)
+        self.assertIn("in=22900 cached=11008", transcript)
 
     @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/codex")
-    @mock.patch.object(debate.subprocess, "run")
+    @mock.patch.object(debate, "run_process")
     def test_codex_later_turn_resumes_thread_with_model(self, run, _which):
         self._sides()
         (self.run / "conversation-B.txt").write_text("01a0-thread\n", encoding="utf-8")
-        run.return_value = subprocess.CompletedProcess([], 0, self.codex_jsonl(), "")
+        run.return_value = subprocess.CompletedProcess([], 0, self.codex_call_stdout(), "")
 
         debate.turn(self.run.name, "B", "reply")
 
         argv = run.call_args.args[0]
-        self.assertEqual(argv[1:5], ["--search", "exec", "resume", "01a0-thread"])
-        self.assertEqual(argv[argv.index("-m") + 1], "gpt-5.6-terra")
-        # resume rejects these (measured 0.152.1: exit 2 with usage text)
-        for flag in ("-C", "--add-dir", "--color"):
-            self.assertNotIn(flag, argv)
-        self.assertIn("--dangerously-bypass-approvals-and-sandbox", argv)
+        self.assertEqual(argv[2:4], ["resume", "01a0-thread"])
+        self.assertEqual(argv[argv.index("--model") + 1], "gpt-5.6-terra")
+        self.assertIn("--search", argv)
+
+    @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/codex")
+    @mock.patch.object(debate, "run_process")
+    def test_codex_call_without_result_path_is_loud(self, run, _which):
+        self._sides()
+        run.return_value = subprocess.CompletedProcess([], 0, "something else\n", "")
+        with self.assertRaisesRegex(debate.Failed, "no result path"):
+            debate.turn(self.run.name, "B", "question")
+        self.assertFalse((self.run / "conversation-B.txt").exists())
 
     @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/agy")
-    @mock.patch.object(debate.subprocess, "run")
+    @mock.patch.object(debate, "run_process")
     def test_sides_json_wins_over_environment(self, run, _which):
         self._sides()
         run.return_value = subprocess.CompletedProcess([], 0, agy_json(), "")
@@ -289,7 +327,7 @@ class DebateTests(unittest.TestCase):
             debate.validate_selection({"cli": "claude", "model": "m", "effort": "ultra"}, "A")
 
     @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/claude")
-    @mock.patch.object(debate.subprocess, "run")
+    @mock.patch.object(debate, "run_process")
     def test_claude_initial_turn_then_resume(self, run, which):
         self._claude_sides()
         run.return_value = subprocess.CompletedProcess([], 0, self.claude_json(), "")
@@ -304,7 +342,7 @@ class DebateTests(unittest.TestCase):
         self.assertEqual(argv[argv.index("--output-format") + 1], "json")
         self.assertIn("--dangerously-skip-permissions", argv)
         self.assertNotIn("--resume", argv)
-        self.assertEqual(run.call_args.kwargs["cwd"], self.run / "A")
+        self.assertEqual(run.call_args.args[1], self.run / "A")
         self.assertEqual((self.run / "conversation-A.txt").read_text(encoding="utf-8"), "sess-a\n")
         self.assertIn("cli=claude model=claude-opus-5-5", (self.run / "transcript.md").read_text())
 
@@ -313,7 +351,7 @@ class DebateTests(unittest.TestCase):
         self.assertEqual(argv[argv.index("--resume") + 1], "sess-a")
 
     @mock.patch.object(debate.shutil, "which", return_value="/usr/bin/claude")
-    @mock.patch.object(debate.subprocess, "run")
+    @mock.patch.object(debate, "run_process")
     def test_claude_fork_is_not_recorded(self, run, _which):
         self._claude_sides()
         (self.run / "conversation-A.txt").write_text("sess-a\n", encoding="utf-8")

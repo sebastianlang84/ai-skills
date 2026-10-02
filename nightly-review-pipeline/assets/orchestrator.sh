@@ -2,18 +2,19 @@
 # Nightly review + auto-fix orchestrator.
 #
 # The scheduler (systemd timer / cron) fires this once a night. THIS script decides,
-# per repo and per lens, whether to actually spend a `claude` run — using saved state
+# per repo and per lens, whether to actually spend a review run (codex-call) — using saved state
 # and adaptive backoff — then dedups findings, renders markdown, and (bug lens only)
 # opens draft-PR fixes for high-confidence findings whose tests pass. A repo without a test
 # command gets review only: no fix is attempted, so no unverified PR can open.
 #
 # STARTER TEMPLATE: run with --dry-run first, set per-repo test commands, and verify the
-# `claude` flag syntax for your installed version. No `set -e`: one failing sub-step must
+# `claude` flag syntax (fix agent) and `codex_call.py selftest` (reviews) for your installed versions. No `set -e`: one failing sub-step must
 # not abort the whole night; return codes are handled explicitly.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RUN_CLAUDE="$HERE/run-claude.sh"
+RUN_CLAUDE="$HERE/run-claude.sh"   # fix agent
+RUN_REVIEW="$HERE/run-review.sh"   # review lenses: codex-call, read-only
 PROMPT_DIR="$HERE/prompts"
 
 DRY_RUN=0
@@ -40,7 +41,6 @@ source "$CONFIG"
 : "${MIN_FIX_CONFIDENCE:=high}"
 : "${FIX_BASE_BRANCH:=main}"
 : "${TEST_CMD_DEFAULT:=}"
-: "${REVIEW_MAX_TURNS:=40}"
 : "${REVIEW_TIMEOUT:=1800}"
 : "${FIX_MAX_TURNS:=60}"
 : "${FIX_TIMEOUT:=2400}"
@@ -54,7 +54,7 @@ declare -p REPOS >/dev/null 2>&1 || REPOS=()
 : "${REPORTS_DIR:=$STATE_DIR/reports}"
 : "${TASK_FILE:=TODO.md}"     # bug lens target basename (matched case-insensitively in-repo)
 : "${IDEAS_FILE:=IDEAS.md}"   # usability lens target basename
-export MODEL CLAUDE_BIN 2>/dev/null || true
+export MODEL CLAUDE_BIN REVIEW_MODEL REVIEW_EFFORT 2>/dev/null || true
 mkdir -p "$STATE_DIR" "$LOG_DIR"
 RUN_LOG="$LOG_DIR/run-$(date +%Y%m%d-%H%M%S).log"
 
@@ -178,15 +178,14 @@ run_review(){ # $1 repo  $2 statedir  $3 lens  $4 promptfile  $5 new_commits  $6
   fi
 
   local raw="$sd/$lens.raw.json"
-  if ! "$RUN_CLAUDE" --cwd "$repo" --prompt-file "$prompt" --raw "$raw" --log "$RUN_LOG" \
-        --output-format json --permission-mode plan \
-        --max-turns "$REVIEW_MAX_TURNS" --timeout "$REVIEW_TIMEOUT"; then
-    log "  [$lens] REVIEW FAILED: claude run failed (see log)"; echo "-2"; return
+  if ! "$RUN_REVIEW" --cwd "$repo" --prompt-file "$prompt" --raw "$raw" --log "$RUN_LOG" \
+        --label "nightly-$lens" --timeout "$REVIEW_TIMEOUT"; then
+    log "  [$lens] REVIEW FAILED: codex-call review failed (see log)"; echo "-2"; return
   fi
 
   local items="$sd/$lens.items.json"
   if ! jq -e '.result' "$raw" >/dev/null 2>&1; then
-    log "  [$lens] REVIEW FAILED: no .result field in claude output"; echo "-2"; return
+    log "  [$lens] REVIEW FAILED: no .result field in review output"; echo "-2"; return
   fi
   if ! jq -r '.result' "$raw" | strip_fences | jq -cs 'if length == 1 then .[0] else error("expected one JSON document") end' > "$items" 2>>"$RUN_LOG"; then
     log "  [$lens] REVIEW FAILED: model result was not valid JSON"; echo "-2"; return

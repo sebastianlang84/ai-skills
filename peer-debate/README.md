@@ -15,7 +15,7 @@ alone and that the orchestrator, sharing the question but not the work, would no
 
 ## Three decisions worth knowing
 
-**Nobody is running between turns.** Each turn starts a fresh `agy --print`, `claude -p` or `codex exec` process
+**Nobody is running between turns.** Each turn starts a fresh `agy --print`, `claude -p` or `codex-call` process
 that exits once it has answered; what survives is a conversation or thread id, not a resident
 agent. There is no separate
 judge — judging happens inside the orchestrator. The two sides run concurrently only in blind round
@@ -50,7 +50,7 @@ machine before the first turn.
 | | |
 |---|---|
 | Skill and role prompts | this directory |
-| Run directories | `~/peer-debates/<date>-<slug>/` — transcript, result, and one `A/` and `B/` working directory per side |
+| Run directories | `~/.agents/state/peer-debates/<date>-<slug>/` — transcript, result, and one `A/` and `B/` working directory per side |
 | Session state | Agy conversation ids in `conversation-A.txt` and `conversation-B.txt`; Agy keeps its own history |
 
 ## Worked example

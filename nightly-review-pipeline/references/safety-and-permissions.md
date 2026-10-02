@@ -5,9 +5,9 @@ templates are built so that the blast radius is small by construction.
 
 ## Permission modes (not `--dangerously-skip-permissions`)
 
-- **Review lenses run `--permission-mode plan`.** Plan mode is read-only: the agent can read, search,
-  and run read commands but **cannot edit files or run mutating commands**, and it does not block on
-  prompts. So a review lens physically cannot change your repo — the worst case is a wasted run.
+- **Review lenses run through `codex-call` in Codex's `read-only` sandbox.** The reviewer can read,
+  search and run read commands but **cannot write files**, and it never blocks on prompts. So a
+  review lens physically cannot change your repo — the worst case is a wasted run.
 - **Fix lens runs `--permission-mode acceptEdits`.** The agent may edit files in its worktree
   (auto-accepted, no prompt) but the fix prompt forbids it from running git or the test suite. The
   **orchestrator** runs the tests, commits, pushes, and opens the PR. This avoids handing the agent
@@ -32,8 +32,10 @@ version-sensitive and easy to get subtly wrong.
 
 ## Runaway-cost guards
 
-- Every `claude` run is bounded by `--max-turns` (turn cap) and `timeout` (wall-clock). Tune
-  `REVIEW_*` / `FIX_*` in the config.
+- Every review is bounded by `REVIEW_TIMEOUT` (wall-clock; at the deadline, or when the wrapper is
+  stopped from outside, the call is cancelled with `codex_call.py cancel` and counts as failed — its
+  findings are lost, not collected later). Every fix run is
+  bounded by `--max-turns` and `timeout`. Tune `REVIEW_*` / `FIX_*` in the config.
 - The systemd service adds `TimeoutStartSec=6h` as a hard ceiling for the whole night.
 - Adaptive backoff (see `adaptive-cadence.md`) stops spending runs on quiet, empty repos.
 - Start with `MODEL=""` (account default) and few repos; widen once you trust a few nights of logs.

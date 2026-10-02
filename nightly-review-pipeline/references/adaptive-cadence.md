@@ -1,7 +1,7 @@
 # Adaptive cadence
 
 Why this exists: a fixed nightly cron re-reviews repos that haven't changed and have no new findings,
-burning `claude` runs for nothing. The orchestrator instead decides, per repo and per lens, whether
+burning model runs for nothing. The orchestrator instead decides, per repo and per lens, whether
 tonight is worth it. This is the logic a dumb scheduler cannot do — hence the bash orchestrator.
 
 ## The decision each night, per lens

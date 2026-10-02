@@ -51,7 +51,7 @@ runs).
 python3 ~/.agents/skills/peer-debate/scripts/debate.py init <slug> <question-file>
 ```
 
-This creates `~/peer-debates/<date>-<slug>/` and puts the question to both sides blind — neither
+This creates `~/.agents/state/peer-debates/<date>-<slug>/` and puts the question to both sides blind — neither
 sees the other in round 0, so neither is anchored by the other's framing. The two run
 **concurrently**, since nothing connects them in round 0; the opening therefore costs the slower
 side's wall clock, not the sum. Both replies land in `transcript.md`.
@@ -98,10 +98,9 @@ Then take one of three exits, and say which:
 - **Re-debate, narrowed.** Something specific is still contested. Put that one quantity back to both
   sides with `ask`, not the whole question again — a second full round re-litigates what is already
   settled and buries the open point.
-- **Escalate to an adversarial review by a different vendor's model.** Take this exit when both
-  sides agree on a premise you cannot break yourself. Two instances of one model share a training
-  set and therefore share blind spots, so their agreement is exactly where an independent
-  cross-vendor reviewer earns its cost. Nothing here depends on how that review is run.
+- **Name the shared premise.** When both sides agree on a premise you cannot break yourself, say
+  so in the result: two instances of one model share blind spots, so that agreement is the weakest
+  point. Offer a cross-vendor review of it; run `cross-vendor-review` only on the user's request.
 
 ## Configuration
 
@@ -109,7 +108,7 @@ Every value below is an environment variable with a default.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `PEER_DEBATE_ROOT` | `~/peer-debates` | where run directories are created. Point it elsewhere to keep a debate's record beside the thing it is about |
+| `PEER_DEBATE_ROOT` | `~/.agents/state/peer-debates` | where run directories are created; runs from before 2026-10-02 in `~/peer-debates` still resolve by name. Point it elsewhere to keep a debate's record beside the thing it is about |
 | `PEER_DEBATE_MODEL` | `agy:gemini-3.8-flash-medium` | model both sides run, as `<cli>:<id>` with cli `agy`, `codex` or `claude`; a bare id means agy. `agy models` lists agy ids |
 | `PEER_DEBATE_MODEL_A`, `PEER_DEBATE_MODEL_B` | unset | model for one side; set both to put two vendors against each other, e.g. `PEER_DEBATE_MODEL_A=agy:gemini-3.8-flash-medium PEER_DEBATE_MODEL_B=codex:gpt-5.6-terra` |
 | `PEER_DEBATE_EFFORT` | `medium` | reasoning effort for both sides (`PEER_DEBATE_EFFORT_A`/`_B` per side); explicit Agy Gemini model variants must match |
@@ -139,11 +138,11 @@ there. That is deliberate: a debate in which nobody computes anything is an exch
 ### Tool policy
 
 Both sides receive their cli's complete configured tool surface. The runner uses
-`--dangerously-skip-permissions` on agy and claude and `--dangerously-bypass-approvals-and-sandbox` on codex so
-headless turns can use shell, files, web and MCP without soft denials or interactive pauses; it
-deliberately enables no sandbox on either. Codex turns run with `features.hooks=false`: the
-SessionEnd hook on this host compacts a thread after every `exec` and holds its writer lock for
-minutes, and a resume inside that window fails. The role
+`--dangerously-skip-permissions` on agy and claude; codex turns go through `codex-call` with
+`--sandbox danger-full-access` and `--search`, so headless turns can use shell, files, web and MCP
+without soft denials or interactive pauses; it deliberately enables no sandbox on either.
+`codex-call` turns hooks off: the SessionEnd hook on this host compacts a thread after every `exec`
+and holds its writer lock for minutes, and a resume inside that window fails. The role
 prompts still require debate artifacts to stay under `A/` or `B/`. This broad grant is a conscious
 choice for this private experiment host. Details: [`references/tool-policy.md`](references/tool-policy.md).
 
@@ -153,7 +152,7 @@ roles produce agreement after one round, and that agreement is an artefact of th
 
 ## Files
 
-Run directory `~/peer-debates/<date>-<slug>/`:
+Run directory `~/.agents/state/peer-debates/<date>-<slug>/`:
 
 - `question.md` — as put to both sides
 - `sides.json` — cli, model and effort per side, fixed at `init`
@@ -168,5 +167,5 @@ Run directory `~/peer-debates/<date>-<slug>/`:
   separate on purpose: in a shared directory the second side can read the first side's scripts and
   reply, which makes round 0 blind in name only.
 
-Each turn starts one `agy --print`, `claude -p` or `codex exec` process and resumes the side's stored id. There
+Each turn starts one `agy --print`, `claude -p` or `codex-call` process and resumes the side's stored id. There
 is no resident debater process and no lock file.

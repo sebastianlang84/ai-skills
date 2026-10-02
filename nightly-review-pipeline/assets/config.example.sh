@@ -15,7 +15,8 @@ REPOS=(
 
 # --- Runtime ----------------------------------------------------------------
 CLAUDE_BIN="claude"          # binary on PATH
-MODEL=""                     # "" = account default; or e.g. claude-opus-4-8
+MODEL=""                     # fix agent model; "" = account default, or e.g. claude-opus-5-5
+# Reviews run through codex-call (gpt-6.1-sol); REVIEW_MODEL / REVIEW_EFFORT override its pins.
 STATE_DIR="$HOME/.local/state/nightly-review"
 LOG_DIR="$STATE_DIR/logs"
 
@@ -44,7 +45,6 @@ FIX_BASE_BRANCH="main"       # fixes branch off this and PR back into it; never 
 TEST_CMD_DEFAULT=""          # used when a repo entry leaves TEST_CMD empty; "" = no auto-fix for such repos
 
 # --- Run bounds (cost/runaway guards) ---------------------------------------
-REVIEW_MAX_TURNS=40
 REVIEW_TIMEOUT=1800          # seconds, wall-clock, per review lens run
 FIX_MAX_TURNS=60
 FIX_TIMEOUT=2400             # seconds, per fix run

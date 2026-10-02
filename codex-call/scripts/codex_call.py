@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """One pinned way to call Codex: start a thread, ask a follow-up in it, wait for a detached call.
 
-    codex_call.py new    [--cwd DIR] [--label L] [--model M] [--effort E] [--sandbox S] [--detach] PROMPT|-
-    codex_call.py resume THREAD_ID [--label L] [--model M] [--effort E] [--sandbox S] [--detach] PROMPT|-
+    codex_call.py new    [--cwd DIR] [--label L] [--model M] [--effort E] [--sandbox S] [--search] [--detach] PROMPT|-
+    codex_call.py resume THREAD_ID [--cwd DIR] [--label L] [--model M] [--effort E] [--sandbox S] [--search] [--detach] PROMPT|-
     codex_call.py wait   CALL_DIR [--timeout SECONDS]
+    codex_call.py cancel CALL_DIR   (stops a detached call and its codex process)
     codex_call.py list   [-n N]
     codex_call.py selftest
 
@@ -27,6 +28,7 @@ import argparse
 import json
 import os
 import random
+import signal
 import shutil
 import subprocess
 import sys
@@ -78,10 +80,12 @@ def codex_version(exe: str) -> str:
 def command(meta: dict, exe: str, out: Path) -> list[str]:
     pins = ["-m", meta["model"], "-c", f"model_reasoning_effort={meta['effort']}",
             "-c", "features.hooks=false", "--skip-git-repo-check", "--json", "-o", str(out)]
+    # `--search` (native web search) is a top-level flag; codex rejects it after `exec`.
+    top = [exe, "--search"] if meta.get("search") else [exe]
     if meta["parent_thread"]:
-        return [exe, "exec", "resume", meta["parent_thread"], *pins,
+        return [*top, "exec", "resume", meta["parent_thread"], *pins,
                 "-c", f"sandbox_mode={meta['sandbox']}", "-"]
-    return [exe, "exec", "-C", meta["cwd"], "-s", meta["sandbox"], *pins, "-"]
+    return [*top, "exec", "-C", meta["cwd"], "-s", meta["sandbox"], *pins, "-"]
 
 
 def outcome(events: str) -> tuple[str | None, str | None]:
@@ -142,12 +146,17 @@ def run(call: Path) -> int:
     except Exception as exc:  # recorded, never lost: wait reads the end state from meta.json
         error = str(exc)
     meta.update(thread_id=thread, rc=rc, error=error, finished=now())
+    finish(call, meta)
+    return rc
+
+
+def finish(call: Path, meta: dict) -> None:
+    """Record a call's end state in meta.json and its one line in calls.jsonl."""
     write_meta(call, meta)
     with (ROOT / "calls.jsonl").open("a", encoding="utf-8") as log:
         log.write(json.dumps({k: meta.get(k) for k in (
             "started", "finished", "label", "thread_id", "parent_thread", "model", "effort",
             "sandbox", "cwd", "rc", "error")} | {"dir": str(call)}) + "\n")
-    return rc
 
 
 def alive(pid: int | None) -> bool:
@@ -214,16 +223,19 @@ def prepare(args, parent: str | None) -> Path:
         raise Failed("empty prompt")
     ROOT.mkdir(parents=True, exist_ok=True)
     label = "".join(c if c.isalnum() or c in "-_" else "-" for c in args.label)[:40] or "call"
-    call = ROOT / f"{datetime.now():%Y%m%d-%H%M%S}-{label}"
-    suffix = 1
-    while call.exists():
-        suffix += 1
-        call = ROOT / f"{datetime.now():%Y%m%d-%H%M%S}-{label}-{suffix}"
-    call.mkdir()
+    stamp, suffix = f"{datetime.now():%Y%m%d-%H%M%S}", 1
+    while True:
+        # mkdir itself is the claim: two callers in the same second cannot both get one directory
+        call = ROOT / (f"{stamp}-{label}" if suffix == 1 else f"{stamp}-{label}-{suffix}")
+        try:
+            call.mkdir()
+            break
+        except FileExistsError:
+            suffix += 1
     (call / "prompt.md").write_text(prompt, encoding="utf-8")
     cwd = str(Path(args.cwd).resolve()) if getattr(args, "cwd", None) else str(call)
     write_meta(call, {"label": label, "started": now(), "model": args.model, "effort": args.effort,
-                      "sandbox": args.sandbox, "cwd": cwd, "parent_thread": parent,
+                      "sandbox": args.sandbox, "search": bool(getattr(args, "search", False)), "cwd": cwd, "parent_thread": parent,
                       "thread_id": parent, "pid": None})
     return call
 
@@ -242,6 +254,54 @@ def start(args, parent: str | None) -> int:
     (call / "runner.pid").write_text(str(proc.pid), encoding="utf-8")
     print(call)
     return 0
+
+
+def cancel(call: Path) -> int:
+    """Stop a detached call: its runner leads its own session, so the group holds codex too."""
+    call = call.resolve()  # the runner's argv holds the absolute path
+    meta = read_meta(call)
+    if "rc" in meta:
+        return report(call)
+    try:
+        pid = int((call / "runner.pid").read_text())
+    except (FileNotFoundError, ValueError):
+        raise Failed(f"{call} has no detached runner to cancel")
+    if not is_runner_of(pid, call):
+        # The runner is gone and its pid may belong to someone else now: signal nothing.
+        meta.update(rc=1, error="cancelled; runner already gone", finished=now())
+        finish(call, meta)
+        print(f"cancelled (runner already gone): {call}", file=sys.stderr)
+        return 1
+    for sig, grace in ((signal.SIGTERM, 10), (signal.SIGKILL, 5)):
+        try:
+            os.killpg(pid, sig)
+        except ProcessLookupError:
+            break
+        deadline = time.monotonic() + grace
+        while time.monotonic() < deadline:
+            try:
+                os.killpg(pid, 0)
+            except ProcessLookupError:
+                break
+            time.sleep(0.2)
+        else:
+            continue
+        break
+    meta = read_meta(call)
+    if "rc" not in meta:
+        meta.update(rc=1, error="cancelled", finished=now())
+        finish(call, meta)
+    print(f"cancelled: {call}", file=sys.stderr)
+    return 1
+
+
+def is_runner_of(pid: int, call: Path) -> bool:
+    """True only if pid is alive, leads its own group, and runs `_run` for this very call."""
+    try:
+        argv = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
+        return os.getpgid(pid) == pid and b"_run" in argv and str(call).encode() in argv
+    except (OSError, ProcessLookupError):
+        return False
 
 
 def selftest() -> int:
@@ -304,6 +364,7 @@ def main(argv=None) -> int:
         sp.add_argument("--model", default=MODEL)
         sp.add_argument("--effort", default=EFFORT)
         sp.add_argument("--sandbox", default="read-only")
+        sp.add_argument("--search", action="store_true", help="give Codex its native web search")
         sp.add_argument("--detach", action="store_true")
         sp.add_argument("prompt")
 
@@ -312,7 +373,11 @@ def main(argv=None) -> int:
     common(new)
     resume = sub.add_parser("resume")
     resume.add_argument("thread")
+    # resume rejects -C; --cwd here only sets the process directory the resumed turn runs in
+    resume.add_argument("--cwd")
     common(resume)
+    c = sub.add_parser("cancel")
+    c.add_argument("call")
     w = sub.add_parser("wait")
     w.add_argument("call")
     w.add_argument("--timeout", type=float, default=WAIT_TIMEOUT)
@@ -337,7 +402,11 @@ def main(argv=None) -> int:
             return 0
         if args.cmd == "selftest":
             return selftest()
-        return run(Path(args.call))
+        if args.cmd == "cancel":
+            return cancel(Path(args.call))
+        if args.cmd == "_run":
+            return run(Path(args.call))
+        raise Failed(f"unknown command {args.cmd}")
     except Failed as exc:
         print(f"codex_call: {exc}", file=sys.stderr)
         return 2

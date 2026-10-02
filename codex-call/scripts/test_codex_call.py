@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import importlib.util
 import io
 import json
@@ -81,6 +82,44 @@ class CodexCallTests(unittest.TestCase):
         for forbidden in ("-s", "-C", "--add-dir", "--color", "--ephemeral"):
             self.assertNotIn(forbidden, cmd)
         self.assertEqual((meta["thread_id"], meta["parent_thread"]), ("t-9", "t-9"))
+
+    def test_search_is_a_top_level_flag_on_new_and_resume(self):
+        self.call(search=True)
+        self.assertEqual(self.calls[0][1:3], ["--search", "exec"])
+        self.call(parent="t-9", stream=events("turn.completed", thread="t-9"), search=True)
+        self.assertEqual(self.calls[0][1:4], ["--search", "exec", "resume"])
+
+    def test_cancel_stops_the_runner_group_and_records_the_end(self):
+        call = cc.prepare(self.args(), None)
+        # argv carries `_run <call>` like the real runner, so cancel recognises it
+        runner = subprocess.Popen(["bash", "-c", "sleep 60 & wait", "_run", str(call)],
+                                  start_new_session=True)
+        (call / "runner.pid").write_text(str(runner.pid), encoding="utf-8")
+        relative = Path(os.path.relpath(call))  # a relative path names the same runner
+        with mock.patch("sys.stderr"):
+            self.assertEqual(cc.cancel(relative), 1)
+        self.assertIsNotNone(runner.wait(timeout=5))
+        meta = cc.read_meta(call)
+        self.assertEqual((meta["rc"], meta["error"]), (1, "cancelled"))
+
+    def test_cancel_never_signals_a_process_that_is_not_this_runner(self):
+        call = cc.prepare(self.args(), None)
+        stranger = subprocess.Popen(["sleep", "30"], start_new_session=True)
+        try:
+            (call / "runner.pid").write_text(str(stranger.pid), encoding="utf-8")
+            with mock.patch("sys.stderr"):
+                self.assertEqual(cc.cancel(call), 1)
+            self.assertIsNone(stranger.poll())
+            self.assertIn("already gone", cc.read_meta(call)["error"])
+            self.assertIn(str(call), (cc.ROOT / "calls.jsonl").read_text())
+        finally:
+            stranger.kill()
+            stranger.wait()
+
+    def test_cancel_without_a_detached_runner_is_refused(self):
+        call = cc.prepare(self.args(), None)
+        with self.assertRaises(cc.Failed):
+            cc.cancel(call)
 
     def test_failed_turn_with_exit_zero_is_a_failure(self):
         _, meta = self.call(stream=events({"type": "turn.failed", "error": {"message": "model refused"}}))

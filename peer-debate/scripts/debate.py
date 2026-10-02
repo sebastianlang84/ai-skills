@@ -16,7 +16,7 @@ wherever those differ.
 
 Configuration, all optional, all environment variables:
 
-    PEER_DEBATE_ROOT         where run directories are created   (default ~/peer-debates)
+    PEER_DEBATE_ROOT         where run directories are created   (default ~/.agents/state/peer-debates)
     PEER_DEBATE_MODEL        model both sides run                 (default agy:gemini-3.8-flash-medium)
     PEER_DEBATE_MODEL_A/_B   model for one side, overrides PEER_DEBATE_MODEL
     PEER_DEBATE_EFFORT       reasoning effort both sides run      (default medium)
@@ -38,6 +38,7 @@ import os
 import platform
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -46,7 +47,11 @@ import threading
 from pathlib import Path
 
 HOME = Path.home()
-ROOT = Path(os.environ.get("PEER_DEBATE_ROOT", HOME / "peer-debates"))
+# Agent state lives under ~/.agents (global rule). The name keeps "peer-debates": nightshift's
+# reflect excludes Claude projects matching *peer-debates*, and a debate's claude side runs there.
+ROOT = Path(os.environ.get("PEER_DEBATE_ROOT", HOME / ".agents/state/peer-debates"))
+# Runs created before 2026-10-02 stay where Brain provenance cites them; they still resolve.
+LEGACY_ROOT = None if "PEER_DEBATE_ROOT" in os.environ else HOME / "peer-debates"
 MODEL = os.environ.get("PEER_DEBATE_MODEL", "agy:gemini-3.8-flash-medium")
 EFFORT = os.environ.get("PEER_DEBATE_EFFORT", "medium")
 TURN_TIMEOUT = int(os.environ.get("PEER_DEBATE_TIMEOUT", "3600"))
@@ -151,12 +156,15 @@ def rundir(name: str) -> Path:
     Matching is on the parsed `<date>-<slug>` shape, not a suffix glob: `review` must not also
     resolve to a run called `peer-review`.
     """
-    direct = ROOT / name
-    if direct.is_dir():
-        return direct
+    roots = [r for r in (ROOT, LEGACY_ROOT) if r is not None]
+    for root in roots:
+        if (root / name).is_dir():
+            return root / name
     hits = sorted(
-        p for p in ROOT.glob("*")
-        if p.is_dir() and (m := RUN_RE.match(p.name)) and m.group("slug") == name
+        (p for root in roots for p in root.glob("*")
+         if p.is_dir() and (m := RUN_RE.match(p.name)) and m.group("slug") == name),
+        # same name in both roots: the current root wins, as it does for a full name
+        key=lambda p: (p.name, p.parent == ROOT),
     )
     if not hits:
         raise Failed(f"no such run: {name}")
@@ -324,33 +332,44 @@ def agy_command(exe: str, work: Path, msg_file: Path, model: str, effort: str,
     return cmd
 
 
+CODEX_CALL = Path(os.environ.get("PEER_DEBATE_CODEX_CALL",
+                                  HOME / ".agents/skills/codex-call/scripts/codex_call.py"))
+
+
 def codex_command(exe: str, work: Path, msg_file: Path, model: str, effort: str,
                   thread: str | None) -> list[str]:
-    # `--search` is a top-level flag (not accepted after `exec`); it gives the codex side the native
-    # web_search tool the agy and claude sides already have.
-    cmd = [exe, "--search", "exec"]
-    if thread is not None:
-        # The model must be repeated on resume: without it codex resumes under its default model
-        # and only notes the mismatch (measured 0.152.1).
-        cmd.extend(["resume", thread])
-    else:
-        # `resume` accepts neither -C nor --add-dir nor --color (0.152.1); the working root is
-        # remembered by the thread, and the process cwd is the side's directory either way.
-        cmd.extend(["-C", str(work), "--add-dir", str(work), "--color", "never"])
+    # codex-call owns the invocation: hooks off (this host's SessionEnd hook would hold the
+    # thread's writer lock and break the next resume), model repeated on resume, thread kept,
+    # one record per turn under ~/.agents/state/codex-call. `exe` only proves codex is installed.
+    cmd = [sys.executable, str(CODEX_CALL)]
+    cmd.extend(["new"] if thread is None else ["resume", thread])
     cmd.extend([
-        "-m", model,
-        "-c", f"model_reasoning_effort={effort}",
-        # The SessionEnd hook on this host compacts the thread after every exec and holds its
-        # writer lock for minutes; a resume in that window fails with "already has an active
-        # writer". Hooks are therefore off for debate turns.
-        "-c", "features.hooks=false",
-        "--skip-git-repo-check",
-        # Same grant as the agy side: full tools, no sandbox, no prompts. See tool-policy.md.
-        "--dangerously-bypass-approvals-and-sandbox",
-        "--json",
-        f"Read {msg_file}. It is this turn's complete message. Answer it.",
+        "--cwd", str(work),
+        "--label", f"peer-debate-{work.name}",
+        "--model", model,
+        "--effort", effort,
+        # Same grant as the agy and claude sides: full tools, no prompts. See tool-policy.md.
+        "--sandbox", "danger-full-access",
+        # Native web search, which the agy and claude sides have too.
+        "--search",
+        str(msg_file),
     ])
     return cmd
+
+
+def parse_codex_call_result(stdout: str, stderr: str, side: str) -> tuple[str, str, str]:
+    """Read the event stream codex-call kept beside its answer and validate it as before."""
+    result = next((line[len("result: "):].strip() for line in stdout.splitlines()
+                   if line.startswith("result: ")), None)
+    if not result:
+        raise Failed(f"side {side}: codex-call printed no result path; nothing recorded"
+                     + failure_detail(stdout, stderr))
+    events = Path(result).parent / "events.jsonl"
+    try:
+        stream = events.read_text(encoding="utf-8", errors="replace")
+    except OSError as exc:
+        raise Failed(f"side {side}: cannot read {events} ({exc}); nothing recorded")
+    return parse_codex_result(stream, stderr, side)
 
 
 def claude_command(exe: str, work: Path, msg_file: Path, model: str, effort: str,
@@ -368,9 +387,36 @@ def claude_command(exe: str, work: Path, msg_file: Path, model: str, effort: str
 # Looked up at call time, so a test that patches one adapter function patches the dispatch too.
 ADAPTERS = {
     "agy": (lambda *a: agy_command(*a), lambda *a: parse_agy_result(*a)),
-    "codex": (lambda *a: codex_command(*a), lambda *a: parse_codex_result(*a)),
+    "codex": (lambda *a: codex_command(*a), lambda *a: parse_codex_call_result(*a)),
     "claude": (lambda *a: claude_command(*a), lambda *a: parse_claude_result(*a)),
 }
+
+
+def run_process(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess:
+    """Run one side's turn; on timeout kill its whole process tree, then re-raise.
+
+    The child leads its own session: codex-call is a wrapper, and killing only the wrapper would
+    leave codex running with full access. encoding is explicit: text=True alone decodes with the
+    locale codec, and on a cp1252 console every µ, — or ° in a reply raises or silently corrupts.
+    """
+    with subprocess.Popen(cmd, cwd=cwd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, encoding="utf-8", errors="replace",
+                          start_new_session=True) as child:
+        try:
+            out, err = child.communicate(timeout=TURN_TIMEOUT + 30)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            try:
+                # A grandchild in its own session can survive the group kill and hold the pipes
+                # open; do not wait on it forever.
+                child.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                child.kill()
+            raise
+    return subprocess.CompletedProcess(cmd, child.returncode, out, err)
 
 
 def turn(run: str, side: str, message: str) -> str:
@@ -417,9 +463,7 @@ def turn(run: str, side: str, message: str) -> str:
     try:
         # encoding is explicit: text=True alone decodes with the locale codec, and on a
         # cp1252 console every µ, — or ° in a reply raises or silently corrupts.
-        proc = subprocess.run(cmd, cwd=work, stdin=subprocess.DEVNULL,
-                              capture_output=True, encoding="utf-8", errors="replace",
-                              timeout=TURN_TIMEOUT + 30)
+        proc = run_process(cmd, work)
     except subprocess.TimeoutExpired:
         raise Failed(f"side {side} hit the {TURN_TIMEOUT}s turn limit and was killed. The session "
                      f"may already hold this prompt, so its history and the transcript can differ; "

@@ -1,6 +1,6 @@
 ---
 name: nightly-review-pipeline
-description: Set up an unattended overnight code-review-and-fix pipeline for one or more git repos — systemd timer, bash orchestrator, headless `claude -p`.
+description: Set up an unattended overnight code-review-and-fix pipeline for one or more git repos — systemd timer, bash orchestrator, read-only reviews through codex-call, fixes by headless `claude -p`.
 disable-model-invocation: true
 ---
 
@@ -18,7 +18,7 @@ adaptive backoff. This "should I even run tonight?" logic is why a plain cron li
 ## Architecture
 
 ```
-systemd .timer  ──fires──▶  orchestrator.sh  ──per repo, per lens──▶  run-claude.sh (headless claude -p)
+systemd .timer  ──fires──▶  orchestrator.sh  ──per repo, per lens──▶  run-review.sh (codex-call, read-only)
    (dumb)                     (smart: state,        │
                               backoff, dedup,       ├─ bug lens ──▶ repo's task file + draft-PR fixes
                               git/PR policy)        └─ usability ─▶ repo's ideas file (suggestions only)
@@ -26,15 +26,12 @@ systemd .timer  ──fires──▶  orchestrator.sh  ──per repo, per lens�
 
 ## Review lenses
 
-Each lens is a separate, bounded `claude -p` run (own prompt, timeout, permission mode, log).
-A repo enables whichever lenses make sense for it, in the config.
+Each lens is a separate, bounded review through `codex-call` (`gpt-6.1-sol`, read-only sandbox,
+own prompt, timeout and log), as house rules require for every review. `run-review.sh` hands the
+answer back in the `{"result": …}` JSON contract; `REVIEW_MODEL`/`REVIEW_EFFORT` override the pins.
+Claude (`run-claude.sh`) stays the fix agent. A repo enables whichever lenses make sense for it.
 
-**Open item (house rules):** adversarial reviews on this machine go through `codex-call`
-(`gpt-6.1-sol`), not Claude. The templates still run the review lenses through `run-claude.sh`;
-before scheduling here, replace that call with a `codex-call` wrapper that hands the answer to the
-orchestrator in the same `.result` JSON contract. Claude stays the fix agent.
-
-- **`bug`** — correctness/security bug screen. Read-only review (`--permission-mode plan`).
+- **`bug`** — correctness/security bug screen. Read-only review (Codex `read-only` sandbox).
   New, deduped, high-confidence findings become auto-fix **draft PRs**; all findings are also
   recorded as checkboxes in the repo's task file (see "Where findings go" below).
 - **`usability`** — product/usability/functionality review. Read-only. Suggestions only,
@@ -101,19 +98,20 @@ modes, why fixes never touch `main` or auto-merge, and how to cap runaway cost.
 
 ## Safety guardrails (mandatory, enforced by the templates)
 
-- Review lenses run read-only (`--permission-mode plan`); they cannot modify code.
+- Review lenses run read-only (codex-call, `read-only` sandbox); they cannot modify code.
 - Fixes happen only in a **throwaway git worktree** on a `nightly/fix-<id>` branch off the base
   branch, never on `main`; the agent edits (`--permission-mode acceptEdits`) but the **orchestrator**
   runs tests, commits, pushes, and opens the PR.
 - A fix PR is opened **only if the repo's test command passes**. A repo without a test command
   (entry field and `TEST_CMD_DEFAULT` both empty) is review only: no fix is attempted. No auto-merge, ever.
-- Every `claude` run is bounded by `--max-turns` and a wall-clock `timeout`; everything is logged.
+- Every review is bounded by a wall-clock deadline and every fix by `--max-turns` and `timeout`; everything is logged.
 - Findings are deduped by hash so the same issue is not re-reported or re-PR'd every night.
 
 ## Assets
 
 - `assets/orchestrator.sh` — the smart driver (state, backoff, dedup, render, fix flow).
-- `assets/run-claude.sh` — bounded/logged wrapper around `claude -p` (permission mode, turns, timeout).
+- `assets/run-review.sh` — bounded/logged review through `codex-call` (read-only, deadline, `.result` contract).
+- `assets/run-claude.sh` — bounded/logged wrapper around `claude -p` for the fix agent (permission mode, turns, timeout).
 - `assets/config.example.sh` — repos, per-repo lenses + test command, thresholds, backoff knobs.
 - `assets/prompts/{bug-review,usability-review,fix}.prompt.md` — the three prompt templates.
 - `assets/findings.schema.json` — JSON shape the review lenses must emit.

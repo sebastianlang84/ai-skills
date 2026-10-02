@@ -13,6 +13,10 @@ read-only sandbox, hooks off, thread kept. Prompts go in as a file or `-` for st
   still running, so call `wait` again. Exit 1 is a failure with its reason.
 - Follow up in the same thread: `python3 $S resume <thread-id> --detach <prompt-file>`, then `wait`.
 - Without `--detach` a call blocks and prints the same output. Only do that for calls under 10 min.
+- Stop a detached call with `python3 $S cancel <call-dir>`; it kills the runner and codex and
+  records the call as cancelled.
+- `--search` gives Codex its native web search; `--sandbox workspace-write|danger-full-access`
+  widens the default read-only sandbox for callers that must write (peer-debate sides).
 
 Call it directly from the main session; no wrapper subagent. For a review, append
 `references/review-rules.md` to the prompt file. For scouting, pass `--model gpt-6-luna --effort low`
