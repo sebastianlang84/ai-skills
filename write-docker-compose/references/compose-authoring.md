@@ -2,7 +2,7 @@
 
 ## Core guardrails
 
-1. Apply `secrets-env` for secret classification, env-file boundaries, ignore rules, committed examples, and leak checks; this reference keeps only the Compose-specific rules.
+1. Apply `handling-secrets` for secret classification, env-file boundaries, ignore rules, committed examples, and leak checks; this reference keeps only the Compose-specific rules.
 2. Pass every env layer as an explicit `--env-file` argument in run instructions instead of relying on unstated shell state. For `${VAR}` interpolation, shell variables override `--env-file` values and a later `--env-file` overrides an earlier one; `environment:` overrides `env_file:` inside the container.
 3. Do not add host port exposure without rationale and matching documentation.
 4. Prefer internal Docker networking over host exposure when only containers need access.

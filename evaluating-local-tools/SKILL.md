@@ -80,5 +80,5 @@ Return:
 
 - Use `tool-update-checker` for update/version checks of known installed tools.
 - Use `pi-extension-packaging` when the tool is a Pi package/extension and the task is repo structure or package manifest design.
-- Use `secrets-env` when evaluation changes credential or environment handling.
+- Use `handling-secrets` when evaluation changes credential or environment handling.
 - Use `git-workflow` before committing, tagging, or pushing any resulting local changes.

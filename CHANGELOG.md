@@ -13,6 +13,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- Renamed `secrets-env` to `handling-secrets` (and its checklist) so the name says what the skill does; pointers in `evaluating-local-tools` and `write-docker-compose` follow.
 - `peer-debate`: codex sides run through `codex-call` (`--sandbox danger-full-access`, `--search`, cwd = side directory) instead of a direct `codex exec` with the sandbox bypass; a turn that times out kills its whole process tree. New runs go to `~/.agents/state/peer-debates` (the name keeps nightshift's `*peer-debates*` exclusion working); runs in `~/peer-debates` still resolve by name, and on a name clash the current root wins. The "escalate to cross-vendor review" exit became "name the shared premise; cross-vendor review only on request". Verified with a real two-side codex debate including a resume.
 - `nightly-review-pipeline`: review lenses run through the new `assets/run-review.sh` (codex-call, `gpt-6.1-sol`, read-only sandbox); Claude stays the fix agent. The review deadline and an outside TERM/INT/HUP cancel the call, so the deadline bounds the spend. `REVIEW_MODEL`/`REVIEW_EFFORT` reach the wrapper. Verified with a real orchestrator run, a deadline cancel and a mid-call TERM.
 - `codex-call`: `--search` (native web search) on `new` and `resume`; `resume --cwd` sets the process directory; `cancel CALL_DIR` stops a detached call's runner group after checking the pid really is that call's runner, and records it in `calls.jsonl`; call directories are claimed race-free.
@@ -68,6 +69,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Removed
 
+- Removed `grilling`. The operator never invoked it. `improve-codebase-architecture` keeps its design conversation inline, and `peer-debate` points disagreements with the user back to direct questions.
 - Removed `handoff`. The operator never invoked it; it dates from heavy Pi use, and `/compact` covers continuing a session.
 - Removed `grill-me` and `grill-with-docs`. `grill-with-docs` coupled grilling to a `CONTEXT.md` domain model that this collection no longer maintains (see the matching `improve-codebase-architecture` change); `grill-me` was a wrapper whose only remaining primitive, `grilling`, is directly invocable.
 - Removed `pi-subagents`. It was entirely Pi-specific orchestration policy, and Pi no longer consumes this skill store.

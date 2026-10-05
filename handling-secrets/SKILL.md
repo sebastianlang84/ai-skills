@@ -1,5 +1,5 @@
 ---
-name: secrets-env
+name: handling-secrets
 description: Use this skill when the user wants to design, review, or fix secrets and environment-variable handling. Covers .env boundaries, committed examples, secret-safe documentation, Compose env files, and leak-prevention checks.
 ---
 
@@ -10,7 +10,7 @@ Use this skill for tasks involving `.env`, `.env.example`, config examples, secr
 ## Workflow
 
 1. Classify each variable as secret, sensitive non-secret, or ordinary config.
-2. Apply `references/secrets-env-checklist.md`.
+2. Apply `references/handling-secrets-checklist.md`.
 3. Keep real secrets out of tracked files, logs, docs, prompts, and final responses.
 4. Use placeholders in examples; never invent plausible-looking credentials.
 5. Stop and ask before changing authentication, credential rotation, production secrets, or secret-manager behavior.

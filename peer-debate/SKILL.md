@@ -1,6 +1,6 @@
 ---
 name: peer-debate
-description: Answers an open, contestable question by making two independent model instances — one model on both sides, or two vendors via agy, codex and claude — argue it out under asymmetric roles until they converge or hit a round cap, then adjudicating the result. Use when the user wants a question debated, stress-tested by two agents, worked out by a duo, or says "let two models argue this", "have them discuss until they agree", "peer debate", or in German „lass das ausdiskutieren", „zwei Modelle sollen sich einigen". Not for critiquing a finished artifact or scanning a codebase for defects — one reviewer against an existing document, diff or repo is a codex-call review (cross-vendor-review only on the user's explicit request). Not for interrogating the user's own thinking (grilling).
+description: Answers an open, contestable question by making two independent model instances — one model on both sides, or two vendors via agy, codex and claude — argue it out under asymmetric roles until they converge or hit a round cap, then adjudicating the result. Use when the user wants a question debated, stress-tested by two agents, worked out by a duo, or says "let two models argue this", "have them discuss until they agree", "peer debate", or in German „lass das ausdiskutieren", „zwei Modelle sollen sich einigen". Not for critiquing a finished artifact or scanning a codebase for defects — one reviewer against an existing document, diff or repo is a codex-call review (cross-vendor-review only on the user's explicit request). Not for interrogating the user's own thinking.
 ---
 
 # Peer debate
@@ -15,7 +15,7 @@ nothing.
 
 - The question has one right answer that a calculation settles → just calculate it.
 - There is an artifact to review → a `codex-call` review, one reviewer; `cross-vendor-review` only when the user explicitly asks for it.
-- The disagreement is with the user, not within the material → `grilling`.
+- The disagreement is with the user, not within the material → ask the user directly, one question at a time.
 
 ## Procedure
 

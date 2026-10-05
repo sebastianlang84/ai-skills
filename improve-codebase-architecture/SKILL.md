@@ -38,8 +38,8 @@ Present a numbered list of deepening opportunities. For each candidate:
 
 Do NOT propose interfaces yet. Ask the user: "Which of these would you like to explore?"
 
-### 3. Grilling loop
+### 3. Design conversation
 
-Once the user picks a candidate, drop into a grilling conversation. Walk the design tree with them — constraints, dependencies, the shape of the deepened module, what sits behind the seam, what tests survive.
+Once the user picks a candidate, walk the design tree with them one question at a time, each with your recommended answer — constraints, dependencies, the shape of the deepened module, what sits behind the seam, what tests survive.
 
 To classify a candidate's dependencies and decide how the deepened module is tested across its seam, see [DEEPENING.md](DEEPENING.md). Want to explore alternative interfaces for the deepened module? See [INTERFACE-DESIGN.md](INTERFACE-DESIGN.md).
