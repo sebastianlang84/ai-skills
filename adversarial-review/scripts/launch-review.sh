@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One adversarial cross-vendor review.
+# One adversarial review by the other vendor (Claude -> Codex).
 #
 # This blocks for as long as the reviewer thinks. That is deliberate:
 # the CALLER backgrounds it, so the harness reports completion instead of the script detaching
@@ -21,9 +21,15 @@ reasoning_effort="${REVIEW_REASONING_EFFORT:-medium}"
 rm -f "$out" "${out%.*}.thread"
 
 [ -r "$prompt" ] || { echo "prompt file not readable: $prompt" >&2; exit 2; }
-command -v codex >/dev/null 2>&1 || { echo "codex CLI not found — no cross-vendor reviewer available" >&2; exit 2; }
+command -v codex >/dev/null 2>&1 || { echo "codex CLI not found — no other-vendor reviewer available" >&2; exit 2; }
 
 mkdir -p "$(dirname "$out")"
+# The first interpreter that really runs: on Windows, python3 may be a Store stub that only prints a hint.
+py=""
+for c in python3 python; do
+  if "$c" -c 'import sys; sys.exit(sys.version_info < (3, 9))' >/dev/null 2>&1; then py="$c"; break; fi
+done
+[ -n "$py" ] || { echo "python 3.9+ not found (tried python3, python)" >&2; exit 2; }
 
 # codex-call owns the invocation: read-only sandbox, hooks off, thread kept for follow-ups.
 # It blocks here; the caller backgrounds this script.
@@ -35,7 +41,7 @@ rules="$HOME/.agents/skills/codex-call/references/review-rules.md"
 full="$(mktemp)"
 trap 'rm -f "$full"' EXIT
 { cat "$prompt"; printf '\n'; cat "$rules"; } > "$full"
-python3 "$call" new --cwd "$cwd" --label cross-vendor-review \
+"$py" "$call" new --cwd "$cwd" --label adversarial-review \
   --model "$model" --effort "$reasoning_effort" "$full" > "$raw" 2> "${out%.*}.err"
 # codex-call prints `thread: <id>`, `result: <path>`, a blank line, then the answer. The output file
 # keeps its old contract (the answer only); the thread id goes beside it for a follow-up.

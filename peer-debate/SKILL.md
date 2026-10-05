@@ -1,6 +1,6 @@
 ---
 name: peer-debate
-description: Answers an open, contestable question by making two independent model instances — one model on both sides, or two vendors via agy, codex and claude — argue it out under asymmetric roles until they converge or hit a round cap, then adjudicating the result. Use when the user wants a question debated, stress-tested by two agents, worked out by a duo, or says "let two models argue this", "have them discuss until they agree", "peer debate", or in German „lass das ausdiskutieren", „zwei Modelle sollen sich einigen". Not for critiquing a finished artifact or scanning a codebase for defects — one reviewer against an existing document, diff or repo is a codex-call review (cross-vendor-review only on the user's explicit request). Not for interrogating the user's own thinking.
+description: Answers an open, contestable question by making two independent model instances — one model on both sides, or two vendors via agy, codex and claude — argue it out under asymmetric roles until they converge or hit a round cap, then adjudicating the result. Use when the user wants a question debated, stress-tested by two agents, worked out by a duo, or says "let two models argue this", "have them discuss until they agree", "peer debate", or in German „lass das ausdiskutieren", „zwei Modelle sollen sich einigen". Not for critiquing a finished artifact or scanning a codebase for defects — one reviewer against an existing document, diff or repo is an `adversarial-review`. Not for interrogating the user's own thinking.
 ---
 
 # Peer debate
@@ -14,7 +14,7 @@ nothing.
 ## When this is the wrong tool
 
 - The question has one right answer that a calculation settles → just calculate it.
-- There is an artifact to review → a `codex-call` review, one reviewer; `cross-vendor-review` only when the user explicitly asks for it.
+- There is an artifact to review → `adversarial-review`, one reviewer from the other vendor.
 - The disagreement is with the user, not within the material → ask the user directly, one question at a time.
 
 ## Procedure
@@ -100,7 +100,7 @@ Then take one of three exits, and say which:
   settled and buries the open point.
 - **Name the shared premise.** When both sides agree on a premise you cannot break yourself, say
   so in the result: two instances of one model share blind spots, so that agreement is the weakest
-  point. Offer a cross-vendor review of it; run `cross-vendor-review` only on the user's request.
+  point. Have it checked with `adversarial-review`.
 
 ## Configuration
 
@@ -122,7 +122,7 @@ Fix selection errors explicitly; preserve failed runs and use a new slug after a
 round 0. Do not change `sides.json` to swap models inside an existing debate.
 
 **Two vendors change what convergence means.** With one model on both sides, agreement carries no
-independent evidence and the third exit below (cross-vendor review) exists for that reason. With
+independent evidence and the third exit below (adversarial review) exists for that reason. With
 two different clis (agy, codex, claude) the sides no longer share a training set, so their agreement is worth more and
 their dissent is more often a real open point than a role artefact; the roles stay asymmetric
 regardless.
