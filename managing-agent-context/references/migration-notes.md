@@ -56,9 +56,7 @@ Example:
 ```markdown
 # CLAUDE.md
 
-This repo uses `AGENTS.md` as the canonical agent instruction file.
-
-Read and follow `AGENTS.md` for repo rules. Use the repo's chosen memory and TODO systems only when needed.
+@AGENTS.md
 ```
 
-Only use this pattern if the tool actually reads that adapter file. Keep adapter contents minimal and avoid linking it from human docs unless the user explicitly asks.
+The `@` import loads `AGENTS.md` into every session; a sentence asking the agent to read it does not. Codex has no imports, so connect it with a symlink instead (see `harness-loading.md`). Only use this pattern if the tool actually reads that adapter file. Keep adapter contents minimal and avoid linking it from human docs unless the user explicitly asks.

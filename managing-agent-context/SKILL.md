@@ -23,6 +23,9 @@ Goal: clear authority, low redundancy, good trigger boundaries, and high informa
 - Meta-skills for context management, subagent workflow, and skill creation are valuable audit and maintenance tools. They help keep the context system intentional without hard-routing every task through another skill.
 - Tools, MCP, scripts, hooks, and CI should provide capability or enforcement instead of prose promises.
 - Memory is for reset-resilient non-normative context, not enforcement.
+- Each harness loads instruction files and skills differently (Codex: one global file, no imports, a
+  size cap; Claude Code: `CLAUDE.md` with `@` imports). Before designing or auditing a setup that
+  spans harnesses, read `references/harness-loading.md`.
 
 ## Scope
 
@@ -105,7 +108,8 @@ Read only when needed:
 - `references/migration-notes.md` — migration from larger/ad-hoc structures
 - `references/review-checklist.md` — readiness review checklist
 - `references/audit-workflow.md` — read-only audit workflow for existing context systems
+- `references/harness-loading.md` — how Codex and Claude Code load instruction files and skills, and how to share one file between them
 - `references/initialize-workflow.md` — bootstrap workflow for new or ad-hoc context systems
 - `assets/agents-template.md` — repo AGENTS.md scaffold
 - `assets/global-agents-template.md` — global AGENTS.md scaffold
-- `assets/todo-template.md`, `assets/changelog-template.md`, `assets/readme-template.md` — other scaffolds
+- `assets/memory-template.md`, `assets/todo-template.md`, `assets/changelog-template.md`, `assets/readme-template.md` — other scaffolds
