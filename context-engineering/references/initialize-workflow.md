@@ -33,6 +33,10 @@ Stop and ask if conflicts require deletion, rename, ownership change, or behavio
 
 Default: root `README.md`, `AGENTS.md`, `TODO.md`, `CHANGELOG.md`, plus whichever memory system is present or intentionally chosen.
 
+Human-facing docs (`README.md`, `CHANGELOG.md`, `docs/adr/*`, `docs/runbooks/*`) are part of the
+baseline, but `code-documentation` owns what goes into them; this workflow only makes sure they
+exist and do not duplicate agent context.
+
 Add optional directories only when clearly needed:
 
 - `docs/adr/*` — durable architectural decisions
@@ -48,11 +52,11 @@ For `TODO.md`, use `assets/todo-template.md` unless the repo already has an issu
 
 Recommended order:
 
-1. `README.md` — actual project facts; use `assets/readme-template.md` as scaffold.
+1. `README.md` — actual project facts; use `assets/readme-template.md` as scaffold and `code-documentation` for its content.
 2. `AGENTS.md` — routing, hard rules, bootstrap order; use `assets/agents-template.md`.
 3. Memory layer — stable current truth only; use `assets/memory-template.md` when scaffolding file-based memory.
 4. `TODO.md` — open work only.
-5. `CHANGELOG.md` — user/operator-visible history.
+5. `CHANGELOG.md` — user/operator-visible history; use `assets/changelog-template.md` as scaffold and `code-documentation` for what to record.
 
 For each file:
 
@@ -66,7 +70,7 @@ File content rules:
 - `AGENTS.md` — short, normative, operational; no setup instructions hidden here alone.
 - Memory — present-tense stable facts; no rules, backlog, diary, or secrets.
 - `TODO.md` — active open work only; no completed-work archive.
-- `CHANGELOG.md` — Keep a Changelog categories; SemVer when the repo versions releases.
+- `README.md`, `CHANGELOG.md`, ADRs, runbooks — follow `code-documentation`.
 
 ## Step 5 — Verify
 

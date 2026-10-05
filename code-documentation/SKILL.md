@@ -9,20 +9,8 @@ description: "Update or review project documentation after code changes. Use whe
 
 Keep project documentation accurate while using each artifact for its intended role, not as a catch-all dumping ground.
 
-## Core rule
-
-Do not use the PRD as general feature documentation.
-
-PRDs describe product intent, scope, requirements, acceptance criteria, constraints, and implementation status. Implemented behavior belongs in the canonical user or developer docs, with short PRD links when useful.
-
-Example:
-
-```md
-Feature: Hybrid Search
-Status: implemented in v0.4.0
-User docs: docs/user/features/search.md
-API docs: docs/developer/api.md
-```
+If the repo has a PRD (`PRD.md` or `docs/product/`), read [references/prd.md](references/prd.md) before
+changing it: a PRD holds intent, scope and status, never the documentation of implemented features.
 
 ## Required workflow
 
@@ -47,8 +35,7 @@ Common homes:
 - `docs/adr/` — durable architectural decisions with lasting consequences.
 - `CHANGELOG.md` — user/operator-visible release history, if the repo maintains one.
 - `TODO.md` or issue tracker — active open work only; remove or archive completed items.
-- `AGENTS.md` or equivalent — active agent rules, stop conditions, and repo-specific gates only; not feature documentation.
-- Memory systems — durable non-normative context such as preferences, prior decisions, progress notes, or handoffs; not canonical docs, not rules, not backlog, not changelog, and not enforcement.
+- `AGENTS.md`, skills and memory are agent context, not feature documentation; `context-engineering` decides what goes there.
 
 ## Decision heuristic
 
@@ -66,19 +53,6 @@ Ask after meaningful code changes:
    - Track it in TODO/issue system, not changelog or PRD prose.
 6. Is this only an implementation detail?
    - Prefer no docs change; add code comments only when the reason is not obvious.
-
-## PRD handling
-
-Use PRDs for:
-
-- problem statement
-- product goals
-- scope and non-scope
-- requirements
-- user stories
-- acceptance criteria
-- product-level constraints
-- feature status and links to canonical docs
 
 ## ADR threshold
 
@@ -109,38 +83,9 @@ Number sequentially: scan the ADR directory for the highest number and increment
 
 Update `CHANGELOG.md` only when the repo maintains one and the change is user/operator-visible. Do not record every commit or purely internal refactor.
 
-Example:
+## Boundary with context-engineering
 
-```md
-## 0.4.0
-
-### Added
-- Added `codemap_context` for file-centered retrieval.
-
-### Changed
-- Improved FTS ranking for path matches.
-```
-
-## Code comments
-
-Comment why, not obvious what.
-
-Good:
-
-```ts
-// Keep this deterministic so repeated agent runs produce stable retrieval order.
-```
-
-Bad:
-
-```ts
-// Increment i by 1.
-i++;
-```
-
-## Boundary with managing-agent-context
-
-If the change concerns agent instructions, skill routing, memory ownership, tool exposure, MCP/extension context policy, hooks/CI enforcement, or context bloat, use the `managing-agent-context` workflow instead of treating it as ordinary code documentation.
+If the change concerns agent instructions, skill routing, memory ownership, tool exposure, MCP/extension context policy, hooks/CI enforcement, or context bloat, use the `context-engineering` workflow instead of treating it as ordinary code documentation.
 
 ## Output style
 

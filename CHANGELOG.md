@@ -14,6 +14,8 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- `managing-agent-context` renamed to `context-engineering` (Sebastian, 2026-10-05): the established name for what it does, and easier to remember. Its routing table no longer repeats human-facing docs (README, ADRs, changelog, runbooks); one row hands them to `code-documentation`, which in turn hands agent instructions, skills and memory back.
+- `code-documentation` trimmed: PRD rules moved to `references/prd.md` (only one project has a PRD), the code-comment section and the changelog example removed.
 - `managing-agent-context` gets `references/harness-loading.md`: how Codex and Claude Code discover instruction files and skills (verified against the vendor docs on 2026-10-05), how to share one instruction file between both, and a session-start check that tests effective loading. The CLAUDE.md adapter example is now an `@AGENTS.md` import. Reviewed in three rounds by Codex gpt-6.1-sol.
 - `resolving-merge-conflicts` merged into `git-workflow` as `references/merge-conflicts.md` (Sebastian, 2026-10-05): conflict resolution is a Git task, so `git-workflow` names it in its description and points at the reference, which loads only when a merge, rebase or cherry-pick stops with conflicts. One skill fewer in every session's list; content unchanged apart from the frontmatter and the pointer to the approval rules.
 - New `THIRD_PARTY_NOTICES.md` with the MIT license text of mattpocock/skills, which the adapted parts (`diagnosing-bugs`, `merge-conflicts.md`, `improve-codebase-architecture`, `skill-design-theory.md`, `tdd`) need when they are passed on.

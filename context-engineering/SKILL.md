@@ -1,9 +1,9 @@
 ---
-name: managing-agent-context
-description: "Use this skill to audit, design, or repair LLM agent context systems: instruction files, skills, memory, document routing, tool exposure, MCP configuration, hooks/CI enforcement, and context bloat. Use when deciding what information should be loaded, retrieved, persisted, or enforced for agents."
+name: context-engineering
+description: "Context engineering for LLM agents: audit, design, or repair agent context systems: instruction files, skills, memory, document routing, tool exposure, MCP configuration, hooks/CI enforcement, and context bloat. Use when deciding what information should be loaded, retrieved, persisted, or enforced for agents."
 ---
 
-# Managing Agent Context
+# Context Engineering
 
 **Principle: as little as necessary, as much as needed.**
 
@@ -33,7 +33,7 @@ Use this skill to decide what agent-facing context should load automatically, lo
 
 AGENTS.md boundary: global instructions hold durable user-wide defaults; repo/project instructions hold only repo-local overrides, gates, and verified facts. Repo instructions may specialize global defaults, but should not restate them; replace duplicates with short pointers or concrete local deltas.
 
-Use specialized workflows for domain work; this skill may route to them, not duplicate them. Do not use it for ordinary prose editing, app architecture, Docker authoring, secrets handling, release execution, or domain-specific skill authoring.
+Use specialized workflows for domain work; this skill may route to them, not duplicate them. Do not use it for human-facing project documentation (README, user and developer docs, PRD, ADRs, changelog: use `code-documentation`), ordinary prose editing, app architecture, Docker authoring, secrets handling, release execution, or domain-specific skill authoring.
 
 When maintaining shared context docs, name one canonical home for each rule, fact, plan, decision, or handoff; replace duplicates with short pointers; and update only the canonical home plus a discoverability link when needed. Use `references/document-routing.md` to choose the home before editing.
 
