@@ -15,7 +15,7 @@ Use the terms and principles in [LANGUAGE.md](LANGUAGE.md) exactly in every sugg
 
 ### 1. Explore
 
-Walk the codebase: in Claude Code, use the Agent tool with `subagent_type=Explore`; elsewhere, read the code directly or run a cheap scout through `codex-call` with `--model gpt-6-luna --effort low`. Don't follow rigid heuristics — explore organically and note where you experience friction:
+Walk the codebase: in Claude Code, use the Agent tool with `subagent_type=Explore`; elsewhere, read the code directly or run a cheap scout through `using-codex` with `--model gpt-6-luna --effort low`. Don't follow rigid heuristics — explore organically and note where you experience friction:
 
 - Where does understanding one concept require bouncing between many small modules?
 - Where are modules **shallow** — interface nearly as complex as the implementation?

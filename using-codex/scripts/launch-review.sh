@@ -33,15 +33,15 @@ done
 
 # codex-call owns the invocation: read-only sandbox, hooks off, thread kept for follow-ups.
 # It blocks here; the caller backgrounds this script.
-call="$HOME/.agents/skills/codex-call/scripts/codex_call.py"
+call="$HOME/.agents/skills/using-codex/scripts/codex_call.py"
 raw="${out%.*}.call"
 # Every review prompt carries codex-call's review rules; a repeat costs a few lines, a gap costs the rules.
-rules="$HOME/.agents/skills/codex-call/references/review-rules.md"
+rules="$HOME/.agents/skills/using-codex/references/review-rules.md"
 [ -r "$rules" ] || { echo "review rules not readable: $rules" >&2; exit 2; }
 full="$(mktemp)"
 trap 'rm -f "$full"' EXIT
 { cat "$prompt"; printf '\n'; cat "$rules"; } > "$full"
-"$py" "$call" new --cwd "$cwd" --label adversarial-review \
+"$py" "$call" new --cwd "$cwd" --label review \
   --model "$model" --effort "$reasoning_effort" "$full" > "$raw" 2> "${out%.*}.err"
 # codex-call prints `thread: <id>`, `result: <path>`, a blank line, then the answer. The output file
 # keeps its old contract (the answer only); the thread id goes beside it for a follow-up.

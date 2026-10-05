@@ -16,7 +16,7 @@ REPOS=(
 # --- Runtime ----------------------------------------------------------------
 CLAUDE_BIN="claude"          # binary on PATH
 MODEL=""                     # fix agent model; "" = account default, or e.g. claude-opus-5-5
-# Reviews run through codex-call (gpt-6.1-sol); REVIEW_MODEL / REVIEW_EFFORT override its pins.
+# Reviews run through `codex_call.py` (gpt-6.1-sol); REVIEW_MODEL / REVIEW_EFFORT override its pins.
 STATE_DIR="$HOME/.local/state/nightly-review"
 LOG_DIR="$STATE_DIR/logs"
 

@@ -11,11 +11,11 @@
 # deadline the call is cancelled (`codex_call.py cancel` stops the runner and codex) and reported
 # as a failure, so the deadline bounds the spend, not only the wait.
 #
-# Env: CODEX_CALL (default ~/.agents/skills/codex-call/scripts/codex_call.py),
+# Env: CODEX_CALL (default ~/.agents/skills/using-codex/scripts/codex_call.py),
 #      REVIEW_MODEL / REVIEW_EFFORT (optional; default to codex-call's pins).
 set -uo pipefail
 
-CODEX_CALL="${CODEX_CALL:-$HOME/.agents/skills/codex-call/scripts/codex_call.py}"
+CODEX_CALL="${CODEX_CALL:-$HOME/.agents/skills/using-codex/scripts/codex_call.py}"
 
 cwd=""; pf=""; raw=""; log="/dev/stderr"; wall=1800; label="nightly-review"
 while [[ $# -gt 0 ]]; do

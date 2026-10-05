@@ -19,7 +19,7 @@ jobs:
         run: |
           python3 parallel-agents/scripts/test_coordination.py
           python3 parallel-agents/scripts/test_brain_lock.py
-          python3 codex-call/scripts/test_codex_call.py
+          python3 using-codex/scripts/test_codex_call.py
           python3 peer-debate/scripts/test_debate.py
       - name: Validate README and CHANGELOG metadata
         shell: bash

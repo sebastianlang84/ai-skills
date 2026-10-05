@@ -5,7 +5,7 @@ templates are built so that the blast radius is small by construction.
 
 ## Permission modes (not `--dangerously-skip-permissions`)
 
-- **Review lenses run through `codex-call` in Codex's `read-only` sandbox.** The reviewer can read,
+- **Review lenses run through `using-codex`'s `codex_call.py` in Codex's `read-only` sandbox.** The reviewer can read,
   search and run read commands but **cannot write files**, and it never blocks on prompts. So a
   review lens physically cannot change your repo — the worst case is a wasted run.
 - **Fix lens runs `--permission-mode acceptEdits`.** The agent may edit files in its worktree

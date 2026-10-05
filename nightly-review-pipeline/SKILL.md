@@ -1,6 +1,6 @@
 ---
 name: nightly-review-pipeline
-description: Set up an unattended overnight code-review-and-fix pipeline for one or more git repos — systemd timer, bash orchestrator, read-only reviews through codex-call, fixes by headless `claude -p`.
+description: Set up an unattended overnight code-review-and-fix pipeline for one or more git repos — systemd timer, bash orchestrator, read-only reviews through `codex_call.py`, fixes by headless `claude -p`.
 disable-model-invocation: true
 ---
 
@@ -18,7 +18,7 @@ adaptive backoff. This "should I even run tonight?" logic is why a plain cron li
 ## Architecture
 
 ```
-systemd .timer  ──fires──▶  orchestrator.sh  ──per repo, per lens──▶  run-review.sh (codex-call, read-only)
+systemd .timer  ──fires──▶  orchestrator.sh  ──per repo, per lens──▶  run-review.sh (`codex_call.py`, read-only)
    (dumb)                     (smart: state,        │
                               backoff, dedup,       ├─ bug lens ──▶ repo's task file + draft-PR fixes
                               git/PR policy)        └─ usability ─▶ repo's ideas file (suggestions only)
@@ -26,7 +26,7 @@ systemd .timer  ──fires──▶  orchestrator.sh  ──per repo, per lens�
 
 ## Review lenses
 
-Each lens is a separate, bounded review through `codex-call` (`gpt-6.1-sol`, read-only sandbox,
+Each lens is a separate, bounded review through `using-codex`'s `codex_call.py` (`gpt-6.1-sol`, read-only sandbox,
 own prompt, timeout and log), as house rules require for every review. `run-review.sh` hands the
 answer back in the `{"result": …}` JSON contract; `REVIEW_MODEL`/`REVIEW_EFFORT` override the pins.
 Claude (`run-claude.sh`) stays the fix agent. A repo enables whichever lenses make sense for it.
@@ -98,7 +98,7 @@ modes, why fixes never touch `main` or auto-merge, and how to cap runaway cost.
 
 ## Safety guardrails (mandatory, enforced by the templates)
 
-- Review lenses run read-only (codex-call, `read-only` sandbox); they cannot modify code.
+- Review lenses run read-only (`codex_call.py`, `read-only` sandbox); they cannot modify code.
 - Fixes happen only in a **throwaway git worktree** on a `nightly/fix-<id>` branch off the base
   branch, never on `main`; the agent edits (`--permission-mode acceptEdits`) but the **orchestrator**
   runs tests, commits, pushes, and opens the PR.
@@ -110,7 +110,7 @@ modes, why fixes never touch `main` or auto-merge, and how to cap runaway cost.
 ## Assets
 
 - `assets/orchestrator.sh` — the smart driver (state, backoff, dedup, render, fix flow).
-- `assets/run-review.sh` — bounded/logged review through `codex-call` (read-only, deadline, `.result` contract).
+- `assets/run-review.sh` — bounded/logged review through `using-codex`'s `codex_call.py` (read-only, deadline, `.result` contract).
 - `assets/run-claude.sh` — bounded/logged wrapper around `claude -p` for the fix agent (permission mode, turns, timeout).
 - `assets/config.example.sh` — repos, per-repo lenses + test command, thresholds, backoff knobs.
 - `assets/prompts/{bug-review,usability-review,fix}.prompt.md` — the three prompt templates.

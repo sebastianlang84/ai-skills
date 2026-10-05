@@ -15,7 +15,7 @@ alone and that the orchestrator, sharing the question but not the work, would no
 
 ## Three decisions worth knowing
 
-**Nobody is running between turns.** Each turn starts a fresh `agy --print`, `claude -p` or `codex-call` process
+**Nobody is running between turns.** Each turn starts a fresh `agy --print`, `claude -p` or `using-codex`'s `codex_call.py` process
 that exits once it has answered; what survives is a conversation or thread id, not a resident
 agent. There is no separate
 judge — judging happens inside the orchestrator. The two sides run concurrently only in blind round
