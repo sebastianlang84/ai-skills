@@ -41,4 +41,4 @@ After auto-compaction Claude Code re-attaches the most recent invocation of each
 
 ## Rules that must hold every turn
 
-A skill is prompt text: loaded once, compactable, and ignorable. A rule that must hold on every tool call — block a command, protect a path — belongs in a hook (`settings.json`, or the skill's `hooks` field while it is active). The skill may install or explain the hook; `git-guardrails` is the local example.
+A skill is prompt text: loaded once, compactable, and ignorable. A rule that must hold on every tool call — block a command, protect a path — belongs in a hook (`settings.json`, or the skill's `hooks` field while it is active). The skill may install or explain the hook; `git-workflow`'s guardrail hook (`references/guardrails.md`) is the local example.

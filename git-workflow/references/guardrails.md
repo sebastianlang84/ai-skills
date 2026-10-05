@@ -1,14 +1,8 @@
----
-name: git-guardrails
-description: "Install or adjust the hook that blocks irreversible git commands before Claude Code can run them."
-disable-model-invocation: true
----
+# Git guardrails hook
 
-# Git Guardrails
+`git-workflow` says destructive Git needs the operator's approval. That is prose — the agent can ignore it, and broad permission rules like `Bash(git push:*)` pre-approve the dangerous forms anyway. The enforcement is a `PreToolUse` hook that inspects every Bash command and refuses the irreversible ones before they execute.
 
-`git-workflow` says destructive Git needs the operator's approval. That is prose — the agent can ignore it, and broad permission rules like `Bash(git push:*)` pre-approve the dangerous forms anyway. This skill installs the enforcement: a `PreToolUse` hook that inspects every Bash command and refuses the irreversible ones before they execute.
-
-The script is [scripts/block-dangerous-git.py](scripts/block-dangerous-git.py).
+The script is [scripts/block-dangerous-git.py](../scripts/block-dangerous-git.py); paths below are relative to the `git-workflow` skill directory.
 
 ## The rule it encodes
 
@@ -67,7 +61,7 @@ Add to the `hooks` block of `~/.claude/settings.json` (project scope: `.claude/s
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /home/wasti/.agents/skills/git-guardrails/scripts/block-dangerous-git.py"
+            "command": "python3 /home/wasti/.agents/skills/git-workflow/scripts/block-dangerous-git.py"
           }
         ]
       }
@@ -87,7 +81,7 @@ Edit `RULES` in the script: each entry is `(regex, what it destroys, what to do 
 Run the suite first — it builds real repositories, because the exceptions are proved against live git state and a mocked git would only test the mock:
 
 ```bash
-python3 /home/wasti/.agents/skills/git-guardrails/scripts/test_block_dangerous_git.py
+python3 /home/wasti/.agents/skills/git-workflow/scripts/test_block_dangerous_git.py
 ```
 
 It covers both directions of both exceptions: a squash-merged branch is released, a branch carrying work the default branch lacks is not, and neither is one that was squash-merged and then reverted.

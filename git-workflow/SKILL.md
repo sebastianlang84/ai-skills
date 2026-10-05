@@ -14,6 +14,7 @@ Portable default for Git decisions and task closeout. Follow repository-local po
 - Without explicit user approval, run only read-only Git commands such as `git status`, `git diff`, `git log`, branch listing, and remote inspection.
 - Never run mutating Git commands without explicit approval: commit, push, merge, rebase, checkout/switch, branch/tag creation or deletion, reset, restore, stash, pull, or similar state-changing operations.
 - Treat `git pull` as mutating and approval-gated.
+- In Claude Code on beelink a `PreToolUse` hook enforces the irreversible cases (force-push, `reset --hard`, `clean -f`, `branch -D`, …) and refuses them before they run. To install, adjust, or verify it, read [references/guardrails.md](references/guardrails.md).
 - Stop and ask when the current branch, target branch, ownership, or merge/push policy is unclear.
 - Do not mix unrelated changes in one commit, branch, push, or handoff.
 - Stage explicit paths in repositories with nested worktrees; never use `git add -A` there. Ignore harness worktree directories to prevent accidental gitlinks.
