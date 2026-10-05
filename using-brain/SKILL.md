@@ -1,6 +1,6 @@
 ---
 name: using-brain
-description: Read and extend the shared Brain at ~/.agents/brain in every session — retrieve prior local decisions, preferences, methods, patterns, and repo knowledge before working, and record durable learning before finishing. A session-start hook loads this skill in Claude Code, Codex, and Pi; invoke it explicitly when the hook did not run, unless `BRAIN_SESSION_CONTEXT=0` suppressed it in an isolated automated run. Also use when the user asks what the Brain knows or how it works, or before changing Brain structure, retrieval, categories, provenance, or trust. Do not use it for a project-local knowledge system with its own rules.
+description: Read and extend the shared Brain at ~/.agents/brain in every session — retrieve prior local decisions, preferences, methods, patterns, and repo knowledge before working, and record durable learning before finishing. On the Windows PCs the Brain lives on beelink and is reached over ssh. A session-start hook loads this skill in Claude Code, Codex, and Pi; invoke it explicitly when the hook did not run, unless `BRAIN_SESSION_CONTEXT=0` suppressed it in an isolated automated run. Also use when the user asks what the Brain knows or how it works, or before changing Brain structure, retrieval, categories, provenance, or trust. Do not use it for a project-local knowledge system with its own rules.
 ---
 
 # Using the shared Brain
@@ -96,6 +96,37 @@ concept when the identity is the same; create a new concept only when it has a d
 
 The write is complete only when the concept has one canonical home, is discoverable from an index,
 has provenance, passes lint, and the lock is released.
+
+## From the Windows PCs
+
+The Brain, its tools, and its write locks exist only on beelink. Agents on the Windows PCs (`seb-pc`,
+`c940`) reach it over `ssh wasti@beelink` and run every step above there; paths in this skill are
+beelink paths. The rules above apply unchanged, including use in every session. Windows has no
+session-start hook, so the global instructions there tell the agent to invoke this skill.
+
+- **Unreachable:** if beelink does not answer, say so and continue without the Brain. Never report
+  knowledge as recorded unless the write completed.
+- **Read:** `ssh wasti@beelink 'cat ~/.agents/brain/index.md'`, then the subtree index and the
+  concepts it names. Non-interactive ssh has no `~/.local/bin` on its `PATH`, so call tools by
+  absolute path, for example `ssh wasti@beelink '~/.local/bin/rg -n "<term>" ~/.agents/brain'`.
+- **Lock:** acquire the concept, every index it changes, and `log.md` in one call, and name the
+  owner: `brain-lock.py acquire --owner "<device>/<harness>" <paths>`. A lease lasts 15 minutes by
+  default; renew it before it expires, and stop writing if a renewal fails. After acquiring, read
+  the current content of every locked file again and build the change on that, not on an earlier
+  read.
+- **Transfer:** drafts may live in the session's scratchpad on Windows; that is the only local
+  copy allowed. Save drafts as UTF-8 without BOM and with LF line endings, and move them with
+  `scp`, which copies bytes unchanged in Git Bash and PowerShell alike:
+  `scp draft.md wasti@beelink:dev/brain/<path>`. For an append to `log.md`, copy the entry to
+  `/tmp` first and append it remotely. Afterwards check remotely that the file has no CR
+  characters.
+- **Quoting:** keep text with quotes or apostrophes out of the remote command line. Pass it as a
+  file instead, for example a commit message through `git commit -F <file>`.
+- **Finish:** run lint remotely from `~/dev/brain` and fix only your own changes. Commit and push
+  under `git-workflow` and the current authorization, staging explicit paths. If the push fails,
+  report the change as committed but not pushed. Release the lock when the write is complete;
+  do not hold it while waiting on a push problem. Name the device in the log entry (for example
+  "from seb-pc").
 
 ## Maintain the Brain
 
