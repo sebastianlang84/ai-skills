@@ -24,6 +24,8 @@ $C [--review] [--resume <session-id>] <prompt-file> <output-file> <dir> [more di
 - Claude can only read files: it cannot run `git diff` or any other command. Write diffs, logs
   and command output to files inside a passed directory and name them in the prompt.
 - `CLAUDE_CALL_MODEL` and `CLAUDE_CALL_EFFORT` override the model and effort.
+- Needs Python 3.9 or newer. On Windows the `python3` from the Microsoft Store alias is only a
+  placeholder; install Python (for example `winget install Python.Python.3.14 --scope user`).
 - On Windows, run it from Git Bash. Over ssh to beelink, use a login shell (`bash -lc`) so `claude`
   is on the `PATH`, and check that Claude Code is logged in there.
 

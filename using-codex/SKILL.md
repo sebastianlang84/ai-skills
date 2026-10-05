@@ -6,8 +6,10 @@ description: Call Codex (gpt-6.1-sol) from another agent - for an adversarial re
 # Using Codex
 
 `S=~/.agents/skills/using-codex/scripts/codex_call.py` pins model `gpt-6.1-sol`, effort `medium`,
-read-only sandbox, hooks off, thread kept. Prompts go in as a file or `-` for stdin. On Windows,
-run it with `python` from Git Bash; over ssh to beelink, use a login shell (`bash -lc`) so `codex`
+read-only sandbox, hooks off, thread kept. Prompts go in as a file or `-` for stdin. It needs
+Python 3.9 or newer; on Windows the Microsoft Store alias `python3` is only a placeholder, so
+install Python (for example `winget install Python.Python.3.14 --scope user`) and run it with
+`python` from Git Bash; over ssh to beelink, use a login shell (`bash -lc`) so `codex`
 is on the `PATH`.
 
 - Start: `python3 $S new --cwd <dir> --label <name> --detach <prompt-file>` prints a call dir.
@@ -52,5 +54,5 @@ After a Codex update, or when a call fails in a way that looks like the CLI chan
 `python3 $S selftest`. It checks new, an immediate resume and the sandbox against the live CLI and
 records the verified version in `~/.agents/state/codex-call/selftest.json`.
 
-`~/.agents/skills/codex-call/scripts/codex_call.py` is a link to this script for callers that still
+`~/.agents/skills/codex-call/scripts/codex_call.py` is a small starter that runs this script for callers that still
 use the old path (market-digest's quality loop); remove it once nothing uses that path.
