@@ -1,6 +1,6 @@
 ---
 name: git-workflow
-description: Use for Git safety, branch/worktree choice, commits, version/changelog impact, merge/push approval, and task closeout.
+description: Use for Git safety, branch/worktree choice, commits, resolving merge/rebase/cherry-pick conflicts, version/changelog impact, merge/push approval, and task closeout.
 ---
 
 # Git Workflow
@@ -91,6 +91,8 @@ Use repo-local Git identity and existing commit history without asking. Only whe
 Avoid commits for random snapshots, mixed unrelated changes, or known-broken states unless explicitly requested.
 
 Rebase only when policy allows it and it will not surprise other users of the branch.
+
+When a merge, rebase, or cherry-pick stops with conflicts, read [references/merge-conflicts.md](references/merge-conflicts.md) before resolving: resolve each hunk by both sides' intent, never `--abort` on your own initiative.
 
 Merge only after explicit user approval and only when source, target, strategy, verification, release impact, and changelog/version decision are clear.
 

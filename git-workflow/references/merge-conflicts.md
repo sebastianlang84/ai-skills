@@ -1,11 +1,6 @@
----
-name: resolving-merge-conflicts
-description: Resolve an in-progress git merge or rebase conflict hunk by hunk, by tracing each side's original intent. Use when a merge, rebase, or cherry-pick has stopped with conflicts.
----
-
 # Resolving Merge Conflicts
 
-Resolve by **intent**, not by picking whichever side looks tidier. Follow `git-workflow` for approval gates: resolving conflicts in the working tree is repair work, but finishing the operation (commit, `--continue`, `--abort`) is a mutating Git action: do it when existing authorization covers that exact operation, otherwise request approval.
+Resolve by **intent**, not by picking whichever side looks tidier. The approval rules in [`../SKILL.md`](../SKILL.md) apply: resolving conflicts in the working tree is repair work, but finishing the operation (commit, `--continue`, `--abort`) is a mutating Git action: do it when existing authorization covers that exact operation, otherwise request approval.
 
 ## Process
 
@@ -20,3 +15,5 @@ Resolve by **intent**, not by picking whichever side looks tidier. Follow `git-w
 5. **Report, then finish.** State: files resolved, which intent won in each incompatible hunk and why, check results, and anything you could not resolve confidently. If existing authorization covers the exact finishing command (`git merge --continue`, `git rebase --continue`, or the commit), run it; otherwise propose that command and request approval.
 
 **Never `--abort` on your own initiative.** Aborting throws away the resolution work and is the user's call. If the conflict cannot be resolved responsibly, say so and hand back the analysis.
+
+Adapted from Matt Pocock's `resolving-merge-conflicts` skill (MIT, see `THIRD_PARTY_NOTICES.md` in the repository root).
