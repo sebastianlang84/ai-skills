@@ -217,7 +217,7 @@ pi-memory/
 └── AGENTS.md
 ```
 
-`AGENTS.md` ist eine repo-interne Agent-Datei, aber keine Pi-Ressource, solange sie nicht über `pi.skills`, `pi.prompts` usw. eingebunden wird. Dauerhaftes Wissen gehört über `using-brain` in den Brain, Sessionübergaben über `handoff` und die bestehenden Pi-Handoff-Regeln — nicht in ein committetes `MEMORY.md`.
+`AGENTS.md` ist eine repo-interne Agent-Datei, aber keine Pi-Ressource, solange sie nicht über `pi.skills`, `pi.prompts` usw. eingebunden wird. Dauerhaftes Wissen gehört über `using-brain` in den Brain, Sessionübergaben über die bestehenden Pi-Handoff-Regeln — nicht in ein committetes `MEMORY.md`.
 
 ### `pi-subagents`
 

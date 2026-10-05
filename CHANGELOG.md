@@ -68,6 +68,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Removed
 
+- Removed `handoff`. The operator never invoked it; it dates from heavy Pi use, and `/compact` covers continuing a session.
 - Removed `grill-me` and `grill-with-docs`. `grill-with-docs` coupled grilling to a `CONTEXT.md` domain model that this collection no longer maintains (see the matching `improve-codebase-architecture` change); `grill-me` was a wrapper whose only remaining primitive, `grilling`, is directly invocable.
 - Removed `pi-subagents`. It was entirely Pi-specific orchestration policy, and Pi no longer consumes this skill store.
 
