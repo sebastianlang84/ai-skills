@@ -1,6 +1,6 @@
 ---
 name: peer-debate
-description: Answers an open, contestable question by making two independent model instances — one model on both sides, or two vendors via agy, codex and claude — argue it out under asymmetric roles until they converge or hit a round cap, then adjudicating the result. Use when the user wants a question debated, stress-tested by two agents, worked out by a duo, or says "let two models argue this", "have them discuss until they agree", "peer debate", or in German „lass das ausdiskutieren", „zwei Modelle sollen sich einigen". Not for critiquing a finished artifact or scanning a codebase for defects — one reviewer against an existing document, diff or repo is a review through `using-codex` or `using-claude`. Not for interrogating the user's own thinking.
+description: Answers an open, contestable question by making two independent model instances — one model on both sides, or two vendors via agy, codex and claude — argue it out under asymmetric roles until they converge or hit a round cap, then adjudicating the result. Use when the user wants a question debated, stress-tested by two agents, worked out by a duo, or says "let two models argue this", "have them discuss until they agree", "peer debate", or in German „lass das ausdiskutieren", „zwei Modelle sollen sich einigen". Not for critiquing a finished artifact or scanning a codebase for defects — one reviewer against an existing document, diff or repo is a review through `using-harnesses`. Not for interrogating the user's own thinking.
 ---
 
 # Peer debate
@@ -14,7 +14,7 @@ nothing.
 ## When this is the wrong tool
 
 - The question has one right answer that a calculation settles → just calculate it.
-- There is an artifact to review → a review by the other vendor through `using-codex` or `using-claude`.
+- There is an artifact to review → a review by the other vendor through `using-harnesses`.
 - The disagreement is with the user, not within the material → ask the user directly, one question at a time.
 
 ## Procedure
@@ -100,7 +100,7 @@ Then take one of three exits, and say which:
   settled and buries the open point.
 - **Name the shared premise.** When both sides agree on a premise you cannot break yourself, say
   so in the result: two instances of one model share blind spots, so that agreement is the weakest
-  point. Have it reviewed by the other vendor (`using-codex` / `using-claude`).
+  point. Have it reviewed by the other vendor (`using-harnesses`).
 
 ## Configuration
 
@@ -138,10 +138,10 @@ there. That is deliberate: a debate in which nobody computes anything is an exch
 ### Tool policy
 
 Both sides receive their cli's complete configured tool surface. The runner uses
-`--dangerously-skip-permissions` on agy and claude; codex turns go through `using-codex`'s `codex_call.py` with
+`--dangerously-skip-permissions` on agy and claude; codex turns go through `using-harnesses`'s `codex_call.py` with
 `--sandbox danger-full-access` and `--search`, so headless turns can use shell, files, web and MCP
 without soft denials or interactive pauses; it deliberately enables no sandbox on either.
-`using-codex`'s `codex_call.py` turns hooks off: the SessionEnd hook on this host compacts a thread after every `exec`
+`using-harnesses`'s `codex_call.py` turns hooks off: the SessionEnd hook on this host compacts a thread after every `exec`
 and holds its writer lock for minutes, and a resume inside that window fails. The role
 prompts still require debate artifacts to stay under `A/` or `B/`. This broad grant is a conscious
 choice for this private experiment host. Details: [`references/tool-policy.md`](references/tool-policy.md).
@@ -167,5 +167,5 @@ Run directory `~/.agents/state/peer-debates/<date>-<slug>/`:
   separate on purpose: in a shared directory the second side can read the first side's scripts and
   reply, which makes round 0 blind in name only.
 
-Each turn starts one `agy --print`, `claude -p` or `using-codex`'s `codex_call.py` process and resumes the side's stored id. There
+Each turn starts one `agy --print`, `claude -p` or `using-harnesses`'s `codex_call.py` process and resumes the side's stored id. There
 is no resident debater process and no lock file.

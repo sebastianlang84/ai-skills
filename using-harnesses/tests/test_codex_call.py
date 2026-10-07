@@ -13,7 +13,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
-SCRIPT = Path(__file__).with_name("codex_call.py")
+SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "codex_call.py"
 SPEC = importlib.util.spec_from_file_location("codex_call", SCRIPT)
 assert SPEC and SPEC.loader
 cc = importlib.util.module_from_spec(SPEC)

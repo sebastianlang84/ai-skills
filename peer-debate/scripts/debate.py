@@ -333,7 +333,7 @@ def agy_command(exe: str, work: Path, msg_file: Path, model: str, effort: str,
 
 
 CODEX_CALL = Path(os.environ.get("PEER_DEBATE_CODEX_CALL",
-                                  HOME / ".agents/skills/using-codex/scripts/codex_call.py"))
+                                  HOME / ".agents/skills/using-harnesses/scripts/codex_call.py"))
 
 
 def codex_command(exe: str, work: Path, msg_file: Path, model: str, effort: str,

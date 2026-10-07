@@ -7,8 +7,9 @@ description: Have the other vendor diagnose why an agent session worked badly - 
 
 The doctor is the other vendor than the patient session, at effort `medium`: a Claude Code
 session gets Codex `gpt-6.1-sol`, a Codex session gets Opus 5.5; `doctor.sh` reads the vendor
-from the transcript. It judges from a redacted evidence file and changes nothing; Opus
-sees only that file, Codex is told to but keeps a read-only shell. The call runs detached; keep working and talking with the user while it runs.
+from the transcript. It judges from a redacted evidence file and changes nothing; which tools it
+keeps beyond that file is set by `using-harnesses`' `review.sh`. The call runs detached; keep
+working and talking with the user while it runs.
 `D=~/.agents/skills/call-doctor/scripts`.
 
 1. **Name the patient and the symptoms.** The patient is the calling session unless the user names

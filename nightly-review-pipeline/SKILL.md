@@ -26,7 +26,7 @@ systemd .timer  ──fires──▶  orchestrator.sh  ──per repo, per lens�
 
 ## Review lenses
 
-Each lens is a separate, bounded review through `using-codex`'s `codex_call.py` (`gpt-6.1-sol`, read-only sandbox,
+Each lens is a separate, bounded review through `using-harnesses`'s `codex_call.py` (`gpt-6.1-sol`, read-only sandbox,
 own prompt, timeout and log), as house rules require for every review. `run-review.sh` hands the
 answer back in the `{"result": …}` JSON contract; `REVIEW_MODEL`/`REVIEW_EFFORT` override the pins.
 Claude (`run-claude.sh`) stays the fix agent. A repo enables whichever lenses make sense for it.
@@ -110,7 +110,7 @@ modes, why fixes never touch `main` or auto-merge, and how to cap runaway cost.
 ## Assets
 
 - `assets/orchestrator.sh` — the smart driver (state, backoff, dedup, render, fix flow).
-- `assets/run-review.sh` — bounded/logged review through `using-codex`'s `codex_call.py` (read-only, deadline, `.result` contract).
+- `assets/run-review.sh` — bounded/logged review through `using-harnesses`'s `codex_call.py` (read-only, deadline, `.result` contract).
 - `assets/run-claude.sh` — bounded/logged wrapper around `claude -p` for the fix agent (permission mode, turns, timeout).
 - `assets/config.example.sh` — repos, per-repo lenses + test command, thresholds, backoff knobs.
 - `assets/prompts/{bug-review,usability-review,fix}.prompt.md` — the three prompt templates.
