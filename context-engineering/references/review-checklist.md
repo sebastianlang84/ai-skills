@@ -14,7 +14,8 @@ Use before considering a repo context alignment complete.
 
 - No source contains information routed elsewhere by `document-routing.md`.
 - No setup instructions are hidden only in agent instructions.
-- References point to existing files/systems.
+- References point to existing files/systems, including every link in a memory index.
+- Memory recommends or configures no model, tool or path the canonical policy has retired.
 
 ## Agent usability checks
 

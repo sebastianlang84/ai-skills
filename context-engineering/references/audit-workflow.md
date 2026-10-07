@@ -79,6 +79,19 @@ Check for:
 - Templates with unfilled placeholders in active use.
 - Duplicate skill names across global and repo scope with divergent behavior.
 
+### Memory hygiene
+
+- Memory index links that do not resolve to a file.
+- Memory that still recommends or configures a model, tool or path the canonical policy has
+  retired. A historical mention with its date is provenance, not a finding.
+
+### Rules that do not hold
+
+- A rule present in the loaded context that the session still broke (the transcript or a
+  `call-doctor` finding shows it). Fix with enforcement or a safer default, not a reworded sentence.
+- Missing runtime-environment facts (harness, multiplexer, deployed checkout) that led the agent
+  to the wrong tool or checkout.
+
 ### Content quality
 
 - Memory containing rules, backlog, or diary entries.

@@ -23,6 +23,11 @@ Goal: clear authority, low redundancy, good trigger boundaries, and high informa
 - Meta-skills for context management, subagent workflow, and skill creation are valuable audit and maintenance tools. They help keep the context system intentional without hard-routing every task through another skill.
 - Tools, MCP, scripts, hooks, and CI should provide capability or enforcement instead of prose promises.
 - Memory is for reset-resilient non-normative context, not enforcement.
+- The runtime environment (harness, terminal multiplexer, sandbox, which checkout is deployed) is
+  its own layer. A session-start hook states the basics in a few lines (on this machine the
+  existing adapter `~/.agents/scripts/session-environment.py`, owned separately); a fact it does
+  not state is checked read-only before it matters and treated as unknown until then. Do not copy
+  environment manuals into instruction files.
 - Each harness loads instruction files and skills differently (Codex: one global file, no imports, a
   size cap; Claude Code: `CLAUDE.md` with `@` imports). Before designing or auditing a setup that
   spans harnesses, read `references/harness-loading.md`.
@@ -42,6 +47,9 @@ Keep `SKILL.md` as overview, routing, and procedure. Move long examples, templat
 ## Workflow
 
 ### 1. Diagnose
+
+When a session has gone wrong repeatedly, get the diagnosis from `call-doctor` (the other vendor
+reads the transcript and the loaded context); this skill then designs and applies the correction.
 
 Identify automatic instructions, situational instructions, memory/retrieval, capabilities, enforcement, and human docs. Inspect visible context first. Ask before inspecting sensitive local config such as API keys, auth files, private provider configs, credentials, or machine-specific secrets; prefer redacted summaries.
 
@@ -75,6 +83,8 @@ Choose the smallest context system that solves the problem:
 - move deterministic checks into scripts/hooks/CI/tools
 - route durable context to the chosen memory layer
 - remove duplicate policy from lower-priority layers
+- when the agent had a rule and broke it, enforce it (script default, hook, check) instead of
+  adding another sentence
 - keep skill bodies operational, not encyclopedic
 
 Stop and ask before deleting, overwriting, or changing ambiguous project behavior.
