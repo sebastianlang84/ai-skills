@@ -16,6 +16,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- Claude Code skills adapter (Sebastian, 2026-10-08; agreed with Codex gpt-6.1-sol): `~/.claude/skills` is now a real directory with one symlink per skill into this repo, kept by `~/.agents/scripts/sync-claude-skill-links.py` (SessionStart hook). Claude Code's claude.ai skill sync (`synced/`) and its `.trash/` stay there instead of landing here, where Codex listed them. `skill-creator` and `context-engineering/references/harness-loading.md` describe the new layout.
 - `context-engineering`: the runtime environment is its own context layer (pointer to the separately owned session-start hook, unstated facts checked before use); audit checks for broken memory-index links and memory that still recommends retired models or tools; a rule the agent had and broke gets enforcement instead of another sentence; diagnosis of a failed session routes to `call-doctor`. Reviewed in two rounds by Codex gpt-6.1-sol.
 - `managing-agent-context` renamed to `context-engineering` (Sebastian, 2026-10-05): the established name for what it does, and easier to remember. Its routing table no longer repeats human-facing docs (README, ADRs, changelog, runbooks); one row hands them to `code-documentation`, which in turn hands agent instructions, skills and memory back.
 - `code-documentation` trimmed: PRD rules moved to `references/prd.md` (only one project has a PRD), the code-comment section and the changelog example removed.

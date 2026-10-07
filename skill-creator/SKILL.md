@@ -33,7 +33,7 @@ Default to:
 - global: `~/.agents/skills/<skill-name>/`
 - repo-local: `<repo>/.agents/skills/<skill-name>/`
 
-Treat other runtime-specific entrypoints, symlinks, metadata files, or discovery hooks as adapter glue unless the user explicitly chooses them as source of truth. On this machine `~/.claude/skills` and similar harness directories are symlinks into `~/.agents/skills/`, as declared in the global `AGENTS.md`; if tooling writes a second global store elsewhere, relocate rather than maintain two.
+Treat other runtime-specific entrypoints, symlinks, metadata files, or discovery hooks as adapter glue unless the user explicitly chooses them as source of truth. On this machine `~/.claude/skills` holds one symlink per skill into `~/.agents/skills/`, kept by `~/.agents/scripts/sync-claude-skill-links.py` (run it with `--apply` after creating a skill; a SessionStart hook runs it too); if tooling writes a second global store elsewhere, relocate rather than maintain two.
 
 ## Inventory
 

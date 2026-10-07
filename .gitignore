@@ -10,6 +10,7 @@ __pycache__/
 # Externally owned skill checkouts, linked in rather than vendored
 diagram-design
 
-# Written by Claude Code through the ~/.claude/skills symlink: synced org/account skills and its trash
+# Claude Code's account skill sync and its trash; they belong in ~/.claude/skills (per-skill links
+# since 2026-10-08) and are ignored here in case a whole-directory link returns
 synced/
 .trash/

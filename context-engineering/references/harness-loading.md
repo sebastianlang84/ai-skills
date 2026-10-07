@@ -59,8 +59,9 @@ the date.
   descriptions first, then leaves skills out with a warning
   ([docs](https://learn.chatgpt.com/docs/build-skills)).
 - Claude Code reads `~/.claude/skills/`, the project's `.claude/skills/`, nested and `--add-dir`
-  directories, plugins, and skills synced from claude.ai; on Windows, link shared skills into
-  `~/.claude/skills/` per skill (`mklink /D`). Each description (with `when_to_use`) is cut at
+  directories, plugins, and skills synced from claude.ai (written to `~/.claude/skills/synced/`);
+  link shared skills into `~/.claude/skills/` per skill (`ln -s`, on Windows `mklink /D`), never
+  the whole directory, or that sync lands in the shared store and Codex lists it. Each description (with `when_to_use`) is cut at
   `skillListingMaxDescChars` (1,536 by default), and the whole listing is capped by
   `skillListingBudgetFraction` (0.01 of the context window by default); on overflow, names stay
   and descriptions are dropped. `disable-model-invocation: true` removes the description from the
