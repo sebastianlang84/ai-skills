@@ -134,7 +134,7 @@ Full pass and the failure modes it catches: `references/skill-design-theory.md`.
 
 Default to agent-agnostic guidance. If the user targets Claude, Codex, Cursor, Pi, or another runtime, add adapter notes without making them the universal workflow.
 
-A skill is standalone: everything it needs lives inside its own directory. No links or paths outside it, no project vocabulary, and no names of tools, harnesses or models in the core. It is instruction for the model that loads it, not a chronicle: no who-said-what, dates, quotes, ticket numbers or the history of a decision, and no project process rules that do not change how the task is done (Sebastian, 2026-10-11: "skills müssen standalone sein. sie sind tool, harness und model und sonst auch alles agnostisch!!"). Keep a reason only where it explains the matter itself; history belongs in the project's decision records.
+A skill is standalone: everything it needs lives inside its own directory. No links or paths outside it, no project vocabulary, and no names of tools, harnesses or models in the core. It is instruction for the model that loads it, not a chronicle: no who-said-what, dates, quotes, ticket numbers or the history of a decision, and no project process rules that do not change how the task is done. Keep a reason only where it explains the matter itself; history belongs in the project's decision records.
 
 Read `references/agent_adapters.md` when adding runtime-specific adapters or deciding portability trade-offs.
 For Claude Code targets, read `references/claude-code-adapter.md`: listing budget, Claude-Code-only frontmatter, `${CLAUDE_SKILL_DIR}`, compaction, and when a rule belongs in a hook.
