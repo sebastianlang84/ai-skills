@@ -36,6 +36,9 @@ and resolve ownership before integration. Git approval and history rules belong 
   first; a stash does not make them available. Read-only workers need no extra checkout.
 - Coordinate through the current harness's messaging tools when they reach the relevant session.
   A printed session name is not proof that a messaging tool can reach it.
+- A worker in its own tab or pane does not wake you when it finishes. Right after prompting it,
+  start `herdr agent wait <name>` as a background command so its completion re-invokes you, and
+  read its result then (Sebastian, 2026-10-11: two finished tabs went unnoticed for eight hours).
 - Require a handoff with files, changes, checks, branch/commit if applicable, and unresolved issues.
   Recheck upstream and ownership, inspect the integrated diff, and run the affected checks.
 - Remove only completed, task-owned worktrees and safely delete merged task branches.
