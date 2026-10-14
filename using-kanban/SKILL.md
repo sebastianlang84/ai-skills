@@ -46,7 +46,8 @@ A second session on the same device that needs the board uses `<device>-<topic>`
 3. When the work with the board is done, end the session:
    `ssh wasti@beelink '~/.local/bin/kb --session <token> end'`.
 4. Token lost: the old session cannot be ended without it and stays listed in `kb sessions` for
-   up to seven days; its claimed tickets are released after 24 hours without activity. Tell the
+   up to seven days; its claimed tickets stay held and show `idle>24h` after a day without
+   activity, when another session may take them over with `kb claim --take <id>`. Tell the
    user, then start a new session under the same name. That is safe as long as the old session's
    agent is gone, because requests go to a name and only a live agent claims them. Never repair
    the board by hand.
@@ -57,8 +58,9 @@ On beelink the hooks register the session; no token is needed.
 
 Use only the `kb` CLI. Never open `kb.sqlite` with `sqlite3`, Python, or any other tool, not even
 to end a stale session or fix a typo. If `kb` refuses something, report the refusal to the user
-instead of working around it. When the board is unreachable (`kb` exits 2), say so and continue
-without it.
+instead of working around it. When the board is unreachable (`ssh` or `kb` fails with a
+connection or database error), say so and continue without it. The full workflow is in the
+`using-kb` skill; this skill adds the cross-device layer.
 
 ## Ask another device
 

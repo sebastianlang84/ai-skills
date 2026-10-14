@@ -16,6 +16,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- `using-kanban` (2026-10-14): kb 0.3 never releases claims automatically; a lost-token session's tickets show `idle>24h` and are taken over with `kb claim --take`. The general workflow now lives in the `using-kb` skill shipped with agent-kanban (linked by `kb setup`); this skill keeps the cross-device layer.
 - `skill-creator` (Sebastian, 2026-10-11): step 7 now requires skills to be standalone — nothing outside their directory, no project, tool, harness or model names in the core, no chronicle (names, dates, quotes, tickets) and no project process rules. The rule text itself carries no quote.
 - `parallel-agents` (Sebastian, 2026-10-11): after prompting a worker in its own tab or pane, start `herdr agent wait <name>` in the background so its completion re-invokes the coordinator; two finished tabs had gone unnoticed for eight hours.
 - Claude Code skills adapter (Sebastian, 2026-10-08; agreed with Codex gpt-6.1-sol): `~/.claude/skills` is now a real directory with one symlink per skill into this repo, kept by `~/.agents/scripts/sync-claude-skill-links.py` (SessionStart hook). Claude Code's claude.ai skill sync (`synced/`) and its `.trash/` stay there instead of landing here, where Codex listed them. `skill-creator` and `context-engineering/references/harness-loading.md` describe the new layout.
