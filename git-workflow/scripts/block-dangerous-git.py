@@ -36,9 +36,10 @@ RULES = [
     (r"\bgit\b[^;&|]*\bpush\b[^;&|]*(?:\s--delete\b|\s:[A-Za-z0-9_./-]+)",
      "deleting a remote branch or tag",
      "ask the operator to delete it, or delete only branches already contained "
-     "in the remote's default branch (that case is allowed automatically, but "
-     "every named ref must qualify and the remote-tracking refs must be current "
-     "— run git fetch --prune first)"),
+     "in the remote's default branch (that case is allowed automatically when the "
+     "push runs as one plain command — git [-C dir] push <remote> --delete "
+     "<branch>, no cd, &&, ;, pipe or redirect — every named ref qualifies and its "
+     "commit is fetched locally: run git fetch --prune first, as a separate call)"),
     (r"\bgit\b[^;&|]*\breset\b[^;&|]*\s--hard\b",
      "reset --hard discards every uncommitted change in the working tree",
      "use git stash, or git reset without --hard to keep the changes"),
@@ -54,8 +55,9 @@ RULES = [
     (r"\bgit\b[^;&|]*\bbranch\b[^;&|]*\s-[A-Za-z]*D\b",
      "branch -D deletes a branch even when it holds unmerged commits",
      "use git branch -d, which refuses to delete unmerged work — or, if the branch "
-     "was squash-merged, note that the forced form is allowed automatically once the "
-     "default branch demonstrably contains every line the branch carries"),
+     "was squash-merged, note that the forced form is allowed automatically, as one "
+     "plain command without cd, &&, ;, pipe or redirect, once the default branch "
+     "demonstrably contains every line the branch carries"),
     (r"\bgit\b[^;&|]*\b(?:filter-branch|filter-repo)\b",
      "rewriting the entire history of the repository",
      "do this by hand, outside the agent, with a backup"),
