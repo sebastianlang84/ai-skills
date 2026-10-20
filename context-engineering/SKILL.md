@@ -1,6 +1,6 @@
 ---
 name: context-engineering
-description: "Context engineering for LLM agents: audit, design, or repair agent context systems: instruction files, skills, memory, document routing, tool exposure, MCP configuration, hooks/CI enforcement, and context bloat. Use when deciding what information should be loaded, retrieved, persisted, or enforced for agents."
+description: "Context engineering for LLM agents: audit, design, or repair agent context systems: instruction files, skills, memory, document routing, context topology (routing map vs. skill per app vs. index), tool exposure, MCP configuration, hooks/CI enforcement, and context bloat. Use when deciding what information should be loaded, retrieved, persisted, or enforced for agents."
 ---
 
 # Context Engineering
@@ -76,6 +76,8 @@ Optional smoke test for agent-instruction injection during audits: after explici
 
 Principle check: could any planned addition be cut while still solving the problem? If yes, cut it.
 
+When the design covers how agents find a machine's applications or repositories, choose the topology first with `references/context-topologies.md`.
+
 Choose the smallest context system that solves the problem:
 
 - keep always-loaded files short
@@ -115,6 +117,7 @@ Read only when needed:
 
 - `references/setup-checklist.md` — bootstrap checklist
 - `references/document-routing.md` — detailed routing guidance
+- `references/context-topologies.md` — topologies for routing agents to applications and repositories, and how to choose one per environment
 - `references/migration-notes.md` — migration from larger/ad-hoc structures
 - `references/review-checklist.md` — readiness review checklist
 - `references/audit-workflow.md` — read-only audit workflow for existing context systems
