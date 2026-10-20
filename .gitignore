@@ -15,3 +15,7 @@ using-kb
 # since 2026-10-08) and are ignored here in case a whole-directory link returns
 synced/
 .trash/
+using-macrolens
+using-market-digest
+using-moneyflow
+using-valuelens
