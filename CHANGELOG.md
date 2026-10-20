@@ -89,6 +89,8 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Removed
 
+- Removed `using-kanban` (kb #307). Its cross-machine layer (one receiver per machine, `kb start` token over plain ssh, requests addressed by machine name, `kb-watch` listener, verifying a new machine) moved to `using-kb`'s `references/remote-machines.md` in agent-kanban, without the machine names; a guest set up with `kb setup --guest` needs none of it.
+- Removed the compatibility starters `using-codex/scripts/codex_call.py` and `codex-call/scripts/codex_call.py` with their directories (kb #307): every caller uses `using-harnesses/scripts/codex_call.py`.
 - Removed `grilling`. The operator never invoked it. `improve-codebase-architecture` keeps its design conversation inline, and `peer-debate` points disagreements with the user back to direct questions.
 - Removed `handoff`. The operator never invoked it; it dates from heavy Pi use, and `/compact` covers continuing a session.
 - Removed `grill-me` and `grill-with-docs`. `grill-with-docs` coupled grilling to a `CONTEXT.md` domain model that this collection no longer maintains (see the matching `improve-codebase-architecture` change); `grill-me` was a wrapper whose only remaining primitive, `grilling`, is directly invocable.

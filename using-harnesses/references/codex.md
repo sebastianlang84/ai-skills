@@ -75,10 +75,6 @@ After a Codex update, or when a call fails in a way that looks like the CLI chan
 `python3 $C selftest`; it checks new, an immediate resume and the sandbox against the live CLI and
 records the verified version in `~/.agents/state/codex-call/selftest.json`.
 
-Compatibility starters at `~/.agents/skills/using-codex/scripts/codex_call.py` and
-`~/.agents/skills/codex-call/scripts/codex_call.py` run this script for callers that still use the
-old paths; remove them once nothing uses those paths.
-
 ## Windows (Git Bash)
 
 Run from Git Bash; `timeout`, `mktemp` and `stat -c` come with it. The detached start needs
