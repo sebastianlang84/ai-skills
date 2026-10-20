@@ -7,15 +7,10 @@ __pycache__/
 *.log
 *.tmp
 
-# Externally owned skill checkouts, linked in rather than vendored
-diagram-design
-using-kb
+# Linked skills from other repos (diagram-design, using-kb, using-<app>) are excluded in
+# .git/info/exclude, not here: Pi reads this file as a skill-ignore list and would hide them.
 
 # Claude Code's account skill sync and its trash; they belong in ~/.claude/skills (per-skill links
 # since 2026-10-08) and are ignored here in case a whole-directory link returns
 synced/
 .trash/
-using-macrolens
-using-market-digest
-using-moneyflow
-using-valuelens
