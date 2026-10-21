@@ -17,6 +17,8 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- `using-harnesses` (`references/codex.md`): a writing `codex_call.py resume` must pass `--cwd` and `--sandbox` again; without `--cwd` the worker runs in its call directory and `workspace-write` covers only that (measured 2026-10-21, kb #286).
+
 - `context-engineering` (Sebastian, 2026-10-20): new `references/context-topologies.md` lists ways to route agents to a machine's applications (monolithic global file, routing map, skill per app, knowledge-base index, repo-local only, hook injection), criteria for choosing one per environment, and a verification in fresh sessions; the design step and description point to it. Reviewed by Codex gpt-6.1-sol (one finding on the verification, fixed).
 - `git-workflow` (2026-10-19): the `block-dangerous-git` hints for remote branch deletion and `branch -D` now say that the automatic exception for merged branches only applies to one plain command; with `cd`, `&&`, `;`, a pipe or a redirect the hook never checks containment and blocks. The old hint only pointed at `git fetch --prune`.
 - `using-kanban` (2026-10-14): kb 0.3 never releases claims automatically; a lost-token session's tickets show `idle>24h` and are taken over with `kb claim --take`. The general workflow now lives in the `using-kb` skill shipped with agent-kanban (linked by `kb setup`); this skill keeps the cross-device layer.

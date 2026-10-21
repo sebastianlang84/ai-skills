@@ -59,6 +59,10 @@ or `-` for stdin. Its state is under `~/.agents/state/codex-call/`.
 - Collect: `python3 $C wait <call-dir>` prints `thread:`, `result:` and the answer. Exit 3 means
   still running, so call `wait` again. Exit 1 is a failure with its reason.
 - Follow up in the same thread: `python3 $C resume <thread-id> --detach <prompt-file>`, then `wait`.
+  A resume does not inherit the first call's `--cwd`: without it the worker runs in its call
+  directory, and `workspace-write` then covers only that directory (measured 2026-10-21, kb #286:
+  the target worktrees were read-only). Pass `--cwd` and `--sandbox` again on every resume of a
+  worker that writes.
 - Without `--detach` a call blocks; only do that for calls under 10 min.
 - `python3 $C cancel <call-dir>` stops a detached call; `list` shows recent calls.
 - `--search` gives Codex its native web search; `--sandbox workspace-write|danger-full-access`
