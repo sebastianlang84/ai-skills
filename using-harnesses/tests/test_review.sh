@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
-# Offline tests for scripts/review.sh with fake codex and claude on PATH. No network, no real HOME.
+# Offline tests for scripts/review.sh (and review.py behind it) with fake codex and claude on PATH. No network, no real HOME.
 # Usage: tests/test_review.sh
 set -uo pipefail
+# The first interpreter that really runs: on Windows, python3 may be a Store stub that only prints a hint.
+PY=""; for c in python3 python; do "$c" -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null && { PY=$c; break; }; done; export PY
+# Windows (Git Bash): native symlinks (Developer Mode) and process checks without procps.
+case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) WIN=1; export MSYS=winsymlinks:nativestrict ;; *) WIN=0 ;; esac
+# Starting a round takes longer there (runner, cmd shim, argument bridge): "slow" must outlast it.
+[ "$WIN" = 0 ] || export FAKE_SLOW=8
 SKILL=$(cd "$(dirname "$0")/.." && pwd -P)
 RS="$SKILL/scripts/review.sh"
 # Most cases check the blocking path; R inserts --foreground after the backend.
@@ -12,12 +18,15 @@ T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 export HOME="$T/h" TMPDIR="$T/tmp" FAKE_LOG="$T/fake"
 unset XDG_CONFIG_HOME CLAUDE_CONFIG_DIR
 CH="$HOME/.codex-review"
-mkdir -p "$TMPDIR" "$FAKE_LOG" "$T/bin" "$T/pybin" "$CH"
+mkdir -p "$TMPDIR" "$FAKE_LOG" "$T/bin" "$CH"
 printf '{}' > "$CH/auth.json"; chmod 600 "$CH/auth.json"
+# chmod 600 on Windows, where git bash mounts noacl: no inherited grants, only you and SYSTEM.
+[ "$WIN" = 0 ] || icacls "$(cygpath -w "$CH/auth.json")" //inheritance:r //grant:r "$(whoami):F" '*S-1-5-18:F' >/dev/null
 CID=0199aaaa-bbbb-cccc-dddd-eeeeeeeeeeee LID=5e55a0aa-1111-2222-3333-444444444444
 
 cat > "$T/bin/codex" <<'EOF'
 #!/usr/bin/env bash
+[ -z "${FAKE_ARGS_FILE:-}" ] || { mapfile -d '' -t A < "$FAKE_ARGS_FILE"; rm -f "$FAKE_ARGS_FILE"; set -- "${A[@]}"; }
 printf '%s\n' "$@" > "$FAKE_LOG/argv"
 prev=""; out=""; for a in "$@"; do [ "$prev" = -C ] && cd "$a"; [ "$prev" = -o ] && out=$a; prev=$a; done
 pwd > "$FAKE_LOG/cwd"; ls -A . | wc -l > "$FAKE_LOG/cwdcount"; echo "$CODEX_HOME" > "$FAKE_LOG/codex_home"; echo "$HOME" > "$FAKE_LOG/home"
@@ -25,17 +34,17 @@ cat > "$FAKE_LOG/stdin"
 id=${FAKE_ID:-0199aaaa-bbbb-cccc-dddd-eeeeeeeeeeee}
 if [ "$2" != resume ]; then  # store the session the way codex does
   mkdir -p "$CODEX_HOME/sessions/2026/10/06"
-  python3 - "$FAKE_LOG/stdin" "$CODEX_HOME/sessions/2026/10/06/rollout-2026-10-06T00-00-00-$id.jsonl" <<'PY'
+  "$PY" - "$FAKE_LOG/stdin" "$CODEX_HOME/sessions/2026/10/06/rollout-2026-10-06T00-00-00-$id.jsonl" <<'PY'
 import json, sys
-t = open(sys.argv[1]).read()
+t = open(sys.argv[1], encoding="utf-8").read()
 m = lambda s: json.dumps({"type": "response_item", "payload": {"type": "message", "role": "user", "content": [{"type": "input_text", "text": s}]}})
 open(sys.argv[2], "w").write(m("<environment_context>\n</environment_context>") + "\n" + m(t) + "\n")
 PY
 fi
 [ "${FAKE_MODE:-ok}" = sleep ] && sleep 5
-[ "${FAKE_MODE:-ok}" = slow ] && { sleep 3; FAKE_MODE=ok; }
+[ "${FAKE_MODE:-ok}" = slow ] && { sleep "${FAKE_SLOW:-3}"; FAKE_MODE=ok; }
 [ "${FAKE_MODE:-ok}" = stubborn ] && { trap '' TERM; while :; do sleep 1; done; }
-[ "${FAKE_MODE:-ok}" = renamed ] && exec -a "node /opt/cli.js -p" bash -c "trap '' TERM; while :; do sleep 1; done"
+[ "${FAKE_MODE:-ok}" = renamed ] && exec -a "node /opt/cli.js -p" bash -c "cat /proc/\$\$/winpid > \"\$FAKE_LOG/winpid\" 2>/dev/null; trap '' TERM; while :; do sleep 1; done"
 echo "{\"type\":\"thread.started\",\"thread_id\":\"$id\"}"
 case "${FAKE_MODE:-ok}" in
   ok) printf 'MINOR - x:1 - nothing\n===REVIEW COMPLETE===\n' > "$out" ;;
@@ -47,13 +56,14 @@ esac
 EOF
 cat > "$T/bin/claude" <<'EOF'
 #!/usr/bin/env bash
+[ -z "${FAKE_ARGS_FILE:-}" ] || { mapfile -d '' -t A < "$FAKE_ARGS_FILE"; rm -f "$FAKE_ARGS_FILE"; set -- "${A[@]}"; }
 printf '%s\n' "$@" > "$FAKE_LOG/argv"; pwd > "$FAKE_LOG/cwd"; cat > "$FAKE_LOG/stdin"
 env > "$FAKE_LOG/env"
 id=${FAKE_ID:-5e55a0aa-1111-2222-3333-444444444444}
 slug=$(pwd | sed 's/[^A-Za-z0-9]/-/g')
 if ! printf '%s\n' "$@" | grep -qx -- --resume; then
   mkdir -p "$HOME/.claude/projects/$slug"
-  python3 -c 'import json,sys; open(sys.argv[2],"w").write(json.dumps({"type":"user","message":{"role":"user","content":open(sys.argv[1]).read()}})+"\n")' \
+  "$PY" -c 'import json,sys; open(sys.argv[2],"w").write(json.dumps({"type":"user","message":{"role":"user","content":open(sys.argv[1],encoding="utf-8").read()}})+"\n")' \
     "$FAKE_LOG/stdin" "$HOME/.claude/projects/$slug/$id.jsonl"
 fi
 case "${FAKE_MODE:-ok}" in
@@ -64,13 +74,29 @@ case "${FAKE_MODE:-ok}" in
 esac
 printf '{"type":"result","subtype":"success","is_error":false,"result":"%s","session_id":"%s"}\n' "$r" "$id"
 EOF
-real_py=$(command -v python3)
-cat > "$T/pybin/python3" <<EOF
-#!/usr/bin/env bash
-[ "\${3:-}" = kv ] && exit 1   # the credential checker crashes; everything else is real
-exec "$real_py" "\$@"
-EOF
-chmod +x "$T/bin/"* "$T/pybin/python3"
+chmod +x "$T/bin/"*
+if [ "$WIN" = 1 ]; then
+  # A native Windows process starts no extensionless script, so each fake gets a .cmd. bash splits a
+  # Windows command line differently from Windows programs (\" inside quotes), so the arguments travel
+  # through fakeargs.py, parsed the Windows way, NUL-separated in a file the fake reads first.
+  cat > "$T/bin/fakeargs.py" <<'PYEOF'
+import os, subprocess, sys, tempfile
+fd, path = tempfile.mkstemp()
+os.write(fd, b"".join(a.encode() + b"\0" for a in sys.argv[3:])); os.close(fd)
+sys.exit(subprocess.run([sys.argv[1], sys.argv[2]], env={**os.environ, "FAKE_ARGS_FILE": path}).returncode)
+PYEOF
+  for f in codex claude; do
+    printf '@"%s" "%%~dp0fakeargs.py" "%s" "%%~dp0%s" %%*\r\n' "$(cygpath -w "$(command -v "$PY")")" \
+      "$(cygpath -w "$(command -v bash)")" "$f" > "$T/bin/$f.cmd"
+  done
+fi
+# Is a process running whose command line contains $1? (pgrep -f; Git Bash has no procps.)
+running_with() {
+  if [ "$WIN" = 0 ]; then pgrep -f -- "$1" >/dev/null; return; fi
+  [ "$(powershell -NoProfile -Command "@(Get-CimInstance Win32_Process | Where-Object { \$_.CommandLine -like '*$1*' -and \$_.ProcessId -ne \$PID }).Count" | tr -d '\r')" != 0 ]
+}
+# Same file system path, whatever form (POSIX or Windows) each side carries.
+same_path() { if [ "$WIN" = 1 ]; then [ "$(cygpath -u "$1")" = "$(cygpath -u "$2")" ]; else [ "$1" = "$2" ]; fi; }
 export PATH="$T/bin:$PATH"
 
 pass=0; failn=0
@@ -105,7 +131,7 @@ done
 printf 'CODEX_MODEL=vendor/\000m9\n' > "$CONF"; run "$R" codex "$B" "$A"
 check "config: NUL byte refused with exit 2, reviewer not called" '[ $RC -eq 2 ] && ! called && grep -q "NUL byte" "$T/stderr"'
 run "$R" --get CODEX_MODEL; check "config: NUL byte refused by --get with exit 2" '[ $RC -eq 2 ] && [ -z "$OUT" ]'
-run python3 "$SKILL/scripts/models_conf.py" --get CODEX_MODEL
+run "$PY" "$SKILL/scripts/models_conf.py" --get CODEX_MODEL
 check "models_conf.py: NUL byte refused with exit 2" '[ $RC -eq 2 ] && [ -z "$OUT" ] && grep -q "NUL byte" "$T/stderr"'
 rm "$CONF"; mkdir -p "$T/xdg/using-harnesses"; printf 'CLAUDE_MODEL=opus-y\n' > "$T/xdg/using-harnesses/models.conf"
 XDG_CONFIG_HOME="$T/xdg" run "$R" claude "$B" "$A"
@@ -114,14 +140,14 @@ check "config: XDG_CONFIG_HOME honoured" '[ $RC -eq 0 ] && [ "$(after --model)" 
 # --- happy paths, argv shape, payload
 run "$R" codex "$B" "$A"
 check "codex new: exit 0, answer and session id" '[ $RC -eq 0 ] && [ -s "$DIR/out.md" ] && grep -qx "$CID" "$DIR/session"'
-check "codex new: no tools (shell, exec, image, apps, plugins, browsers), no web search" 'for f in shell_tool unified_exec view_image apps plugins browser_use computer_use in_app_browser; do grep -A1 -x -- --disable "$FAKE_LOG/argv" | grep -qx "$f" || exit 1; done; arg "web_search=\"disabled\""'
+check "codex new: no tools (shell, exec, image, apps, plugins, browsers), no web search" '( for f in shell_tool unified_exec view_image apps plugins browser_use computer_use in_app_browser; do grep -A1 -x -- --disable "$FAKE_LOG/argv" | grep -qx "$f" || exit 1; done ) && arg "web_search=\"disabled\""'
 check "codex new: read-only, rules/config ignored, memories off" 'arg -s && [ "$(after -s)" = read-only ] && arg --ignore-rules && arg --ignore-user-config && [ "$(after --disable)" = memories ] && ! arg --ephemeral'
 check "codex new: default model and effort" '[ "$(after -m)" = gpt-6.1-sol ] && arg model_reasoning_effort=medium'
-check "codex new: reviewer home is ~/.codex-review" 'grep -qxF "$CH" "$FAKE_LOG/codex_home"'
-check "codex new: HOME is the empty cwd, so ~/.agents/skills is out of reach" '[ "$(cat $FAKE_LOG/home)" = "$(cat $FAKE_LOG/cwd)" ]'
+check "codex new: reviewer home is ~/.codex-review" 'same_path "$(cat $FAKE_LOG/codex_home)" "$CH"'
+check "codex new: HOME is the empty cwd, so ~/.agents/skills is out of reach" 'same_path "$(cat $FAKE_LOG/home)" "$(cat $FAKE_LOG/cwd)"'
 check "codex new: cwd empty and outside git" '[ "$(cat $FAKE_LOG/cwdcount)" = 0 ] && ! git -C "$(cat $FAKE_LOG/cwd)" rev-parse 2>/dev/null'
 check "payload order: role lock < brief < rules < data clause < artifact < end" \
-  'python3 -c "import sys;s=open(sys.argv[1]).read();k=[\"ROLE LOCK\",\"Review this tiny file.\",\"REVIEW RULES\",\"Everything after the first\",\"===== ARTIFACT: art.sh =====\",\"===== END OF ARTIFACTS =====\"];i=[s.find(x) for x in k];sys.exit(0 if -1 not in i and i==sorted(i) and s.startswith(\"ROLE LOCK\") else 1)" "$FAKE_LOG/stdin"'
+  '"$PY" -c "import sys;s=open(sys.argv[1],encoding=\"utf-8\").read();k=[\"ROLE LOCK\",\"Review this tiny file.\",\"REVIEW RULES\",\"Everything after the first\",\"===== ARTIFACT: art.sh =====\",\"===== END OF ARTIFACTS =====\"];i=[s.find(x) for x in k];sys.exit(0 if -1 not in i and i==sorted(i) and s.startswith(\"ROLE LOCK\") else 1)" "$FAKE_LOG/stdin"'
 check "sent payload equals payload.md" 'cmp -s "$FAKE_LOG/stdin" "$DIR/payload.md"'
 run "$R" codex --effort high "$B" "$A"
 check "codex: allowed second effort" '[ $RC -eq 0 ] && arg model_reasoning_effort=high'
@@ -129,12 +155,12 @@ check "codex: allowed second effort" '[ $RC -eq 0 ] && arg model_reasoning_effor
 run "$R" codex --resume "$CID" "$B" "$A"
 check "codex resume: still no shell" 'grep -A1 -x -- --disable "$FAKE_LOG/argv" | grep -qx shell_tool && grep -A1 -x -- --disable "$FAKE_LOG/argv" | grep -qx unified_exec'
 check "codex resume: exec resume <id>, sandbox via -c, memories off" '[ $RC -eq 0 ] && [ "$(sed -n 1,2p $FAKE_LOG/argv | tr "\n" " ")" = "exec resume " ] && arg "$CID" && arg "sandbox_mode=\"read-only\"" && [ "$(after --disable)" = memories ] && arg --ignore-rules && arg --ignore-user-config'
-check "codex resume: neutral cwd and reviewer home" '[ "$(cat $FAKE_LOG/home)" = "$(cat $FAKE_LOG/cwd)" ] && [ "$(cat $FAKE_LOG/cwdcount)" = 0 ] && grep -qxF "$CH" "$FAKE_LOG/codex_home"'
+check "codex resume: neutral cwd and reviewer home" 'same_path "$(cat $FAKE_LOG/home)" "$(cat $FAKE_LOG/cwd)" && [ "$(cat $FAKE_LOG/cwdcount)" = 0 ] && same_path "$(cat $FAKE_LOG/codex_home)" "$CH"'
 
 CLAUDE_CONFIG_DIR="$T/other" XDG_CONFIG_HOME="$T/x2" XDG_DATA_HOME="$T/x3" run "$R" claude "$B" "$A"
 check "claude new: exit 0, answer and session" '[ $RC -eq 0 ] && tail -n1 "$DIR/out.md" | grep -qx "===REVIEW COMPLETE===" && grep -qx "$LID" "$DIR/session"'
 check "claude new: safe-mode, no tools, json, persistence kept, default model" 'arg --safe-mode && [ "$(after --setting-sources)" = project ] && [ "$(after --tools)" = "" ] && arg json && ! arg --no-session-persistence && ! arg --resume && [ "$(after --model)" = claude-opus-5-5 ] && [ "$(after --effort)" = medium ]'
-check "claude new: fixed cwd outside git" '[ "$(cat $FAKE_LOG/cwd)" = "$(cd $HOME/.cache/using-harnesses/claude-review && pwd -P)" ]'
+check "claude new: fixed cwd outside git" 'same_path "$(cat $FAKE_LOG/cwd)" "$(cd $HOME/.cache/using-harnesses/claude-review && pwd -P)"'
 check "claude new: store-moving variables unset" '! grep -qE "^(CLAUDE_CONFIG_DIR|XDG_CONFIG_HOME|XDG_DATA_HOME)=" "$FAKE_LOG/env"'
 run "$R" claude --resume "$LID" "$B" "$A"
 check "claude resume: --resume <id>, still no tools" '[ $RC -eq 0 ] && [ "$(after --resume)" = "$LID" ] && arg --safe-mode && [ "$(after --setting-sources)" = project ] && [ "$(after --tools)" = "" ]'
@@ -187,12 +213,15 @@ ln -sf "$T/prod.env" "$T/config.txt"; printf 'A=1\n' > "$T/prod.env"; run "$R" c
 check ".env behind an innocent symlink refused" '[ $RC -eq 3 ] && ! called'
 printf '%s = args.session\n' token > "$T/code.py"; run "$R" codex "$B" "$T/code.py"
 check "code-shaped assignment passes" '[ $RC -eq 0 ]'
-PATH="$T/pybin:$PATH" run "$R" codex "$B" "$A"
+# The credential checker crashes; everything else is real.
+run "$PY" -c 'import sys; sys.path.insert(0, sys.argv[1]); import review; review.kv_hit = lambda p: 1 / 0; sys.exit(review.main(sys.argv[2:]))' "$SKILL/scripts" codex --foreground "$B" "$A"
 check "checker crash fails closed" '[ $RC -eq 3 ] && ! called && grep -q "failed to run" "$T/stderr"'
 
 # --- reviewer home
-chmod 644 "$CH/auth.json"; run "$R" codex "$B" "$A"
-check "home: auth.json mode 644 refused" '[ $RC -eq 2 ] && ! called'; chmod 600 "$CH/auth.json"
+# Readable by others: mode 644, or on Windows (noacl mount, chmod changes nothing) a grant to Everyone.
+if [ "$WIN" = 1 ]; then icacls "$(cygpath -w "$CH/auth.json")" //grant '*S-1-1-0:R' >/dev/null; else chmod 644 "$CH/auth.json"; fi
+run "$R" codex "$B" "$A"; check "home: auth.json readable by others refused" '[ $RC -eq 2 ] && ! called'
+if [ "$WIN" = 1 ]; then icacls "$(cygpath -w "$CH/auth.json")" //remove '*S-1-1-0' >/dev/null; else chmod 600 "$CH/auth.json"; fi
 for f in AGENTS.md AGENTS.override.md; do
   touch "$CH/$f"; run "$R" codex "$B" "$A"; check "home: $f refused" '[ $RC -eq 2 ] && ! called'; rm "$CH/$f"
 done
@@ -237,7 +266,7 @@ run "$R" --get CODEX_EFFORTS; check "--get prints the effective value" '[ $RC -e
 run "$R" --get NOPE; check "--get unknown key: exit 2" '[ $RC -eq 2 ]'
 run "$R" --get; check "--get without key: exit 2" '[ $RC -eq 2 ]'
 HDR=$(sed -n '/<!-- BEGIN role-lock -->/{n;p;q}' "$SKILL/references/review-prompt.md")
-python3 - "$HDR" "$P/5e55ffff-0000-0000-0000-000000000000.jsonl" "$CH/sessions/2026/10/05/rollout-x-0199ffff-1111-0000-0000-000000000000.jsonl" <<'PY'
+"$PY" - "$HDR" "$P/5e55ffff-0000-0000-0000-000000000000.jsonl" "$CH/sessions/2026/10/05/rollout-x-0199ffff-1111-0000-0000-000000000000.jsonl" <<'PY'
 import json, sys
 h = sys.argv[1] + "\nbody"
 open(sys.argv[2], "w", encoding="utf-8").write(json.dumps({"type": "user", "message": {"content": h}}, ensure_ascii=False) + "\n")
@@ -265,31 +294,63 @@ check "wait: answer, session and exit 0 once done" '[ $RC -eq 0 ] && grep -qx "s
 FAKE_MODE=nomarker run "$RS" claude "$B" "$A"; D2=$DIR; run "$RS" wait "$D2" --timeout 30
 check "wait: failed round keeps its exit code" '[ $RC -eq 5 ] && grep -q "closing" "$T/stderr"'
 FAKE_MODE=sleep run "$RS" codex "$B" "$A"; D3=$DIR; sleep 1; run "$RS" cancel "$D3"; sleep 1
-check "cancel: stops the round" '[ $RC -eq 0 ] && [ "$(cat "$D3/rc")" = 143 ] && ! pgrep -f "$D3/out.md" >/dev/null' || { cat "$D3/rc"; pgrep -af "$D3"; }
+check "cancel: stops the round" '[ $RC -eq 0 ] && [ "$(cat "$D3/rc")" = 143 ] && ! running_with "$(basename "$D3")"' || cat "$D3/rc"
 printf 'x\n' > "$T/s4.txt"; printf 'pw: AKIA%s\n' ABCDEFGHIJKLMNOP >> "$T/s4.txt"; run "$RS" codex "$B" "$T/s4.txt"
 check "detached: refusals still exit 3 at once" '[ $RC -eq 3 ] && ! called'
 mkdir -p "$T/forged"; touch "$T/forged/payload.md"; echo $$ > "$T/forged/pid"; run "$RS" cancel "$T/forged"
 check "cancel: forged pid refused, nothing killed" '[ $RC -eq 2 ] && grep -q "no live runner" "$T/stderr"'
+# A non-ASCII TMPDIR: the neutral directory is recorded as UTF-8 and must still be found and removed.
+mkdir -p "$T/prüf"; TMPDIR="$T/prüf" FAKE_MODE=stubborn run "$RS" codex "$B" "$A"; D7=$DIR
+for _ in $(seq 20); do [ -s "$D7/neutral" ] && [ -s "$D7/pid" ] && break; sleep 0.5; done
+N7=$(cat "$D7/neutral" 2>/dev/null); TMPDIR="$T/prüf" run "$RS" cancel "$D7"; sleep 1
+check "cancel: a non-ASCII TMPDIR still loses its working directory" '[ $RC -eq 0 ] && [ -n "$N7" ] && [ ! -e "$N7" ] && ! running_with "$(basename "$D7")"'
+if [ "$WIN" = 0 ]; then  # a terminal interrupt or TERM of a foreground call stops its runner and reviewer
+  ( FAKE_MODE=stubborn exec "$RS" codex --foreground "$B" "$A" > "$T/fg.out" 2> "$T/fg.err" ) & FG=$!
+  for _ in $(seq 20); do [ -s "$T/fg.out" ] && break; sleep 0.5; done; FD=$(head -n1 "$T/fg.out")
+  for _ in $(seq 20); do [ -s "$FD/pid" ] && break; sleep 0.5; done; sleep 1
+  kill -TERM "$FG"; wait "$FG"; FRC=$?; sleep 1
+  check "foreground: TERM stops the round, its runner and its reviewer" '[ $FRC -eq 143 ] && [ "$(cat "$FD/rc")" = 143 ] && ! running_with "$(basename "$FD")"'
+else  # npm's codex.cmd hands arguments to cmd.exe: a TMPDIR it would reinterpret is refused up front
+  mkdir -p "$T/a&b"; TMPDIR="$T/a&b" run "$R" codex "$B" "$A"
+  check "Windows: a TMPDIR that cmd.exe would reinterpret is refused, nothing runs" '[ $RC -eq 2 ] && ! called && grep -q "cmd.exe" "$T/stderr" && [ -z "$(ls -A "$T/a&b")" ]'
+fi
 run "$RS" wait "$T"; check "wait: foreign directory refused" '[ $RC -eq 2 ]'
 run "$RS" wait "$D1" --timeout 9999; check "wait: timeout over 540 refused" '[ $RC -eq 2 ]'
 mkdir -p "$T/forged2"; touch "$T/forged2/payload.md"; echo 0 > "$T/forged2/rc"; echo "Review still pending" > "$T/forged2/out.md"
 run "$RS" wait "$T/forged2"; check "wait: forged status 0 without session, log and marker is exit 4" '[ $RC -eq 4 ] && [ -z "$OUT" ]'
-FAKE_MODE=stubborn run "$RS" codex "$B" "$A"; D4=$DIR; sleep 1; kill -KILL "$(cat "$D4/pid")"; run "$RS" wait "$D4" --timeout 5; sleep 1
+# Kill the runner alone; on Windows its job object must take the reviewer along.
+kill_runner() { if [ "$WIN" = 1 ]; then taskkill //PID "$1" //F >/dev/null; else kill -KILL "$1"; fi; }
+FAKE_MODE=stubborn run "$RS" codex "$B" "$A"; D4=$DIR; sleep 1; kill_runner "$(cat "$D4/pid")"; run "$RS" wait "$D4" --timeout 5; sleep 1
 check "wait: a runner killed before rc reports exit 4, not running" '[ $RC -eq 4 ] && grep -q "died" "$T/stderr" && [ ! -e "$(cat "$D4/neutral")" ]'
-check "wait: no timeout or reviewer survives its dead runner" '! pgrep -f "$D4/out.md" >/dev/null'
-pkill -KILL -f "$D4/out.md" 2>/dev/null
-FAKE_MODE=renamed run "$RS" codex "$B" "$A"; D6=$DIR; sleep 1; S6=$(cat "$D6/pid"); kill -KILL "$S6"; run "$RS" wait "$D6" --timeout 5; sleep 1
-check "wait: a renamed, TERM-ignoring reviewer of a dead runner is killed too" '[ $RC -eq 4 ] && [ -z "$(pgrep -s "$S6")" ]'
-setsid bash -c 'exec -a "codex exec worker" sleep 60' & sleep 1; OTHER=$(pgrep -f "^codex exec worker"); mkdir -p "$T/stale"; touch -d "-5 min" "$T/stale/payload.md"; echo "$OTHER" > "$T/stale/pid"
+check "wait: no timeout or reviewer survives its dead runner" '! running_with "$(basename "$D4")"'
+[ "$WIN" = 1 ] || pkill -KILL -f "$D4/out.md" 2>/dev/null
+FAKE_MODE=renamed run "$RS" codex "$B" "$A"; D6=$DIR; sleep 1
+if [ "$WIN" = 1 ]; then for _ in $(seq 20); do [ -s "$FAKE_LOG/winpid" ] && break; sleep 0.5; done; fi  # a slower start there
+S6=$(cat "$D6/pid"); W6=$(cat "$FAKE_LOG/winpid" 2>/dev/null); kill_runner "$S6"; run "$RS" wait "$D6" --timeout 5; sleep 1
+if [ "$WIN" = 1 ]; then
+  check "wait: a renamed, TERM-ignoring reviewer of a dead runner is killed too" '[ $RC -eq 4 ] && [ -n "$W6" ] && ! tasklist //FI "PID eq $W6" //NH | grep -q bash'
+else
+  check "wait: a renamed, TERM-ignoring reviewer of a dead runner is killed too" '[ $RC -eq 4 ] && [ -z "$(pgrep -s "$S6")" ]'
+fi
+if [ "$WIN" = 1 ]; then  # a reused pid: a live process that is no runner of this call
+  sleep 60 & OTHER_JOB=$!; sleep 1; OTHER=$(cat /proc/$OTHER_JOB/winpid)
+  alive_other() { tasklist //FI "PID eq $OTHER" //NH | grep -q sleep; }
+else
+  setsid bash -c 'exec -a "codex exec worker" sleep 60' & sleep 1; OTHER=$(pgrep -f "^codex exec worker"); OTHER_JOB=""
+  alive_other() { kill -0 "$OTHER" 2>/dev/null; }
+fi
+mkdir -p "$T/stale"; touch -d "-5 min" "$T/stale/payload.md"; echo "$OTHER" > "$T/stale/pid"
 run "$RS" wait "$T/stale" --timeout 5
-check "wait: a stale call whose pid now leads another session kills nothing" '[ $RC -eq 4 ] && kill -0 "$OTHER" 2>/dev/null'
-kill "$OTHER" 2>/dev/null
-mkdir -p "$T/odd\$dir \"q"; S0=$SECONDS; TMPDIR="$T/odd\$dir \"q" FAKE_MODE=slow run "$RS" codex "$B" "$A"; D5=$DIR
-TMPDIR="$T/odd\$dir \"q" run "$RS" wait "$D5" --timeout 30
+check "wait: a stale call whose pid now leads another session kills nothing" '[ $RC -eq 4 ] && alive_other'
+kill "${OTHER_JOB:-$OTHER}" 2>/dev/null
+ODD="$T/odd\$dir \"q"; [ "$WIN" = 0 ] || ODD="$T/odd\$dir q"  # Windows file names carry no quote
+mkdir -p "$ODD"; S0=$SECONDS; TMPDIR="$ODD" FAKE_MODE=slow run "$RS" codex "$B" "$A"; D5=$DIR
+TMPDIR="$ODD" run "$RS" wait "$D5" --timeout 30
 check "detached: TMPDIR with dollar, space and quote still collects the live round" '[ $RC -eq 0 ] && grep -qx "===REVIEW COMPLETE===" <<<"$OUT"'
 S0=$SECONDS; FAKE_MODE=stubborn REVIEW_TIMEOUT=1 run "$R" codex "$B" "$A"
-check "deadline: a TERM-resistant reviewer is killed (exit 137 within 20 s)" '[ $RC -eq 137 ] && [ $((SECONDS - S0)) -lt 20 ]'
-pkill -f "$T/bin/codex" 2>/dev/null; sleep 6
+# Windows has no TERM for a console process: the deadline kills at once and reports 124.
+check "deadline: a TERM-resistant reviewer is killed (exit 137, on Windows 124, within 20 s)" '[ $RC -eq $([ "$WIN" = 1 ] && echo 124 || echo 137) ] && [ $((SECONDS - S0)) -lt 20 ]'
+[ "$WIN" = 1 ] || pkill -f "$T/bin/codex" 2>/dev/null; sleep 6
 
 check "no neutral directory left behind" '[ "$(find "$TMPDIR" -mindepth 1 -maxdepth 1 -name "tmp.*" | wc -l)" -eq 0 ]'
 echo "passed $pass, failed $failn"

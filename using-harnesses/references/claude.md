@@ -37,6 +37,6 @@ well: state the question and the answer format in the brief; the fixed review ru
 
 ## Windows (Git Bash)
 
-Run from Git Bash; see [codex.md](codex.md) for `setsid`. Over ssh to beelink, use a login shell
+`review.py` runs here as on Linux; see [codex.md](codex.md) "Windows". Over ssh to beelink, use a login shell
 (`bash -lc`) and check that Claude Code is logged in there. The project-folder name is derived from the Windows path there; `review.sh`
 matches only its `-using-harnesses-claude-review` ending, so the drive prefix does not matter.

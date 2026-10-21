@@ -9,11 +9,14 @@ Every other Codex call — a question, a scouting search, a worker that writes �
 codex reads `AGENTS.md` and user skills from `$CODEX_HOME` on every run, and `--ignore-user-config`
 skips only `config.toml`. Reviews therefore run with `CODEX_HOME=~/.codex-review`: its own login, no
 `AGENTS.md`, nothing in `skills/` but codex's built-in `.system`. `review.sh` refuses a home that
-breaks any of that, and an `auth.json` that is a symlink or not mode 600. Set it up once:
+breaks any of that, and an `auth.json` that is a symlink or readable by others (mode 600; on Windows
+no grant beyond you, SYSTEM and Administrators). Set it up once:
 
 ```bash
 mkdir -m 700 ~/.codex-review
 CODEX_HOME=~/.codex-review codex login --device-auth
+# Windows (Git Bash): chmod changes nothing there; drop inherited grants such as CodexSandboxUsers
+icacls "$(cygpath -w ~/.codex-review/auth.json)" //inheritance:r //grant:r "$(whoami):F" '*S-1-5-18:F'
 ```
 
 Never copy the everyday `auth.json` there: codex rotates the refresh token on renewal, and the copy
@@ -79,9 +82,17 @@ After a Codex update, or when a call fails in a way that looks like the CLI chan
 `python3 $C selftest`; it checks new, an immediate resume and the sandbox against the live CLI and
 records the verified version in `~/.agents/state/codex-call/selftest.json`.
 
-## Windows (Git Bash)
+## Windows
 
-Run from Git Bash; `timeout`, `mktemp` and `stat -c` come with it. The detached start needs
-`setsid`; where it is missing, `review.sh` exits 2 and `--foreground` (started as a background
-task) is the way. Over ssh to beelink, use a login shell (`bash -lc`) so `codex` is on the `PATH`. `python3` from the Microsoft Store
-alias is only a placeholder: install Python, and `review.sh` falls back to `python`.
+`review.sh` only starts `scripts/review.py`, which runs the same on Windows: from Git Bash, or as
+`python review.py …` from PowerShell or cmd. The detached start, `wait` and `cancel` work there; the
+runner holds its reviewer in a job object, so a runner that is killed takes the reviewer along; if
+that job cannot be created, nothing runs (exit 2). npm's `codex.cmd` would hand every argument to
+cmd.exe, so both scripts start node with the package's script directly, and refuse an argument with
+`& | < > ^ %` if only the shim is found. Two
+differences remain. The reviewer login is checked by its ACL instead of mode 600 (setup above). And
+codex still lists the user skills in `~/.agents/skills`: `HOME` does not hide them there (measured
+with codex-cli 0.160.0, also with `USERPROFILE`). The reviewer has no tools, so it sees their names
+and descriptions, not any file. Over ssh to beelink, use a login shell (`bash -lc`) so `codex` is on
+the `PATH`. `python3` from the Microsoft Store alias is only a placeholder: install Python, and
+`review.sh` falls back to `python`.

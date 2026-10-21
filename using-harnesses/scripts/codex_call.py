@@ -28,6 +28,7 @@ import argparse
 import json
 import os
 import random
+import re
 import signal
 import shutil
 import subprocess
@@ -45,6 +46,7 @@ BANNED_MODELS = ("gpt-6-sol", "gpt-6-astra")
 # One Bash tool call is capped at 600 s; a wait must return before that.
 WAIT_TIMEOUT = 540
 STILL_RUNNING = 3
+WINDOWS = os.name == "nt"
 
 
 class Failed(Exception):
@@ -71,19 +73,47 @@ def write_meta(call: Path, meta: dict) -> None:
     tmp.replace(call / "meta.json")
 
 
-def codex_version(exe: str) -> str:
+def cli(name: str) -> list[str] | None:
+    """How to start a CLI, or None if it is not on PATH. On Windows npm installs a .cmd shim, which
+    hands every argument to cmd.exe; cmd.exe acts on & | < > ^ % that Python's quoting cannot protect.
+    So run node with the shim's script directly when the shim has npm's layout."""
+    exe = shutil.which(name)
+    if not exe or not (WINDOWS and exe.lower().endswith((".cmd", ".bat"))):
+        return [exe] if exe else None
+    shim = Path(exe)
     try:
-        return subprocess.run([exe, "--version"], capture_output=True, text=True,
+        found = re.search(r'"%dp0%\\([^"]+\.[cm]?js)"', shim.read_text(encoding="utf-8", errors="replace"))
+    except OSError:
+        found = None
+    if found:
+        script, node = shim.parent / found.group(1), shim.parent / "node.exe"
+        node = str(node) if node.is_file() else shutil.which("node")
+        if script.is_file() and node:
+            return [node, str(script)]
+    return [exe]
+
+
+def check_batch(argv: list[str]) -> None:
+    """Refuse an argument cmd.exe would reinterpret while argv still starts with a .cmd or .bat."""
+    if WINDOWS and argv[0].lower().endswith((".cmd", ".bat")):
+        bad = next((a for a in argv[1:] if set(a) & set("&|<>^%")), None)
+        if bad is not None:
+            raise Failed(f"cannot pass {bad!r} through {Path(argv[0]).name}: cmd.exe would reinterpret it")
+
+
+def codex_version(prefix: list[str]) -> str:
+    try:
+        return subprocess.run([*prefix, "--version"], capture_output=True, text=True,
                               timeout=30).stdout.strip()
     except (OSError, subprocess.TimeoutExpired):
         return "unknown"
 
 
-def command(meta: dict, exe: str, out: Path) -> list[str]:
+def command(meta: dict, prefix: list[str], out: Path) -> list[str]:
     pins = ["-m", meta["model"], "-c", f"model_reasoning_effort={meta['effort']}",
             "-c", "features.hooks=false", "--skip-git-repo-check", "--json", "-o", str(out)]
     # `--search` (native web search) is a top-level flag; codex rejects it after `exec`.
-    top = [exe, "--search"] if meta.get("search") else [exe]
+    top = [*prefix, "--search"] if meta.get("search") else [*prefix]
     if meta["parent_thread"]:
         return [*top, "exec", "resume", meta["parent_thread"], *pins,
                 "-c", f"sandbox_mode={meta['sandbox']}", "-"]
@@ -118,18 +148,19 @@ def outcome(events: str) -> tuple[str | None, str | None]:
 def run(call: Path) -> int:
     """Execute one prepared call synchronously and record its end state in meta.json."""
     meta = read_meta(call)
-    exe = shutil.which("codex")
+    prefix = cli("codex")
     rc, error, thread = 1, None, meta.get("thread_id")
     try:
-        if not exe:
+        if not prefix:
             raise Failed("codex CLI not found on PATH")
-        meta["codex_version"] = codex_version(exe)
+        argv = command(meta, prefix, call / "last.md")
+        check_batch(argv)
+        meta["codex_version"] = codex_version(prefix)
         write_meta(call, meta)
         with (call / "prompt.md").open("rb") as stdin, \
                 (call / "events.jsonl").open("wb") as stdout, \
                 (call / "stderr.log").open("wb") as stderr:
-            proc = subprocess.run(command(meta, exe, call / "last.md"), stdin=stdin,
-                                  stdout=stdout, stderr=stderr, cwd=meta["cwd"])
+            proc = subprocess.run(argv, stdin=stdin, stdout=stdout, stderr=stderr, cwd=meta["cwd"])
         found, error = outcome((call / "events.jsonl").read_text(encoding="utf-8", errors="replace"))
         if error is None and proc.returncode != 0:
             error = f"codex exited {proc.returncode}"
@@ -164,6 +195,8 @@ def finish(call: Path, meta: dict) -> None:
 def alive(pid: int | None) -> bool:
     if not pid:
         return False
+    if WINDOWS:
+        return win_alive(pid)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -173,10 +206,76 @@ def alive(pid: int | None) -> bool:
     return True
 
 
+def win_alive(pid: int) -> bool:
+    """os.kill(pid, 0) is no probe on Windows: signal 0 is CTRL_C_EVENT, sent to a console process
+    group, and it raises WinError 87 for a live pid outside this console. Open a handle instead."""
+    import ctypes
+    from ctypes import wintypes
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    k32.OpenProcess.restype = wintypes.HANDLE
+    k32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    k32.WaitForSingleObject.restype = wintypes.DWORD
+    k32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    synchronize, query_limited, access_denied, invalid_parameter = 0x00100000, 0x1000, 5, 87
+    if not 0 < pid <= 0xFFFFFFFF:
+        return False  # no Windows pid; as a DWORD it would wrap onto some other process
+    handle = k32.OpenProcess(synchronize | query_limited, False, pid)
+    if not handle:
+        error = ctypes.get_last_error()
+        if error == invalid_parameter:  # no such process
+            return False
+        if error == access_denied:  # exists but belongs to someone else, like EPERM on POSIX
+            return True
+        raise Failed(f"cannot probe pid {pid}: {ctypes.FormatError(error)}")
+    try:
+        # an exited process stays openable while anyone holds a handle; it is signaled then
+        state = k32.WaitForSingleObject(handle, 0)
+        if state in (0, 0x102):  # WAIT_OBJECT_0: exited, WAIT_TIMEOUT: running
+            return state == 0x102
+        raise Failed(f"cannot probe pid {pid}: {ctypes.FormatError(ctypes.get_last_error())}")
+    finally:
+        k32.CloseHandle(handle)
+
+
+def win_argv(pid: int) -> list[str]:
+    """A process's argv as Windows parses its command line, [] if it has none we can read (it is
+    gone, or another user's). A failed lookup raises, so a cancel stays retryable."""
+    import ctypes
+    from ctypes import wintypes
+    # Stop: a CIM error otherwise exits 0 with empty stdout, which would read as "gone"
+    query = ("$ErrorActionPreference = 'Stop'; "
+             "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; "
+             f"(Get-CimInstance Win32_Process -Filter 'ProcessId={int(pid)}').CommandLine")
+    try:
+        proc = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", query],
+                              capture_output=True, encoding="utf-8", errors="replace", timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Failed(f"cannot read the command line of pid {pid}: {exc}")
+    if proc.returncode != 0 or proc.stderr.strip():
+        raise Failed(f"cannot read the command line of pid {pid}: {proc.stderr.strip()}")
+    line = proc.stdout.strip().lstrip("﻿")
+    if not line:
+        return []
+    shell32 = ctypes.WinDLL("shell32", use_last_error=True)
+    shell32.CommandLineToArgvW.argtypes = (wintypes.LPCWSTR, ctypes.POINTER(ctypes.c_int))
+    shell32.CommandLineToArgvW.restype = ctypes.POINTER(wintypes.LPWSTR)
+    k32 = ctypes.WinDLL("kernel32")
+    k32.LocalFree.argtypes = (ctypes.c_void_p,)
+    count = ctypes.c_int()
+    argv = shell32.CommandLineToArgvW(line, ctypes.byref(count))
+    if not argv:
+        raise Failed(f"cannot parse the command line of pid {pid}: {ctypes.FormatError(ctypes.get_last_error())}")
+    try:
+        return [argv[i] for i in range(count.value)]
+    finally:
+        k32.LocalFree(argv)
+
+
 def report(call: Path) -> int:
     meta = read_meta(call)
     if meta["rc"] != 0:
-        tail = (call / "stderr.log").read_text(errors="replace")[-1500:] if (call / "stderr.log").exists() else ""
+        tail = (call / "stderr.log").read_text(encoding="utf-8", errors="replace")[-1500:] if (call / "stderr.log").exists() else ""
         print(f"FAILED: {meta['error']}\ncall: {call}\n{tail}".rstrip(), file=sys.stderr)
         return 1
     print(f"thread: {meta['thread_id']}\nresult: {call / 'last.md'}\n")
@@ -259,7 +358,8 @@ def start(args, parent: str | None) -> int:
 
 
 def cancel(call: Path) -> int:
-    """Stop a detached call: its runner leads its own session, so the group holds codex too."""
+    """Stop a detached call: its runner leads its own session, so the group holds codex too.
+    Windows has no such group; there taskkill /T walks the tree runner → codex.cmd → node → codex."""
     call = call.resolve()  # the runner's argv holds the absolute path
     meta = read_meta(call)
     if "rc" in meta:
@@ -274,6 +374,19 @@ def cancel(call: Path) -> int:
         finish(call, meta)
         print(f"cancelled (runner already gone): {call}", file=sys.stderr)
         return 1
+    if WINDOWS:
+        kill_tree(pid)
+    else:
+        kill_group(pid)
+    meta = read_meta(call)
+    if "rc" not in meta:
+        meta.update(rc=1, error="cancelled", finished=now())
+        finish(call, meta)
+    print(f"cancelled: {call}", file=sys.stderr)
+    return 1
+
+
+def kill_group(pid: int) -> None:
     for sig, grace in ((signal.SIGTERM, 10), (signal.SIGKILL, 5)):
         try:
             os.killpg(pid, sig)
@@ -289,16 +402,38 @@ def cancel(call: Path) -> int:
         else:
             continue
         break
-    meta = read_meta(call)
-    if "rc" not in meta:
-        meta.update(rc=1, error="cancelled", finished=now())
-        finish(call, meta)
-    print(f"cancelled: {call}", file=sys.stderr)
-    return 1
+
+
+def kill_tree(pid: int) -> None:
+    # No SIGTERM for console processes: taskkill without /F only posts WM_CLOSE. /T finds the
+    # children by parent pid, so it must run while the runner is still alive.
+    try:
+        proc = subprocess.run(["taskkill", "/PID", str(pid), "/T", "/F"], capture_output=True,
+                              encoding="oem", errors="replace", timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise Failed(f"cannot run taskkill for runner {pid}: {exc}")
+    said = (proc.stdout + proc.stderr).strip()
+    deadline = time.monotonic() + 5
+    while alive(pid) and time.monotonic() < deadline:
+        time.sleep(0.2)
+    if alive(pid):
+        # nothing recorded: the runner may still finish on its own, and cancel can be retried
+        raise Failed(f"taskkill could not stop runner {pid}: {said}")
+    if proc.returncode != 0:
+        print(f"warning: taskkill exited {proc.returncode}, part of the tree may still run:\n{said}",
+              file=sys.stderr)
 
 
 def is_runner_of(pid: int, call: Path) -> bool:
-    """True only if pid is alive, leads its own group, and runs `_run` for this very call."""
+    """True only if pid is alive, leads its own group (POSIX), and runs `_run` for this very call."""
+    if WINDOWS:
+        # no /proc and no process groups: compare the parsed command line, argument by argument
+        if not alive(pid):
+            return False
+        argv = win_argv(pid)
+        target = os.path.normcase(str(call))
+        return any(flag == "_run" and os.path.normcase(str(Path(arg).resolve())) == target
+                   for flag, arg in zip(argv, argv[1:]))
     try:
         argv = Path(f"/proc/{pid}/cmdline").read_bytes().split(b"\0")
         return os.getpgid(pid) == pid and b"_run" in argv and str(call).encode() in argv
@@ -342,7 +477,8 @@ def selftest() -> int:
     if meta["rc"] != 0:
         return fail("sandbox", meta)
     ran = any((json.loads(line).get("item") or {}).get("type") == "command_execution"
-              for line in (third / "events.jsonl").read_text().splitlines() if line.startswith("{"))
+              for line in (third / "events.jsonl").read_text(encoding="utf-8", errors="replace").splitlines()
+              if line.startswith("{"))
     if not ran:
         print("SELFTEST FAILED at sandbox: the command was not executed, the check proves nothing",
               file=sys.stderr)
@@ -401,7 +537,7 @@ def main(argv=None) -> int:
             return wait(Path(args.call), args.timeout)
         if args.cmd == "list":
             log = ROOT / "calls.jsonl"
-            lines = log.read_text().splitlines()[-args.n:] if log.exists() else []
+            lines = log.read_text(encoding="utf-8").splitlines()[-args.n:] if log.exists() else []
             print("\n".join(lines))
             return 0
         if args.cmd == "selftest":
@@ -417,4 +553,10 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
+    # Every file here is UTF-8, but a redirected stream on Windows defaults to the ANSI code page:
+    # printing an answer with characters outside cp1252 crashed, and a piped `-` prompt was misread.
+    # Keep each stream's error handler: reconfigure would otherwise reset it to strict.
+    for stream in (sys.stdin, sys.stdout, sys.stderr):
+        if stream is not None:
+            stream.reconfigure(encoding="utf-8", errors=stream.errors)
     sys.exit(main())
