@@ -13,8 +13,11 @@ Goal: clear authority, low redundancy, good trigger boundaries, and high informa
 
 ## Mental model
 
-- Early/automatic instructions such as `AGENTS.md` shape baseline behavior through primacy. Keep them short, stable, normative, and focused on durable rules and stop conditions, not task history or long runbooks.
-- Skills shape task-local behavior through recency. Keep descriptions precise as the main trigger surface, and keep `SKILL.md` procedural, compact, and scoped to one job.
+- Quality drops with context length, with near-miss distractors (related but irrelevant content distracts more than random noise), and with contradictions. Too little context fails too: vague rules that assume shared knowledge, or detail lost in a rewrite. Aim for the smallest set of high-signal tokens, not the shortest text.
+- Position alone does not establish authority; follow the harness's instruction hierarchy and scope rules (`references/harness-loading.md`). Position effects on attention depend on model and task; follow current long-context guidance (for example, long documents before the query) and test placement when arranging large inputs. To keep a goal in attention during long work, restate it (rewrite the plan or TODO).
+- Always-loaded instructions (`AGENTS.md`, `CLAUDE.md`, and everything they `@`-import) cost tokens every turn. Persist constraints that must outlive compaction or a reset through the harness's supported mechanism (`references/harness-loading.md`); keep task-scoped restrictions in task state, not in global files. Keep instruction files short (Claude Code's docs target under 200 lines per file; adherence drops as files grow), stable, and normative: durable rules and stop conditions. Leave out task history, long runbooks, facts the agent can read from code, and volatile values (dates, counters) that break the prompt cache. Imports organize content but do not reduce its cost. Reserve emphasis such as "IMPORTANT" for the one or two rules that keep being skipped.
+- Skills are progressive disclosure: only name and description load up front, the body on use, references on demand. The description is the trigger surface; keep `SKILL.md` procedural, compact, and scoped to one job.
+- Every tool definition loaded into context costs tokens and selection accuracy; deferred tools that load on search cost little until used. Prefer tools with distinct jobs, unambiguous parameters, and compact output; prefer CLIs and scripts for deterministic work. Before turning off a useful server, check whether deferred loading already keeps it out of context.
 - Subagents are prompt- and context-engineering tools, not just extra workers:
   - Prompt engineering: the orchestrator can define role, scope, constraints, stop conditions, and output shape with surgical precision.
   - Context engineering: scouts/reviewers can inspect large context in isolation and return only filtered, relevant handoffs, keeping the main agent's context small.
@@ -22,7 +25,7 @@ Goal: clear authority, low redundancy, good trigger boundaries, and high informa
   - Caveat: subagents add coordination overhead, lossy handoffs, scope-risk, and tool/model differences; the main agent remains responsible for final judgment.
 - Meta-skills for context management, subagent workflow, and skill creation are valuable audit and maintenance tools. They help keep the context system intentional without hard-routing every task through another skill.
 - Tools, MCP, scripts, hooks, and CI should provide capability or enforcement instead of prose promises.
-- Memory is for reset-resilient non-normative context, not enforcement.
+- Memory is for reset-resilient non-normative context, not enforcement. Whatever is written there is later read as fact, so verify a claim before storing it; a wrong entry keeps misleading every session that loads it.
 - The runtime environment (harness, terminal multiplexer, sandbox, which checkout is deployed) is
   its own layer. A session-start hook states the basics in a few lines (on this machine the
   existing adapter `~/.agents/scripts/session-environment.py`, owned separately); a fact it does
@@ -74,7 +77,9 @@ Optional smoke test for agent-instruction injection during audits: after explici
 
 ### 2. Design the target shape
 
-Principle check: could any planned addition be cut while still solving the problem? If yes, cut it.
+Principle check: could any planned addition be cut while still solving the problem? If yes, cut it. For each line of an always-loaded file, ask whether removing it would cause mistakes.
+
+Counter-check: cutting can remove what the agent needs. Explicit user requirements, known operational constraints, and stop conditions belong in from the start; beyond those, add corrective rules for observed failures and check that they change behavior. When shortening or rewriting existing context, prefer targeted edits over full rewrites, and list what the old version let the agent do that the new one no longer does; full LLM rewrites tend to collapse detailed context into generic text.
 
 When the design covers how agents find a machine's applications or repositories, choose the topology first with `references/context-topologies.md`.
 
@@ -100,7 +105,8 @@ Templates in `assets/` are scaffolds, not truth. Preserve useful repo-specific c
 After changes or recommendations:
 
 - ask whether every file and rule added earns its place; remove what does not
-- re-read changed files for role overlap and contradiction
+- re-read changed files for role overlap and contradiction; tell deliberate repo overrides of global defaults apart from unresolved contradictions, which an agent may resolve either way
+- check for near-miss content: overlapping skills, stale notes, or similar-but-different rules that could be picked instead of the right one
 - confirm routing references point to files/systems that exist
 - check that always-loaded context stayed small
 - check runtime-specific adapters are tiny, active, and documented only where useful
@@ -122,6 +128,7 @@ Read only when needed:
 - `references/review-checklist.md` — readiness review checklist
 - `references/audit-workflow.md` — read-only audit workflow for existing context systems
 - `references/harness-loading.md` — how Codex and Claude Code load instruction files and skills, and how to share one file between them
+- `references/sources.md` — the research and vendor guidance behind the mental model, with evidence limits; read when a claim is challenged or the guidance needs updating
 - `references/initialize-workflow.md` — bootstrap workflow for new or ad-hoc context systems
 - `assets/agents-template.md` — repo AGENTS.md scaffold
 - `assets/global-agents-template.md` — global AGENTS.md scaffold

@@ -79,6 +79,13 @@ Check for:
 - Templates with unfilled placeholders in active use.
 - Duplicate skill names across global and repo scope with divergent behavior.
 
+### Tool and MCP exposure
+
+- Count tool definitions actually loaded at session start separately from tools available through deferred search; only the loaded ones cost context up front.
+- MCP servers or tools loaded eagerly that the repo or machine never uses.
+- Tools with overlapping jobs, where a human could not say which one to pick.
+- Tools that return large raw output where a filtered result would do.
+
 ### Memory hygiene
 
 - Memory index links that do not resolve to a file.
@@ -94,6 +101,8 @@ Check for:
 
 ### Content quality
 
+- Volatile values (dates, counters, current status) in always-loaded files.
+- Memory containing unverified claims that later sessions will read as fact.
 - Memory containing rules, backlog, or diary entries.
 - Agent instruction files too long or mixing policy with project state.
 - TODO files mixing roadmap and priority buckets without justification.

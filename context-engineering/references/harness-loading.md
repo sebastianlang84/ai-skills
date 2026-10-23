@@ -34,6 +34,13 @@ the date.
   An `AGENTS.md` that Claude reads natively never asks: its external imports load only if they
   were already approved for the project, otherwise they stay off silently.
 
+**After compaction** (Claude Code [memory](https://code.claude.com/docs/en/memory) and
+[glossary](https://code.claude.com/docs/en/glossary#compaction), read 2026-10-24)
+
+- Claude reloads the project-root `CLAUDE.md` after `/compact`; instructions given only in the
+  conversation may be lost. `/compact` accepts instructions on what to keep.
+- Codex: not verified. Do not assume either way; test it before relying on it.
+
 **Sharing one file across harnesses**
 
 - Claude: an `@` import of the canonical file (`CLAUDE.md` containing only `@AGENTS.md` in a
