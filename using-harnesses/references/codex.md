@@ -72,7 +72,7 @@ or `-` for stdin. Its state is under `~/.agents/state/codex-call/`.
   widens the sandbox for callers that must write (market-digest's fixer, peer-debate sides). Never
   use it for a review: reviews go through `review.sh`, which has no such option.
 - `--model`, `--effort`, `--sandbox` or `CODEX_CALL_MODEL` / `CODEX_CALL_EFFORT` override the pins;
-  `gpt-6-sol` and `gpt-6-astra` are refused.
+  `gpt-6-sol` is refused; `gpt-6-astra` only with `--on-request`, when the user named it for this call.
 
 Scouting ("where is this"): pass `--model gpt-6-luna --effort low` and append
 [scout-rules.md](scout-rules.md). Pass the same two flags to every `resume` of a scout thread, or the

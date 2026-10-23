@@ -42,7 +42,9 @@ EFFORT = os.environ.get("CODEX_CALL_EFFORT", "medium")
 ROOT = Path(os.environ.get("CODEX_CALL_ROOT", Path.home() / ".agents/state/codex-call"))
 SANDBOXES = ("read-only", "workspace-write", "danger-full-access")
 # Banned on this machine (Sebastian, 2026-10-01); a call naming one fails before anything runs.
-BANNED_MODELS = ("gpt-6-sol", "gpt-6-astra")
+BANNED_MODELS = ("gpt-6-sol",)
+# Never a default, only when Sebastian names it for this call; needs --on-request (Sebastian, 2026-10-24).
+ON_REQUEST_MODELS = ("gpt-6-astra",)
 # One Bash tool call is capped at 600 s; a wait must return before that.
 WAIT_TIMEOUT = 540
 STILL_RUNNING = 3
@@ -504,6 +506,8 @@ def main(argv=None) -> int:
         sp.add_argument("--sandbox", default="read-only")
         sp.add_argument("--search", action="store_true", help="give Codex its native web search")
         sp.add_argument("--detach", action="store_true")
+        sp.add_argument("--on-request", action="store_true",
+                        help="the user named this on-request model for this call")
         sp.add_argument("prompt")
 
     new = sub.add_parser("new")
@@ -529,6 +533,8 @@ def main(argv=None) -> int:
     try:
         if getattr(args, "model", None) in BANNED_MODELS:
             raise Failed(f"model {args.model} is banned on this machine; use gpt-6.1-sol or gpt-6-luna")
+        if getattr(args, "model", None) in ON_REQUEST_MODELS and not args.on_request:
+            raise Failed(f"model {args.model} runs only when the user names it for this call (--on-request)")
         if args.cmd == "new":
             return start(args, None)
         if args.cmd == "resume":
