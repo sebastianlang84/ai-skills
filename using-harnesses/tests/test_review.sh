@@ -150,6 +150,25 @@ check "codex new: cwd empty and outside git" '[ "$(cat $FAKE_LOG/cwdcount)" = 0 
 check "payload order: role lock < brief < rules < data clause < artifact < end" \
   '"$PY" -c "import sys;s=open(sys.argv[1],encoding=\"utf-8\").read();k=[\"ROLE LOCK\",\"Review this tiny file.\",\"REVIEW RULES\",\"Everything after the first\",\"===== ARTIFACT: art.sh =====\",\"===== END OF ARTIFACTS =====\"];i=[s.find(x) for x in k];sys.exit(0 if -1 not in i and i==sorted(i) and s.startswith(\"ROLE LOCK\") else 1)" "$FAKE_LOG/stdin"'
 check "sent payload equals payload.md" 'cmp -s "$FAKE_LOG/stdin" "$DIR/payload.md"'
+printf 'OWN RULES: list every error.\n' > "$T/rules.md"
+run "$R" codex --rules "$T/rules.md" "$B" "$A"
+check "--rules: replaces only the review rules; role lock, brief, data clause, artifacts stay in order" \
+  '[ $RC -eq 0 ] && ! grep -q "REVIEW RULES" "$FAKE_LOG/stdin" && "$PY" -c "import sys;s=open(sys.argv[1],encoding=\"utf-8\").read();k=[\"ROLE LOCK\",\"Review this tiny file.\",\"OWN RULES: list every error.\",\"Everything after the first\",\"===== ARTIFACT: art.sh =====\"];i=[s.find(x) for x in k];sys.exit(0 if -1 not in i and i==sorted(i) and s.startswith(\"ROLE LOCK\") else 1)" "$FAKE_LOG/stdin"'
+check "--rules: role lock and data clause are byte for byte the fixed blocks" \
+  '"$PY" -c "import sys,re;f=open(sys.argv[2],encoding=\"utf-8\").read();s=open(sys.argv[1],encoding=\"utf-8\").read();b=lambda n:re.search(\"<!-- BEGIN \"+n+\" -->\\n(.*?)<!-- END \"+n+\" -->\",f,re.S).group(1);d=s.find(b(\"data-clause\"));sys.exit(0 if s.startswith(b(\"role-lock\")) and d > s.find(\"OWN RULES\") > 0 and s.find(\"===== ARTIFACT: art.sh\") > d else 1)" "$FAKE_LOG/stdin" "$SKILL/references/review-prompt.md"'
+run "$R" codex --resume "$CID" --rules "$T/rules.md" "$B" "$A"
+check "--rules: a resumed round carries the caller's rules too" '[ $RC -eq 0 ] && grep -q "OWN RULES" "$FAKE_LOG/stdin" && ! grep -q "REVIEW RULES" "$FAKE_LOG/stdin"'
+: > "$T/empty-rules.md"
+for bad in "$T/missing-rules.md" "$T/empty-rules.md" ""; do
+  run "$R" codex --rules "$bad" "$B" "$A"
+  check "--rules: missing file, empty file or empty argument '$bad' refused with exit 2, reviewer not called" '[ $RC -eq 2 ] && ! called'
+done
+cp "$T/rules.md" "$T/rules.env.md"; run "$R" codex --rules "$T/rules.env.md" "$B" "$A"
+check "--rules: an .env-named rules file is refused like any input (exit 3)" '[ $RC -eq 3 ] && ! called'
+# Built at run time: the literal would trip this skill's own secret check.
+printf 'api_%s = "%s"\n' key abcd1234efgh > "$T/secret-rules.md"
+run "$R" codex --rules "$T/secret-rules.md" "$B" "$A"
+check "--rules: the rules file passes the secret check (exit 3)" '[ $RC -eq 3 ] && ! called'
 run "$R" codex --effort high "$B" "$A"
 check "codex: allowed second effort" '[ $RC -eq 0 ] && arg model_reasoning_effort=high'
 

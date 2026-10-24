@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """review.py — send one adversarial review round to codex or claude with fixed, contained flags.
 
-    review.py <codex|claude> [--foreground] [--resume <id>] [--effort <level>] <brief-file> <artifact-file>...
+    review.py <codex|claude> [--foreground] [--resume <id>] [--effort <level>] [--rules <file>] <brief-file> <artifact-file>...
     review.py wait <dir> [--timeout <s>]  |  review.py cancel <dir>
     review.py --print-config | --get <KEY>
 
@@ -56,7 +56,7 @@ REFS = HERE.parent / "references"
 MARKER = "===REVIEW COMPLETE==="
 WAIT_LIMIT = 540
 STILL_RUNNING = 75
-USAGE = ("usage: review.py <codex|claude> [--foreground] [--resume <id>] [--effort <level>] "
+USAGE = ("usage: review.py <codex|claude> [--foreground] [--resume <id>] [--effort <level>] [--rules <file>] "
          "<brief-file> <artifact-file>... | wait <dir> [--timeout <s>] | cancel <dir> | "
          "--print-config | --get <KEY>")
 # Read by the runner; the checked values travel in a file, not through argv.
@@ -463,17 +463,19 @@ def start(argv: list[str]) -> int:
     backend = argv[0] if argv else ""
     if backend not in ("codex", "claude"):
         usage()
-    args, resume, effort, foreground = argv[1:], "", "", False
+    args, resume, effort, rules_file, foreground = argv[1:], "", "", None, False
     while args:
         if args[0] == "--foreground":
             foreground, args = True, args[1:]
-        elif args[0] in ("--resume", "--effort"):
+        elif args[0] in ("--resume", "--effort", "--rules"):
             if len(args) < 2:
                 usage()
             if args[0] == "--resume":
                 resume = args[1]
-            else:
+            elif args[0] == "--effort":
                 effort = args[1]
+            else:
+                rules_file = args[1]
             args = args[2:]
         elif args[0].startswith("-"):
             usage()
@@ -489,11 +491,15 @@ def start(argv: list[str]) -> int:
     if resume and not re.fullmatch(r"[A-Za-z0-9-]{8,64}", resume):
         die("invalid resume id")
     brief, artifacts = args[0], args[1:]
-    for f in (brief, *artifacts):
+    if rules_file == "":
+        die("empty --rules argument")
+    for f in (brief, *artifacts, *([rules_file] if rules_file is not None else [])):
         if f.startswith("-"):
             usage()
         if not (os.path.isfile(f) and os.access(f, os.R_OK)):
             die(f"not a readable file: {f}")
+        if f == rules_file and os.path.getsize(f) == 0:
+            die(f"empty rules file: {f}")
         for n in (f, os.path.realpath(f)):  # the name given and the file it resolves to
             if ".env" in os.path.basename(n).lower():
                 die(f"payload refused: {f} is or points to an excluded (.env) file", 3)
@@ -520,11 +526,14 @@ def start(argv: list[str]) -> int:
     head = head_block.decode("utf-8", "replace").split("\n")[0] if head_block else ""
     if not head:
         fail("review-prompt.md has no role-lock block", 2)
+    # --rules replaces only the general review rules; role lock and data clause stay fixed.
     rules, data = block("rules"), block("data-clause")
     payload = outdir / "payload.md"
     try:
         if rules is None or data is None:
             raise OSError("block missing")
+        if rules_file is not None:
+            rules = Path(rules_file).read_bytes().rstrip(b"\n") + b"\n"
         parts = [head_block, b"\n", Path(brief).read_bytes(), b"\n\n", rules, b"\n", data]
         for f in artifacts:
             parts += [f"\n\n===== ARTIFACT: {os.path.basename(f)} =====\n".encode(), Path(f).read_bytes()]

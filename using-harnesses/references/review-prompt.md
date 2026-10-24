@@ -1,7 +1,7 @@
 # Review prompt frame
 
 `scripts/review.py` reads the three blocks below between their `BEGIN`/`END` markers and builds every
-payload in this order: role lock, the caller's brief, review rules, data clause, then each artifact
+payload in this order: role lock, the caller's brief, review rules (or the caller's `--rules` file), data clause, then each artifact
 under `===== ARTIFACT: <basename> =====`, then `===== END OF ARTIFACTS =====`. A missing block stops
 the script before anything is sent. The first line of the role lock is also how the script
 recognises a session it started, so changing that line makes older review sessions unresumable.

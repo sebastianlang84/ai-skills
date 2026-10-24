@@ -43,7 +43,10 @@ again. Budget 5–20 minutes per round. `wait` prints `session: <id>`, a blank l
 scripts that run in the background anyway. The call directory holds `out.md` (the answer),
 `session` (the id for `--resume`), `err.txt`, `why`, `payload.md`, `rc` and the raw log; remove it
 and `$W` once you have the session id. The model is fixed per backend; `--effort` takes only the
-levels configured for it (`"$PY" "$S/review.py" --print-config`).
+levels configured for it (`"$PY" "$S/review.py" --print-config`). `--rules <file>` replaces the
+general review rules of [review-prompt.md](review-prompt.md) with the caller's own (a non-empty
+file), for a fixed reading task whose output format the code-review rules would contradict, such as
+a capped number of findings; role lock and data clause stay as they are.
 
 | Exit | Meaning | Action |
 |---|---|---|

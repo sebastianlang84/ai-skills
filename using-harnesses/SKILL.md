@@ -16,7 +16,7 @@ description: Calls another agent harness headless — codex (gpt-6.1-sol, scouti
 ```bash
 S=~/.agents/skills/using-harnesses/scripts
 PY=python3                   # Windows: PY=python (python3 there may be the Microsoft Store placeholder)
-D=$("$PY" "$S/review.py" <codex|claude> [--resume <id>] [--effort <level>] <brief-file> <artifact-file>...)
+D=$("$PY" "$S/review.py" <codex|claude> [--resume <id>] [--effort <level>] [--rules <file>] <brief-file> <artifact-file>...)
 "$PY" "$S/review.py" wait "$D"     # exit 75: still running, call wait again
 ```
 
@@ -29,7 +29,9 @@ review blocking in the foreground of a session. The script assembles the payload
 [review-prompt.md](references/review-prompt.md), refuses secrets and `.env` inputs, runs the
 reviewer contained (both without tools; codex read-only in its own home `~/.codex-review`),
 checks the closing marker, and resumes only sessions it started. Never hand-write `codex exec` or
-`claude -p` for a review.
+`claude -p` for a review. `--rules <file>` replaces only the general review rules, for a reading
+that is not a code review (for example checking a document for errors); role lock and data clause
+stay fixed.
 
 - **The reviewer's vendor must differ from the author's.** Under Claude Code review with `codex`;
   under Codex review with `claude`. If only the author's vendor is reachable, say so and stop.
