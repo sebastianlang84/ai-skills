@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """review.py — send one adversarial review round to codex or claude with fixed, contained flags.
 
-    review.sh <codex|claude> [--foreground] [--resume <id>] [--effort <level>] <brief-file> <artifact-file>...
-    review.sh wait <dir> [--timeout <s>]  |  review.sh cancel <dir>
-    review.sh --print-config | --get <KEY>
+    review.py <codex|claude> [--foreground] [--resume <id>] [--effort <level>] <brief-file> <artifact-file>...
+    review.py wait <dir> [--timeout <s>]  |  review.py cancel <dir>
+    review.py --print-config | --get <KEY>
 
-review.sh starts this file; both take the same arguments. Builds the payload from
+Call it as `python3 review.py …` on Linux, `python review.py …` on Windows (python3 there may be
+the Microsoft Store placeholder). Builds the payload from
 ../references/review-prompt.md (role lock, brief, rules, data clause, artifacts), refuses secrets and
 `.env` inputs (exit 3), and runs the reviewer contained: codex in CODEX_HOME=~/.codex-review,
 read-only, memories off, in an empty directory outside git that is also its HOME; claude with
@@ -40,6 +41,11 @@ import tempfile
 import time
 from pathlib import Path
 
+# 3.7 and 3.8 stop here with exit 2 like every setup error; older ones cannot compile this file.
+if sys.version_info < (3, 9):
+    print("review.py: python 3.9 or newer required", file=sys.stderr)
+    sys.exit(2)
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import codex_call  # noqa: E402  (alive, is_runner_of, kill_tree, WINDOWS)
@@ -50,7 +56,7 @@ REFS = HERE.parent / "references"
 MARKER = "===REVIEW COMPLETE==="
 WAIT_LIMIT = 540
 STILL_RUNNING = 75
-USAGE = ("usage: review.sh <codex|claude> [--foreground] [--resume <id>] [--effort <level>] "
+USAGE = ("usage: review.py <codex|claude> [--foreground] [--resume <id>] [--effort <level>] "
          "<brief-file> <artifact-file>... | wait <dir> [--timeout <s>] | cancel <dir> | "
          "--print-config | --get <KEY>")
 # Read by the runner; the checked values travel in a file, not through argv.
@@ -81,7 +87,7 @@ class Exit(Exception):
 
 
 def die(message: str, code: int = 2):
-    print(f"review.sh: {message}", file=sys.stderr)
+    print(f"review.py: {message}", file=sys.stderr)
     raise Exit(code)
 
 
@@ -300,7 +306,7 @@ def collect(argv: list[str]) -> int:
     elif rest:
         usage()
     if not (call.is_dir() and owned(call) and (call / "payload.md").is_file()):
-        die(f"not a review.sh call directory: {argv[1]}")
+        die(f"not a review.py call directory: {argv[1]}")
     call = call.resolve()
     if cmd == "cancel":
         if (call / "rc").is_file():
@@ -313,7 +319,7 @@ def collect(argv: list[str]) -> int:
         remove_neutral(call)
         (call / "rc").write_text("143\n")
         with (call / "why").open("a", encoding="utf-8") as why:
-            why.write("review.sh: cancelled\n")
+            why.write("review.py: cancelled\n")
         print("cancelled")
         return 0
     end, held = time.monotonic() + limit, None
@@ -339,7 +345,7 @@ def collect(argv: list[str]) -> int:
                     pass
                 remove_neutral(call)
                 with (call / "why").open("a", encoding="utf-8") as why:
-                    why.write(f"review.sh: the runner died before it finished; see {shown(call)}/err.txt\n")
+                    why.write(f"review.py: the runner died before it finished; see {shown(call)}/err.txt\n")
                 (call / "rc").write_text("4\n")
                 break
             if time.monotonic() >= end:
@@ -357,7 +363,7 @@ def collect(argv: list[str]) -> int:
         session = call / "session"
         logs = [call / "log.jsonl", call / "log.json"]
         if not (nonempty(session) and any(nonempty(p) for p in logs) and last_line(call / "out.md") == MARKER):
-            print(f"review.sh: status 0 without a complete answer, session and log in {argv[1]}", file=sys.stderr)
+            print(f"review.py: status 0 without a complete answer, session and log in {argv[1]}", file=sys.stderr)
             return 4
         answer = (call / "out.md").read_bytes()
         out = sys.stdout.buffer
@@ -580,7 +586,7 @@ def start(argv: list[str]) -> int:
         fail(f"working directory {cwd} lies inside a git repository", 2)
     if resume:
         if stored is None:
-            fail(f"session {resume} was not started by review.sh for {backend}; start a new one", 2)
+            fail(f"session {resume} was not started by review.py for {backend}; start a new one", 2)
         if not first_message_opens_with(backend, stored, head):
             fail(f"session {resume} does not open with the role lock; start a new one", 2)
 
@@ -618,7 +624,7 @@ def start(argv: list[str]) -> int:
         runner_proc.wait()
         remove_neutral(outdir)
         if not (outdir / "rc").is_file():
-            publish(outdir, 128 + int(caught[0] if caught else signal.SIGINT), "review.sh: interrupted")
+            publish(outdir, 128 + int(caught[0] if caught else signal.SIGINT), "review.py: interrupted")
     rc_file = outdir / "rc"
     rc = int(rc_file.read_text().strip()) if rc_file.is_file() else 4
     why = outdir / "why"
@@ -711,7 +717,7 @@ def run_with_deadline(cmd: list[str], env: dict, cwd: str, payload: Path, log: P
             proc = subprocess.Popen(cmd, stdin=stdin, stdout=stdout, stderr=stderr, cwd=cwd, env=env,
                                     **({} if WINDOWS else {"preexec_fn": os.setpgrp}))
         except OSError as exc:
-            stderr.write(f"review.sh: cannot start {cmd[0]}: {exc}\n".encode())
+            stderr.write(f"review.py: cannot start {cmd[0]}: {exc}\n".encode())
             return 127
         try:
             rc = proc.wait(timeout=deadline)
@@ -720,12 +726,12 @@ def run_with_deadline(cmd: list[str], env: dict, cwd: str, payload: Path, log: P
                 try:
                     codex_call.kill_tree(proc.pid)
                 except codex_call.Failed as exc:
-                    stderr.write(f"review.sh: {exc}\n".encode())
+                    stderr.write(f"review.py: {exc}\n".encode())
                 try:
                     proc.wait(timeout=10)
                 except subprocess.TimeoutExpired:
                     # The runner returns anyway: when it exits, its job object kills what is left.
-                    stderr.write(b"review.sh: the reviewer survived taskkill; the runner's job object ends it\n")
+                    stderr.write(b"review.py: the reviewer survived taskkill; the runner's job object ends it\n")
                 return 124
             for sig, grace in ((signal.SIGTERM, 10), (signal.SIGKILL, None)):
                 try:
@@ -782,11 +788,11 @@ def run_reviewer(outdir: Path) -> int:
             rc = 4
     if rc == 0 and not nonempty(outdir / "out.md"):
         with why.open("a", encoding="utf-8") as f:
-            f.write(f"review.sh: no answer; see {shown(outdir)}/err.txt\n")
+            f.write(f"review.py: no answer; see {shown(outdir)}/err.txt\n")
         rc = 4
     if rc == 0 and last_line(outdir / "out.md") != MARKER:
         with why.open("a", encoding="utf-8") as f:
-            f.write(f"review.sh: answer lacks the closing {MARKER} line; the round failed\n")
+            f.write(f"review.py: answer lacks the closing {MARKER} line; the round failed\n")
         rc = 5
     if neutral:
         remove_tree(neutral)
@@ -812,7 +818,7 @@ def runner(outdir: Path) -> int:
             neutral = json.loads((outdir / JOB).read_text(encoding="utf-8"))["neutral"]
             if neutral:
                 remove_tree(Path(neutral))
-            return publish(outdir, 2, f"review.sh: cannot hold the reviewer in a job object, so nothing ran: {exc}")
+            return publish(outdir, 2, f"review.py: cannot hold the reviewer in a job object, so nothing ran: {exc}")
     return run_reviewer(outdir)
 
 

@@ -1,7 +1,7 @@
 # Copy to ${XDG_CONFIG_HOME:-~/.config}/using-harnesses/models.conf and keep only the lines you change.
 # KEY=value, one per line, no spaces, no quotes. The file is parsed, never sourced; an unknown key, a
-# bad value or a banned model (gpt-6-sol, gpt-6-astra) stops review.sh with exit 2.
-# Check the result with: scripts/review.sh --print-config
+# bad value or a banned model (gpt-6-sol, gpt-6-astra) stops review.py with exit 2.
+# Check the result with: python3 scripts/review.py --print-config  (Windows: python)
 # The first effort in a list is the default; --effort may pick any other listed one.
 CODEX_MODEL=gpt-6.1-sol
 CODEX_EFFORTS=medium,high

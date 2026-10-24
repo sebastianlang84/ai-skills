@@ -8,7 +8,7 @@ description: Have the other vendor diagnose why an agent session worked badly - 
 The doctor is the other vendor than the patient session, at effort `medium`: a Claude Code
 session gets Codex `gpt-6.1-sol`, a Codex session gets Opus 5.5; `doctor.sh` reads the vendor
 from the transcript. It judges from a redacted evidence file and changes nothing; which tools it
-keeps beyond that file is set by `using-harnesses`' `review.sh`. The call runs detached; keep
+keeps beyond that file is set by `using-harnesses`' `review.py`. The call runs detached; keep
 working and talking with the user while it runs.
 `D=~/.agents/skills/call-doctor/scripts`.
 
@@ -28,9 +28,9 @@ working and talking with the user while it runs.
    It collects the evidence ([`collect.py`](scripts/collect.py): loaded context as recorded,
    timeline with `L<n>` = transcript line and compaction boundaries, secrets and e-mail addresses
    redacted, subagent sidechains left out) and hands it to
-   `using-harnesses`' `review.sh`, which returns at once and prints the call directory.
-4. **Collect** with `~/.agents/skills/using-harnesses/scripts/review.sh wait <dir>` as a background
-   command; exit 75 means still running, so wait again. Other exit codes are `review.sh`'s: 3 = the
+   `using-harnesses`' `review.py`, which returns at once and prints the call directory.
+4. **Collect** with `python3 ~/.agents/skills/using-harnesses/scripts/review.py wait <dir>` (Windows:
+   `python`) as a background command; exit 75 means still running, so wait again. Other exit codes are `review.py`'s: 3 = the
    payload hit a secret pattern (find it in `<dir>/payload.md`, drop the `--extra` file or narrow
    `--focus`), 2 = setup, for example a missing reviewer login.
 5. **Check before you relay.** Open every cited `L<n>` (`sed -n '<n>p' <transcript>`) and every
@@ -39,5 +39,5 @@ working and talking with the user while it runs.
 6. **Therapy is a separate step.** Apply agreed corrections with `context-engineering` (and
    `skill-creator` for skills), one canonical home per rule; the doctor's text is a proposal.
 
-If `review.sh` is missing or the other vendor is unreachable, say so and stop; never let the same
+If `review.py` is missing or the other vendor is unreachable, say so and stop; never let the same
 vendor be its own doctor.

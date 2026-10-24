@@ -30,24 +30,25 @@ files (`git diff --cached > "$W/review.diff"`) and pass them as artifacts.
 
 ```bash
 S=~/.agents/skills/using-harnesses/scripts
-D=$("$S/review.sh" codex  [--resume <id>] [--effort <level>] "$W/brief.md" <artifact>...)
-D=$("$S/review.sh" claude [--resume <id>] [--effort <level>] "$W/brief.md" <artifact>...)
-"$S/review.sh" wait "$D" [--timeout <s≤540>]
+PY=python3   # Windows: PY=python (see codex.md "Windows")
+D=$("$PY" "$S/review.py" codex  [--resume <id>] [--effort <level>] "$W/brief.md" <artifact>...)
+D=$("$PY" "$S/review.py" claude [--resume <id>] [--effort <level>] "$W/brief.md" <artifact>...)
+"$PY" "$S/review.py" wait "$D" [--timeout <s≤540>]
 ```
 
 The start runs every check, prints the call directory and returns at once; the reviewer runs
 detached. Keep the session responsive and call `wait` later; exit 75 means still running, so call it
 again. Budget 5–20 minutes per round. `wait` prints `session: <id>`, a blank line and the answer.
-`review.sh cancel "$D"` stops a round. `--foreground` blocks until the round ends; use it only in
+`"$PY" "$S/review.py" cancel "$D"` stops a round. `--foreground` blocks until the round ends; use it only in
 scripts that run in the background anyway. The call directory holds `out.md` (the answer),
 `session` (the id for `--resume`), `err.txt`, `why`, `payload.md`, `rc` and the raw log; remove it
 and `$W` once you have the session id. The model is fixed per backend; `--effort` takes only the
-levels configured for it (`review.sh --print-config`).
+levels configured for it (`"$PY" "$S/review.py" --print-config`).
 
 | Exit | Meaning | Action |
 |---|---|---|
 | 0 | the answer ends with `===REVIEW COMPLETE===` | read it |
-| 2 | usage, config, unclean reviewer home, cwd inside git, resume of a session review.sh did not start | fix the cause; never bypass the script |
+| 2 | usage, config, unclean reviewer home, cwd inside git, resume of a session review.py did not start | fix the cause; never bypass the script |
 | 3 | payload refused: secret pattern or `.env` input | redact or exclude, then resend |
 | 4 | no answer, no session id, a runner that died, or a status 0 without answer, session and log | read `err.txt` |
 | 5 | closing line missing: truncated, refused or hijacked | failed round; do not report partial findings |
@@ -88,6 +89,6 @@ version the last review saw. If the other vendor is unreachable, say so.
 | minutes of silence, process alive | normal: a reasoning model, buffered output | wait for the deadline |
 | codex quotes `AGENTS.md` or house rules | the reviewer home or cwd is not the script's | use the script; never call `codex exec` by hand for a review |
 | codex cites a file not in the payload | it ran with tools: not the script, or a disabled feature was renamed | use the script; check `codex features list` |
-| `--resume` exits 2 | not a session review.sh started on this backend, or deleted | start a new session with the full payload |
+| `--resume` exits 2 | not a session review.py started on this backend, or deleted | start a new session with the full payload |
 | claude auth error | `--bare` used instead of `--safe-mode` | use the script |
 | no reviewer login | `~/.codex-review` not set up | see [codex.md](codex.md) "The reviewer home" |

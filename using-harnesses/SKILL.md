@@ -15,9 +15,14 @@ description: Calls another agent harness headless — codex (gpt-6.1-sol, scouti
 
 ```bash
 S=~/.agents/skills/using-harnesses/scripts
-D=$("$S/review.sh" <codex|claude> [--resume <id>] [--effort <level>] <brief-file> <artifact-file>...)
-"$S/review.sh" wait "$D"     # exit 75: still running, call wait again
+PY=python3                   # Windows: PY=python (python3 there may be the Microsoft Store placeholder)
+D=$("$PY" "$S/review.py" <codex|claude> [--resume <id>] [--effort <level>] <brief-file> <artifact-file>...)
+"$PY" "$S/review.py" wait "$D"     # exit 75: still running, call wait again
 ```
+
+From cmd the same arguments follow `python "%USERPROFILE%\.agents\skills\using-harnesses\scripts\review.py"`
+(PowerShell: `python "$HOME\.agents\skills\using-harnesses\scripts\review.py"`). It needs Python 3.9 or newer; 3.7 and
+3.8 stop with exit 2, anything older fails to compile.
 
 The start returns at once with the call directory; `wait` returns after at most 540 s. Never run a
 review blocking in the foreground of a session. The script assembles the payload from
@@ -41,7 +46,7 @@ CLI and output; keep both stable.
 
 Review defaults: Codex `gpt-6.1-sol` (efforts `medium,high`), Claude `claude-opus-5-5` (`medium`);
 per-user overrides in `${XDG_CONFIG_HOME:-~/.config}/using-harnesses/models.conf`
-([models.conf.example](references/models.conf.example)), shown by `scripts/review.sh --print-config`.
+([models.conf.example](references/models.conf.example)), shown by `"$PY" "$S/review.py" --print-config`.
 `gpt-6-sol` is refused everywhere; `gpt-6-astra` is never a default and runs only when the user names it
 for that call (`codex_call.py --model gpt-6-astra --on-request`).
 

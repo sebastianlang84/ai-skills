@@ -8,7 +8,7 @@ The file is ${XDG_CONFIG_HOME:-~/.config}/using-harnesses/models.conf (format:
 ../references/models.conf.example). It is read as bytes and never executed. A NUL byte, bytes that
 are not UTF-8, an unknown key or a bad value stop with exit 2 instead of being skipped, because a
 skipped line silently runs a model the user did not choose. A banned model id stops the same way.
-review.sh calls this file. Python 3.9, stdlib only.
+review.py calls this file. Python 3.9, stdlib only.
 """
 from __future__ import annotations
 

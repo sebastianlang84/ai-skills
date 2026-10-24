@@ -1,6 +1,6 @@
 # Calling codex
 
-For a review, use `scripts/review.sh codex …` ([review.md](review.md)); it fixes every flag below.
+For a review, use `"$PY" "$S/review.py" codex …` (`S`, `PY` and the steps: [review.md](review.md)); it fixes every flag below.
 Every other Codex call — a question, a scouting search, a worker that writes — goes through
 `scripts/codex_call.py` ([Other calls](#other-calls-codex_callpy)).
 
@@ -8,7 +8,7 @@ Every other Codex call — a question, a scouting search, a worker that writes �
 
 codex reads `AGENTS.md` and user skills from `$CODEX_HOME` on every run, and `--ignore-user-config`
 skips only `config.toml`. Reviews therefore run with `CODEX_HOME=~/.codex-review`: its own login, no
-`AGENTS.md`, nothing in `skills/` but codex's built-in `.system`. `review.sh` refuses a home that
+`AGENTS.md`, nothing in `skills/` but codex's built-in `.system`. `review.py` refuses a home that
 breaks any of that, and an `auth.json` that is a symlink or readable by others (mode 600; on Windows
 no grant beyond you, SYSTEM and Administrators). Set it up once:
 
@@ -23,7 +23,7 @@ Never copy the everyday `auth.json` there: codex rotates the refresh token on re
 that renews second is logged out. Use this home for nothing but reviews; `--resume` trusts the
 sessions stored in it.
 
-## Flags review.sh passes
+## Flags review.py passes
 
 | Flag | Why |
 |---|---|
@@ -40,14 +40,14 @@ sessions stored in it.
 | `-` | prompt from stdin; a direct call with the prompt as argument waits on an inherited open stdin, so close it with `< /dev/null` |
 
 A feature renamed in a later codex release makes `--disable` fail and the round exit non-zero; check
-the names with `CODEX_HOME=~/.codex-review codex features list` and update `review.sh`, never drop the
+the names with `CODEX_HOME=~/.codex-review codex features list` and update `review.py`, never drop the
 flag. Sessions persist under `~/.codex-review/sessions/YYYY/MM/DD/rollout-<time>-<id>.jsonl`; they hold the
 payload.
 
 ## Resume
 
 `codex exec resume <id> -` continues a thread in the same `CODEX_HOME`. Pass the sandbox and the
-memories flag again; a resume does not inherit flags reliably. `review.sh --resume` accepts an id only
+memories flag again; a resume does not inherit flags reliably. `review.py --resume` accepts an id only
 when its rollout file exists under `~/.codex-review/sessions/` and the session's first user message
 opens with the role lock, so a mistyped id or an ordinary session is refused.
 
@@ -70,7 +70,7 @@ or `-` for stdin. Its state is under `~/.agents/state/codex-call/`.
 - `python3 $C cancel <call-dir>` stops a detached call; `list` shows recent calls.
 - `--search` gives Codex its native web search; `--sandbox workspace-write|danger-full-access`
   widens the sandbox for callers that must write (market-digest's fixer, peer-debate sides). Never
-  use it for a review: reviews go through `review.sh`, which has no such option.
+  use it for a review: reviews go through `review.py`, which has no such option.
 - `--model`, `--effort`, `--sandbox` or `CODEX_CALL_MODEL` / `CODEX_CALL_EFFORT` override the pins;
   `gpt-6-sol` is refused; `gpt-6-astra` only with `--on-request`, when the user named it for this call.
 
@@ -84,8 +84,8 @@ records the verified version in `~/.agents/state/codex-call/selftest.json`.
 
 ## Windows
 
-`review.sh` only starts `scripts/review.py`, which runs the same on Windows: from Git Bash, or as
-`python review.py …` from PowerShell or cmd. The detached start, `wait` and `cancel` work there; the
+`scripts/review.py` runs the same on Windows, as `python review.py …` from Git Bash, PowerShell or
+cmd; on Linux call it with `python3`. The detached start, `wait` and `cancel` work there; the
 runner holds its reviewer in a job object, so a runner that is killed takes the reviewer along; if
 that job cannot be created, nothing runs (exit 2). npm's `codex.cmd` would hand every argument to
 cmd.exe, so both scripts start node with the package's script directly, and refuse an argument with
@@ -94,5 +94,5 @@ differences remain. The reviewer login is checked by its ACL instead of mode 600
 codex still lists the user skills in `~/.agents/skills`: `HOME` does not hide them there (measured
 with codex-cli 0.160.0, also with `USERPROFILE`). The reviewer has no tools, so it sees their names
 and descriptions, not any file. Over ssh to beelink, use a login shell (`bash -lc`) so `codex` is on
-the `PATH`. `python3` from the Microsoft Store alias is only a placeholder: install Python, and
-`review.sh` falls back to `python`.
+the `PATH`. `python3` from the Microsoft Store alias is only a placeholder that prints a hint:
+install Python and call `python` (or `py -3`). `review.py` needs 3.9 or newer: 3.7 and 3.8 stop with exit 2, anything older fails to compile.

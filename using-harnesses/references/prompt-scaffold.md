@@ -1,6 +1,6 @@
 # Brief scaffold
 
-Copy this into the brief file, replace every `<…>`, delete what does not apply. `review.sh` puts its
+Copy this into the brief file, replace every `<…>`, delete what does not apply. `review.py` puts its
 role lock before it and its review rules and data clause after it; the artifacts follow as separate
 files, so the brief names them by basename and does not paste them.
 

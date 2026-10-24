@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# Offline tests for scripts/review.sh (and review.py behind it) with fake codex and claude on PATH. No network, no real HOME.
+# Offline tests for scripts/review.py with fake codex and claude on PATH. No network, no real HOME.
 # Usage: tests/test_review.sh
 set -uo pipefail
 # The first interpreter that really runs: on Windows, python3 may be a Store stub that only prints a hint.
 PY=""; for c in python3 python; do "$c" -c 'import sys; sys.exit(sys.version_info < (3, 9))' 2>/dev/null && { PY=$c; break; }; done; export PY
+[ -n "$PY" ] || { echo "FAIL python 3.9 or newer not found"; exit 1; }
 # Windows (Git Bash): native symlinks (Developer Mode) and process checks without procps.
 case "$(uname -s)" in MINGW*|MSYS*|CYGWIN*) WIN=1; export MSYS=winsymlinks:nativestrict ;; *) WIN=0 ;; esac
 # Starting a round takes longer there (runner, cmd shim, argument bridge): "slow" must outlast it.
 [ "$WIN" = 0 ] || export FAKE_SLOW=8
 SKILL=$(cd "$(dirname "$0")/.." && pwd -P)
-RS="$SKILL/scripts/review.sh"
+RS() { "$PY" "$SKILL/scripts/review.py" "$@"; }
 # Most cases check the blocking path; R inserts --foreground after the backend.
-R() { case "${1:-}" in codex|claude) local b=$1; shift; "$RS" "$b" --foreground "$@" ;; *) "$RS" "$@" ;; esac; }
+R() { case "${1:-}" in codex|claude) local b=$1; shift; RS "$b" --foreground "$@" ;; *) RS "$@" ;; esac; }
 R=R
 
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
@@ -207,7 +208,7 @@ for line in "$kp = \"\${DB_$KP}\"" 'token: <your-token>' 'api_key = "********"' 
   printf '%s\n' "$line" > "$T/s6.txt"; run "$R" codex "$B" "$T/s6.txt"
   check "secret: placeholder or code passes: $line" '[ $RC -eq 0 ]'
 done
-run "$R" codex "$B" "$SKILL/scripts/review.sh" "$SKILL/tests/test_review.sh" "$SKILL/references/codex.md"
+run "$R" codex "$B" "$SKILL/scripts/review.py" "$SKILL/tests/test_review.sh" "$SKILL/references/codex.md"
 check "secret check passes this skill's own files, so it can be reviewed" '[ $RC -eq 0 ]'
 ln -sf "$T/prod.env" "$T/config.txt"; printf 'A=1\n' > "$T/prod.env"; run "$R" codex "$B" "$T/config.txt"
 check ".env behind an innocent symlink refused" '[ $RC -eq 3 ] && ! called'
@@ -282,30 +283,30 @@ check "C locale: non-ASCII claude answer written as UTF-8" '[ $RC -eq 0 ] && gre
 
 # --- missing frame block fails closed
 cp -r "$SKILL" "$T/sk2"; sed -i '/END data-clause/d' "$T/sk2/references/review-prompt.md"
-run "$T/sk2/scripts/review.sh" codex --foreground "$B" "$A"
+run "$PY" "$T/sk2/scripts/review.py" codex --foreground "$B" "$A"
 check "missing data-clause block: exit 2, not sent" '[ $RC -eq 2 ] && ! called && grep -q "could not be assembled" "$T/stderr"'
 
 # --- detached default: returns at once, wait collects, cancel stops
-S0=$SECONDS; FAKE_MODE=slow run "$RS" codex "$B" "$A"
+S0=$SECONDS; FAKE_MODE=slow run RS codex "$B" "$A"
 check "detached: returns at once with the call directory" '[ $RC -eq 0 ] && [ $((SECONDS - S0)) -lt 4 ] && [ -f "$DIR/payload.md" ] && [ ! -f "$DIR/rc" ]'
-DIR0=$DIR; run "$RS" wait "$DIR0" --timeout 1; check "wait: exit 75 while running" '[ $RC -eq 75 ]'
-D1=$DIR0; run "$RS" wait "$D1" --timeout 30
+DIR0=$DIR; run RS wait "$DIR0" --timeout 1; check "wait: exit 75 while running" '[ $RC -eq 75 ]'
+D1=$DIR0; run RS wait "$D1" --timeout 30
 check "wait: answer, session and exit 0 once done" '[ $RC -eq 0 ] && grep -qx "session: $CID" <<<"$OUT" && grep -qx "===REVIEW COMPLETE===" <<<"$OUT"'
-FAKE_MODE=nomarker run "$RS" claude "$B" "$A"; D2=$DIR; run "$RS" wait "$D2" --timeout 30
+FAKE_MODE=nomarker run RS claude "$B" "$A"; D2=$DIR; run RS wait "$D2" --timeout 30
 check "wait: failed round keeps its exit code" '[ $RC -eq 5 ] && grep -q "closing" "$T/stderr"'
-FAKE_MODE=sleep run "$RS" codex "$B" "$A"; D3=$DIR; sleep 1; run "$RS" cancel "$D3"; sleep 1
+FAKE_MODE=sleep run RS codex "$B" "$A"; D3=$DIR; sleep 1; run RS cancel "$D3"; sleep 1
 check "cancel: stops the round" '[ $RC -eq 0 ] && [ "$(cat "$D3/rc")" = 143 ] && ! running_with "$(basename "$D3")"' || cat "$D3/rc"
-printf 'x\n' > "$T/s4.txt"; printf 'pw: AKIA%s\n' ABCDEFGHIJKLMNOP >> "$T/s4.txt"; run "$RS" codex "$B" "$T/s4.txt"
+printf 'x\n' > "$T/s4.txt"; printf 'pw: AKIA%s\n' ABCDEFGHIJKLMNOP >> "$T/s4.txt"; run RS codex "$B" "$T/s4.txt"
 check "detached: refusals still exit 3 at once" '[ $RC -eq 3 ] && ! called'
-mkdir -p "$T/forged"; touch "$T/forged/payload.md"; echo $$ > "$T/forged/pid"; run "$RS" cancel "$T/forged"
+mkdir -p "$T/forged"; touch "$T/forged/payload.md"; echo $$ > "$T/forged/pid"; run RS cancel "$T/forged"
 check "cancel: forged pid refused, nothing killed" '[ $RC -eq 2 ] && grep -q "no live runner" "$T/stderr"'
 # A non-ASCII TMPDIR: the neutral directory is recorded as UTF-8 and must still be found and removed.
-mkdir -p "$T/prüf"; TMPDIR="$T/prüf" FAKE_MODE=stubborn run "$RS" codex "$B" "$A"; D7=$DIR
+mkdir -p "$T/prüf"; TMPDIR="$T/prüf" FAKE_MODE=stubborn run RS codex "$B" "$A"; D7=$DIR
 for _ in $(seq 20); do [ -s "$D7/neutral" ] && [ -s "$D7/pid" ] && break; sleep 0.5; done
-N7=$(cat "$D7/neutral" 2>/dev/null); TMPDIR="$T/prüf" run "$RS" cancel "$D7"; sleep 1
+N7=$(cat "$D7/neutral" 2>/dev/null); TMPDIR="$T/prüf" run RS cancel "$D7"; sleep 1
 check "cancel: a non-ASCII TMPDIR still loses its working directory" '[ $RC -eq 0 ] && [ -n "$N7" ] && [ ! -e "$N7" ] && ! running_with "$(basename "$D7")"'
 if [ "$WIN" = 0 ]; then  # a terminal interrupt or TERM of a foreground call stops its runner and reviewer
-  ( FAKE_MODE=stubborn exec "$RS" codex --foreground "$B" "$A" > "$T/fg.out" 2> "$T/fg.err" ) & FG=$!
+  ( FAKE_MODE=stubborn exec "$PY" "$SKILL/scripts/review.py" codex --foreground "$B" "$A" > "$T/fg.out" 2> "$T/fg.err" ) & FG=$!
   for _ in $(seq 20); do [ -s "$T/fg.out" ] && break; sleep 0.5; done; FD=$(head -n1 "$T/fg.out")
   for _ in $(seq 20); do [ -s "$FD/pid" ] && break; sleep 0.5; done; sleep 1
   kill -TERM "$FG"; wait "$FG"; FRC=$?; sleep 1
@@ -314,19 +315,19 @@ else  # npm's codex.cmd hands arguments to cmd.exe: a TMPDIR it would reinterpre
   mkdir -p "$T/a&b"; TMPDIR="$T/a&b" run "$R" codex "$B" "$A"
   check "Windows: a TMPDIR that cmd.exe would reinterpret is refused, nothing runs" '[ $RC -eq 2 ] && ! called && grep -q "cmd.exe" "$T/stderr" && [ -z "$(ls -A "$T/a&b")" ]'
 fi
-run "$RS" wait "$T"; check "wait: foreign directory refused" '[ $RC -eq 2 ]'
-run "$RS" wait "$D1" --timeout 9999; check "wait: timeout over 540 refused" '[ $RC -eq 2 ]'
+run RS wait "$T"; check "wait: foreign directory refused" '[ $RC -eq 2 ]'
+run RS wait "$D1" --timeout 9999; check "wait: timeout over 540 refused" '[ $RC -eq 2 ]'
 mkdir -p "$T/forged2"; touch "$T/forged2/payload.md"; echo 0 > "$T/forged2/rc"; echo "Review still pending" > "$T/forged2/out.md"
-run "$RS" wait "$T/forged2"; check "wait: forged status 0 without session, log and marker is exit 4" '[ $RC -eq 4 ] && [ -z "$OUT" ]'
+run RS wait "$T/forged2"; check "wait: forged status 0 without session, log and marker is exit 4" '[ $RC -eq 4 ] && [ -z "$OUT" ]'
 # Kill the runner alone; on Windows its job object must take the reviewer along.
 kill_runner() { if [ "$WIN" = 1 ]; then taskkill //PID "$1" //F >/dev/null; else kill -KILL "$1"; fi; }
-FAKE_MODE=stubborn run "$RS" codex "$B" "$A"; D4=$DIR; sleep 1; kill_runner "$(cat "$D4/pid")"; run "$RS" wait "$D4" --timeout 5; sleep 1
+FAKE_MODE=stubborn run RS codex "$B" "$A"; D4=$DIR; sleep 1; kill_runner "$(cat "$D4/pid")"; run RS wait "$D4" --timeout 5; sleep 1
 check "wait: a runner killed before rc reports exit 4, not running" '[ $RC -eq 4 ] && grep -q "died" "$T/stderr" && [ ! -e "$(cat "$D4/neutral")" ]'
 check "wait: no timeout or reviewer survives its dead runner" '! running_with "$(basename "$D4")"'
 [ "$WIN" = 1 ] || pkill -KILL -f "$D4/out.md" 2>/dev/null
-FAKE_MODE=renamed run "$RS" codex "$B" "$A"; D6=$DIR; sleep 1
+FAKE_MODE=renamed run RS codex "$B" "$A"; D6=$DIR; sleep 1
 if [ "$WIN" = 1 ]; then for _ in $(seq 20); do [ -s "$FAKE_LOG/winpid" ] && break; sleep 0.5; done; fi  # a slower start there
-S6=$(cat "$D6/pid"); W6=$(cat "$FAKE_LOG/winpid" 2>/dev/null); kill_runner "$S6"; run "$RS" wait "$D6" --timeout 5; sleep 1
+S6=$(cat "$D6/pid"); W6=$(cat "$FAKE_LOG/winpid" 2>/dev/null); kill_runner "$S6"; run RS wait "$D6" --timeout 5; sleep 1
 if [ "$WIN" = 1 ]; then
   check "wait: a renamed, TERM-ignoring reviewer of a dead runner is killed too" '[ $RC -eq 4 ] && [ -n "$W6" ] && ! tasklist //FI "PID eq $W6" //NH | grep -q bash'
 else
@@ -340,12 +341,12 @@ else
   alive_other() { kill -0 "$OTHER" 2>/dev/null; }
 fi
 mkdir -p "$T/stale"; touch -d "-5 min" "$T/stale/payload.md"; echo "$OTHER" > "$T/stale/pid"
-run "$RS" wait "$T/stale" --timeout 5
+run RS wait "$T/stale" --timeout 5
 check "wait: a stale call whose pid now leads another session kills nothing" '[ $RC -eq 4 ] && alive_other'
 kill "${OTHER_JOB:-$OTHER}" 2>/dev/null
 ODD="$T/odd\$dir \"q"; [ "$WIN" = 0 ] || ODD="$T/odd\$dir q"  # Windows file names carry no quote
-mkdir -p "$ODD"; S0=$SECONDS; TMPDIR="$ODD" FAKE_MODE=slow run "$RS" codex "$B" "$A"; D5=$DIR
-TMPDIR="$ODD" run "$RS" wait "$D5" --timeout 30
+mkdir -p "$ODD"; S0=$SECONDS; TMPDIR="$ODD" FAKE_MODE=slow run RS codex "$B" "$A"; D5=$DIR
+TMPDIR="$ODD" run RS wait "$D5" --timeout 30
 check "detached: TMPDIR with dollar, space and quote still collects the live round" '[ $RC -eq 0 ] && grep -qx "===REVIEW COMPLETE===" <<<"$OUT"'
 S0=$SECONDS; FAKE_MODE=stubborn REVIEW_TIMEOUT=1 run "$R" codex "$B" "$A"
 # Windows has no TERM for a console process: the deadline kills at once and reports 124.

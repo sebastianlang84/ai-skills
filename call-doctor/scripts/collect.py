@@ -31,7 +31,7 @@ import sys
 
 HOME = os.path.expanduser("~")
 
-# A superset of the payload check in using-harnesses/scripts/review.sh.
+# A superset of the payload check in using-harnesses/scripts/review.py.
 SECRET = re.compile(
     r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(-----END [A-Z ]*PRIVATE KEY-----|$)"
     r"|(?<![A-Za-z0-9])(sk|pk|rk)-[A-Za-z0-9_-]{8,}"
