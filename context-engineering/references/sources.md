@@ -1,12 +1,12 @@
 # Sources behind the mental model
 
-Read 2026-10-24. Paraphrased; check the source before quoting a number. Vendor docs change often.
+Read 2026-10-24; checked again by Fable 5.1 and gpt-6-astra reviews the same day. Paraphrased; check the source before quoting a number. Vendor docs change often.
 
 ## What the sources support
 
 | Claim in `SKILL.md` | Evidence | Limits |
 | --- | --- | --- |
-| Quality drops with length, even at equal task difficulty | Chroma, Context Rot: 18 models; a focused ~300-token prompt beat the full ~113k-token one | Degradation is gradual, not a cliff (Anthropic) |
+| Quality drops as irrelevant content grows | Chroma, Context Rot: 18 models degrade with input length in controlled tasks; on LongMemEval a focused ~300-token prompt beat the full ~113k-token one | The LongMemEval comparison also removes the retrieval step, so it is not a pure length test; Degradation is gradual, not a cliff (Anthropic) |
 | Smallest high-signal set, not shortest text | Anthropic, Effective context engineering | Minimal does not mean short; vague rules fail |
 | Near-miss distractors hurt more than noise | Chroma (one related distractor already lowers accuracy); Breunig, "context confusion" | |
 | Unresolved contradictions fail unpredictably | Claude Code memory docs: conflicting instruction files may be resolved arbitrarily | Deliberate repo overrides and harness-defined precedence (Codex: closer files later) are not contradictions |
@@ -19,11 +19,13 @@ Read 2026-10-24. Paraphrased; check the source before quoting a number. Vendor d
 | No volatile values in stable prefixes | Manus: cache hit rate as the key cost metric, append-only context, no timestamp at the start | Applying it to instruction files is an inference |
 | Emphasis is scarce | Claude Code best practices | Single source |
 | Progressive disclosure for skills | Anthropic, Agent Skills (metadata, then SKILL.md, then linked files) | Runtime exploration is slower than preloading |
-| Few, distinct, compact tools | Anthropic (no overlap; if a human cannot pick, neither can the agent); Breunig (selection failures beyond roughly 30 tools, tool RAG up to 3x better); Claude Code (CLIs are the most context-efficient) | Breunig's thresholds come from older, smaller models: indicative only. Deferred tool loading keeps unused definitions out of context (Anthropic, advanced tool use). Manus masks tools rather than removing them mid-task, to keep the cache |
+| Few, distinct, compact tools | Anthropic (no overlap; if a human cannot pick, neither can the agent); Breunig (selection failures beyond roughly 30 tools, tool RAG up to 3x better); Claude Code (CLIs are the most context-efficient) | The 30-tool and 3x figures come from the RAG-MCP paper on DeepSeek-v3 (cited in Breunig's second post), the 46 vs. 19 tool figure from a quantized Llama 3.1 8B: indicative, not universal. Filter or paginate tool output; Claude Code's default limit for MCP output is 25,000 tokens (configurable), and larger text results are saved to a file the agent can read back. Deferred tool loading keeps unused definitions out of context (Anthropic, advanced tool use). Manus masks tools rather than removing them mid-task, to keep the cache |
 | Verify before writing memory | Breunig, "context poisoning": a recorded hallucination keeps being referenced; LangChain: memory retrieval can surface unrelated facts | |
 | Add corrective rules for observed failures; test the effect | Anthropic (start minimal, add for observed failure modes); Claude Code (treat CLAUDE.md like code, test whether behavior changes) | Does not apply to explicit user requirements and stop conditions, which belong in from the start |
-| Full rewrites collapse context | ACE (arXiv 2510.04618): one rewrite shrank 18,282 tokens to 122 and dropped accuracy below the no-adaptation baseline; prefers itemized entries with small delta merges | ACE favors growing, detailed playbooks; this fits retrievable stores, not the always-loaded layer |
-| Enforce in hooks, not prose | Claude Code: CLAUDE.md is advisory, hooks are deterministic; use PreToolUse hooks or permission deny rules to block actions | |
+| Full rewrites collapse context | ACE (arXiv 2510.04618): one rewrite shrank 18,282 tokens to 122 and dropped accuracy below the no-adaptation baseline; prefers itemized entries with small delta merges | ACE favors growing, detailed playbooks and also tests them in system prompts; keeping them out of the always-loaded layer is this skill's inference |
+| Enforce in hooks, not prose | Claude Code: CLAUDE.md is advisory, hooks are deterministic; use PreToolUse hooks or permission deny rules to block actions. Codex hooks: `PreToolUse` deny | Only for mechanically decidable rules; Codex `PreToolUse` misses hosted tools and `write_stdin` |
+| Scoped rules, compaction, subagent loading | Claude Code context-window and sub-agents docs (see `harness-loading.md`) | Claude-specific; Codex `SessionStart(compact)` hook documented, `AGENTS.md` reload after compaction not documented |
+| Test context changes on representative tasks | OpenAI, skill evals; Claude Code best practices | |
 
 ## Not covered in `SKILL.md`
 
@@ -38,6 +40,13 @@ Read 2026-10-24. Paraphrased; check the source before quoting a number. Vendor d
 - Anthropic, Advanced tool use (deferred tool loading): https://www.anthropic.com/engineering/advanced-tool-use
 - Claude Code glossary, compaction: https://code.claude.com/docs/en/glossary#compaction
 - Laban et al., LLMs Get Lost in Multi-Turn Conversation: https://arxiv.org/abs/2505.06120
+- Anthropic, Writing tools for agents: https://www.anthropic.com/engineering/writing-tools-for-agents
+- Claude Code context window (what survives compaction): https://code.claude.com/docs/en/context-window
+- Claude Code subagents: https://code.claude.com/docs/en/sub-agents
+- Codex hooks: https://learn.chatgpt.com/docs/hooks
+- Codex AGENTS.md discovery: https://learn.chatgpt.com/docs/agent-configuration/agents-md
+- OpenAI, Testing agent skills systematically with evals: https://developers.openai.com/blog/eval-skills
+- RAG-MCP (tool selection at scale): cited via Breunig, How to Fix Your Context; not read directly
 - Anthropic, Equipping agents with Agent Skills: https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills
 - Claude Code best practices: https://code.claude.com/docs/en/best-practices
 - Claude Code memory: https://code.claude.com/docs/en/memory

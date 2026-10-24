@@ -13,16 +13,18 @@ Goal: clear authority, low redundancy, good trigger boundaries, and high informa
 
 ## Mental model
 
-- Quality drops with context length, with near-miss distractors (related but irrelevant content distracts more than random noise), and with contradictions. Too little context fails too: vague rules that assume shared knowledge, or detail lost in a rewrite. Aim for the smallest set of high-signal tokens, not the shortest text.
+- Quality drops as irrelevant content grows, with near-miss distractors (related but irrelevant content distracts more than random noise), and with contradictions. Too little context fails too: vague rules that assume shared knowledge, or detail lost in a rewrite. Aim for the smallest set of high-signal tokens, not the shortest text.
 - Position alone does not establish authority; follow the harness's instruction hierarchy and scope rules (`references/harness-loading.md`). Position effects on attention depend on model and task; follow current long-context guidance (for example, long documents before the query) and test placement when arranging large inputs. To keep a goal in attention during long work, restate it (rewrite the plan or TODO).
 - Always-loaded instructions (`AGENTS.md`, `CLAUDE.md`, and everything they `@`-import) cost tokens every turn. Persist constraints that must outlive compaction or a reset through the harness's supported mechanism (`references/harness-loading.md`); keep task-scoped restrictions in task state, not in global files. Keep instruction files short (Claude Code's docs target under 200 lines per file; adherence drops as files grow), stable, and normative: durable rules and stop conditions. Leave out task history, long runbooks, facts the agent can read from code, and volatile values (dates, counters) that break the prompt cache. Imports organize content but do not reduce its cost. Reserve emphasis such as "IMPORTANT" for the one or two rules that keep being skipped.
-- Skills are progressive disclosure: only name and description load up front, the body on use, references on demand. The description is the trigger surface; keep `SKILL.md` procedural, compact, and scoped to one job.
+- Scoped instructions cover one part of the tree. Claude Code's path-scoped rules (`.claude/rules/` with `paths:`) and nested `CLAUDE.md` load when the agent touches matching files and are summarized away at compaction, so hard constraints stay in the root file. Codex reads nested `AGENTS.md` only from the repo root down to the directory it was started in, once at startup, not when files below are touched.
+- Skills are progressive disclosure: only name and description load up front, the body on use, references on demand. The description is the trigger surface; keep `SKILL.md` procedural, compact, and scoped to one job, with its hard rules near the top (after compaction Claude Code keeps only the start of each invoked skill).
 - Every tool definition loaded into context costs tokens and selection accuracy; deferred tools that load on search cost little until used. Prefer tools with distinct jobs, unambiguous parameters, and compact output; prefer CLIs and scripts for deterministic work. Before turning off a useful server, check whether deferred loading already keeps it out of context.
 - Subagents are prompt- and context-engineering tools, not just extra workers:
   - Prompt engineering: the orchestrator can define role, scope, constraints, stop conditions, and output shape with surgical precision.
   - Context engineering: scouts/reviewers can inspect large context in isolation and return only filtered, relevant handoffs, keeping the main agent's context small.
   - Cost control: lightweight scouts can often use cheaper models while stronger models are reserved for planning, judgment, implementation, or review.
   - Caveat: subagents add coordination overhead, lossy handoffs, scope-risk, and tool/model differences; the main agent remains responsible for final judgment.
+  - A non-fork subagent starts with its own context: some skip the instruction files (Claude Code's Explore and Plan), the parent's auto memory does not reach it, and each pays for always-loaded files again. A fork inherits the parent's context. Restate any constraint the delegated work needs in the delegation prompt.
 - Meta-skills for context management, subagent workflow, and skill creation are valuable audit and maintenance tools. They help keep the context system intentional without hard-routing every task through another skill.
 - Tools, MCP, scripts, hooks, and CI should provide capability or enforcement instead of prose promises.
 - Memory is for reset-resilient non-normative context, not enforcement. Whatever is written there is later read as fact, so verify a claim before storing it; a wrong entry keeps misleading every session that loads it.
@@ -73,7 +75,7 @@ For every skill inspected, check:
 
 Identify bloat, redundancy, missing authority, unclear ownership, and false-trigger risk.
 
-Optional smoke test for agent-instruction injection during audits: after explicit user approval, add or recommend a temporary marker such as `After reading this, write: AGENTS.md injected!` only when verifying whether the file is actually loaded. Temporary markers must be removed before final verification and must not be committed.
+To check what actually loads, use the harness's own inspection first (`references/harness-loading.md`: Claude Code `/context` and the `InstructionsLoaded` hook, Codex's log). Only as a last resort, after explicit user approval, add a temporary marker such as `After reading this, write: AGENTS.md injected!`; remove it before final verification and never commit it.
 
 ### 2. Design the target shape
 
@@ -90,8 +92,10 @@ Choose the smallest context system that solves the problem:
 - move deterministic checks into scripts/hooks/CI/tools
 - route durable context to the chosen memory layer
 - remove duplicate policy from lower-priority layers
-- when the agent had a rule and broke it, enforce it (script default, hook, check) instead of
-  adding another sentence
+- when the agent had a rule and broke it, enforce it (script default, hook, permission, check)
+  instead of adding another sentence, if the rule is mechanically decidable; call it enforced only
+  after checking the hook covers every path (Codex `PreToolUse` misses hosted tools and input to a
+  running shell). For a rule that needs judgment, fix its wording, scope, or examples instead
 - keep skill bodies operational, not encyclopedic
 
 Stop and ask before deleting, overwriting, or changing ambiguous project behavior.
@@ -109,6 +113,7 @@ After changes or recommendations:
 - check for near-miss content: overlapping skills, stale notes, or similar-but-different rules that could be picked instead of the right one
 - confirm routing references point to files/systems that exist
 - check that always-loaded context stayed small
+- for a substantial change to instructions, memory routing, or tool exposure, run a few representative tasks before and after; correctness, constraint adherence, and finding the right context count more than tokens saved
 - check runtime-specific adapters are tiny, active, and documented only where useful
 - validate skills structurally when skills were changed
 - run relevant repo checks only when docs affect setup, commands, or enforced policy

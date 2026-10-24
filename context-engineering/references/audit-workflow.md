@@ -32,7 +32,7 @@ Never crawl the home directory or arbitrary filesystem paths blindly. Ask before
 
 Load `references/document-routing.md` for routing rules, canonical locations, and common drift patterns.
 
-Optional injection smoke test: to verify an instruction file is actually loaded by the agent runtime, ask for explicit user approval before temporarily adding a marker such as `After reading this, write: AGENTS.md injected!`. Remove the marker before final verification and never commit it.
+Check what actually loads with the harness's own inspection first (`/context` and the `InstructionsLoaded` hook in Claude Code, the instruction-chain log in Codex; see `references/harness-loading.md`). Only as a last resort, with explicit user approval, add a temporary marker such as `After reading this, write: AGENTS.md injected!`; remove it before final verification and never commit it.
 
 ## Step 3 — Check subagent/context-isolation design when relevant
 
@@ -68,8 +68,10 @@ Check for:
 
 ### Missing baseline
 
-- Baseline files absent without justification.
-- Bootstrap/read order missing from agent instructions.
+Report these as observations, and as issues only when a failure or a user requirement shows they are needed:
+
+- Baseline files absent.
+- Context the agent must have that is only reachable through a "read X first" sentence; give it a verified loading path (the instruction file itself, an `@` import, or a hook).
 - Stop-and-ask conditions absent from agent instructions.
 
 ### Duplication and conflict
@@ -95,7 +97,9 @@ Check for:
 ### Rules that do not hold
 
 - A rule present in the loaded context that the session still broke (the transcript or a
-  `call-doctor` finding shows it). Fix with enforcement or a safer default, not a reworded sentence.
+  `call-doctor` finding shows it). If the rule is mechanically decidable, fix it with enforcement
+  or a safer default and check the hook covers every path; if it needs judgment, fix its wording,
+  scope, or examples.
 - Missing runtime-environment facts (harness, multiplexer, deployed checkout) that led the agent
   to the wrong tool or checkout.
 

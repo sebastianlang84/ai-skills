@@ -31,11 +31,11 @@ Stop and ask if conflicts require deletion, rename, ownership change, or behavio
 
 ## Step 3 — Choose the baseline shape
 
-Default: root `README.md`, `AGENTS.md`, `TODO.md`, `CHANGELOG.md`, plus whichever memory system is present or intentionally chosen.
+Candidates: root `README.md`, `AGENTS.md`, `TODO.md`, `CHANGELOG.md`, and a memory system. Create each only when it passes the add-file test in `references/document-routing.md`, and keep any existing system of record (issue tracker, release notes) instead of duplicating it.
 
 Human-facing docs (`README.md`, `CHANGELOG.md`, `docs/adr/*`, `docs/runbooks/*`) are part of the
-baseline, but `code-documentation` owns what goes into them; this workflow only makes sure they
-exist and do not duplicate agent context.
+candidates like the rest, but `code-documentation` owns what goes into them; this workflow only
+checks that the ones that exist do not duplicate agent context.
 
 Add optional directories only when clearly needed:
 

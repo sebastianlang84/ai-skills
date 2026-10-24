@@ -19,7 +19,7 @@ Use before considering a repo context alignment complete.
 
 ## Agent usability checks
 
-- Bootstrap/read order, stop-and-ask conditions, verification, secrets handling, and dirty-worktree protection are explicit.
+- Context that must load has a verified loading or retrieval path (the instruction file itself, an import, or a hook), not only a "read X first" sentence; stop-and-ask conditions, verification, secrets handling, and dirty-worktree protection are explicit.
 - Closeout/push gates are explicit when relevant.
 - Relevant skills are referenced by name/path instead of duplicating full procedures.
 - Skill descriptions trigger intended tasks and avoid nearby false positives.

@@ -1,6 +1,6 @@
 # Memory capture checklist
 
-Choose one memory system of record for durable agent context. Do not maintain parallel harness and repo-local memory unless the user explicitly accepts that cost.
+Choose one system of record for curated durable knowledge. Harness auto memory (Claude Code `MEMORY.md`, Codex memories) is a separate, bounded layer: audit it for stale or normative entries instead of counting it as a parallel system.
 
 Never store secrets, raw logs/diaries, backlog/history, or binding rules in memory.
 
