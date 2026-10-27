@@ -41,7 +41,7 @@ stay fixed.
 ## Other calls
 
 Questions, scouting and worker calls to Codex use `scripts/codex_call.py` ([codex.md](references/codex.md)).
-Its callers outside this skill (market-digest, peer-debate, nightly-review-pipeline) depend on its
+Its callers outside this skill (market-digest, peer-debate) depend on its
 CLI and output; keep both stable.
 
 ## Models

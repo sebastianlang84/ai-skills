@@ -25,6 +25,9 @@ _Avoid_: boundary (overloaded with DDD's bounded context).
 **Adapter**
 A concrete thing that satisfies an interface at a seam. Describes *role* (what slot it fills), not substance (what's inside).
 
+**Port**
+An interface the deep module itself defines at a seam, for a dependency it calls. Adapters plug into it.
+
 **Leverage**
 What callers get from depth. More capability per unit of interface they have to learn. One implementation pays back across N call sites and M tests.
 

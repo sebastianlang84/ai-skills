@@ -2,6 +2,8 @@
 
 When the user wants to explore alternative interfaces for a chosen deepening candidate, use this parallel sub-agent pattern. Based on "Design It Twice" (Ousterhout) — your first idea is unlikely to be the best.
 
+It pays off when the module has several callers or its interface is expensive to change. For an internal module with one caller, one careful design is enough.
+
 Uses the vocabulary in [LANGUAGE.md](LANGUAGE.md) — **module**, **interface**, **seam**, **adapter**, **leverage**.
 
 ## Process
