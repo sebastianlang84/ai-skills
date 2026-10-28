@@ -26,7 +26,7 @@ working and talking with the user while it runs.
    Pass each incident's transcript lines as `--focus` (call and result together): they are kept
    whole, while the rest of a large session is cut and partly omitted to fit 300 KB.
    It collects the evidence ([`collect.py`](scripts/collect.py): loaded context as recorded,
-   timeline with `L<n>` = transcript line and compaction boundaries, secrets and e-mail addresses
+   timeline with `L<n>` = transcript line and compaction boundaries, secrets, e-mail addresses, IBANs and phone numbers
    redacted, subagent sidechains left out) and hands it to
    `using-harnesses`' `review.py`, which returns at once and prints the call directory.
 4. **Collect** with `python3 ~/.agents/skills/using-harnesses/scripts/review.py wait <dir>` (Windows:
@@ -41,3 +41,14 @@ working and talking with the user while it runs.
 
 If `review.py` is missing or the other vendor is unreachable, say so and stop; never let the same
 vendor be its own doctor.
+
+## Weekly analysis
+
+`$D/weekly.py` runs the same doctor over a whole week, headless, every Monday 02:00 from the user
+timer `kontext-woche.timer` (units in `~/.agents/systemd/`). It keeps sessions a human drove,
+finds correction signals, sends redacted excerpts per patient vendor to the other vendor with
+[`weekly-brief.md`](references/weekly-brief.md) and [`weekly-rules.md`](references/weekly-rules.md),
+checks every cited line, and writes `~/.agents/state/kontext-woche/<date>.md` (evidence and raw
+answers in `<date>/`). Clear changes become kb tasks for the owning repo, decisions one kb request
+to the curator. `--evidence-only` stops before the doctor, `--no-kb` writes no tickets. Treat its
+findings like step 5: check the cited lines before acting on one.

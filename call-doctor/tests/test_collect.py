@@ -44,6 +44,13 @@ class Redaction(unittest.TestCase):
         for leak in ("hunter2", "opaqueVALUE", "abc!def", "sk-AAAA", "a.b@example.org", "beta", "abcdefg", "zeta", "gamma"):
             self.assertNotIn(leak, doc)
 
+    def test_flag_credentials_iban_and_phone_are_redacted(self):
+        _, doc = run([user("go"), result("mysql --password Hunter42! -u x"), result("IBAN DE89 3704 0044 0532 0130 00"),
+                      result("ruf +49 151 2345 6789 an"), result("id 1793820129 am 2026-10-29 12:30:53")])
+        for leak in ("Hunter42", "3704 0044", "2345 6789"):
+            self.assertNotIn(leak, doc)
+        self.assertIn("1793820129 am 2026-10-29 12:30:53", doc)
+
 
 class Structure(unittest.TestCase):
     def test_sidechain_context_is_not_the_patients(self):

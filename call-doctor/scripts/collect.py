@@ -50,13 +50,22 @@ KV = re.compile(
 )
 # An Authorization header or an auth scheme followed by its credential.
 BEARER = re.compile(r"\b(authorization[ \t]*[:=][ \t]*|Bearer[ \t]+|Basic[ \t]+|Token[ \t]+)[^\s\"',;]+([ \t]+[^\s\"',;]+)?", re.I)
+# A credential passed as a command-line flag value: --password hunter2, --api-key=abc.
+FLAG = re.compile(r"(--?[A-Za-z0-9_-]{0,20}(?:password|passwd|pwd|token|secret|api[_-]?key|credential)[A-Za-z0-9_-]{0,20}"
+                  r"(?:[ \t]*=[ \t]*|[ \t]+))(\"(?:[^\"\\\n]|\\.)*\"|'(?:[^'\\\n]|\\.)*'|\S+)", re.I)
+IBAN = re.compile(r"\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]{4}){3,7}(?:[ ]?[A-Z0-9]{1,3})?\b")
+# International phone numbers only (+ or 00 prefix); bare digit runs are too often ids or amounts.
+PHONE = re.compile(r"(?<![\w+])(?:\+|00)[1-9]\d{0,2}(?:[ /-]?\(?\d{1,5}\)?){2,5}(?!\w)")
 EMAIL = re.compile(r"(?<![A-Za-z0-9._%+-])[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,}")
 
 
 def redact(text: str) -> str:
     text = SECRET.sub("[REDACTED]", text)
     text = BEARER.sub(lambda m: m.group(1).rstrip() + " [REDACTED]", text)
+    text = FLAG.sub(lambda m: m.group(1) + "[REDACTED]", text)
     text = KV.sub(lambda m: m.group(1) + "[REDACTED]", text)
+    text = IBAN.sub("[IBAN]", text)
+    text = PHONE.sub("[PHONE]", text)
     return EMAIL.sub("[EMAIL]", text)
 
 
