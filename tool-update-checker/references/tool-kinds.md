@@ -30,8 +30,7 @@ Optional fields:
 - `groups = ["..."]`
 
 Good for:
-- local clones like `~/openclaw`
-- local clones like `~/hermes`
+- local clones like `~/dev/<repo>`
 - GitHub-based extensions you keep as local repos
 
 ## `github-release`

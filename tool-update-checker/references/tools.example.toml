@@ -21,17 +21,9 @@ package = "pi-bash-live-view"
 groups = ["pi", "extensions"]
 
 [[tool]]
-name = "openclaw"
+name = "some-local-clone"
 kind = "git-repo"
-path = "/home/wasti/openclaw"
-remote = "origin"
-branch = "main"
-groups = ["core", "repos"]
-
-[[tool]]
-name = "hermes"
-kind = "git-repo"
-path = "/home/wasti/hermes"
+path = "/home/wasti/dev/some-repo"
 remote = "origin"
 branch = "main"
 groups = ["core", "repos"]
