@@ -46,7 +46,7 @@ CLI and output; keep both stable.
 
 ## Models
 
-Review defaults: Codex `gpt-6.1-sol` (efforts `medium,high`), Claude `claude-opus-5-5` (`medium`);
+Review defaults: Codex `gpt-6.1-sol` (efforts `high,medium`, the first is the default), Claude `claude-opus-5-5` (`medium`);
 per-user overrides in `${XDG_CONFIG_HOME:-~/.config}/using-harnesses/models.conf`
 ([models.conf.example](references/models.conf.example)), shown by `"$PY" "$S/review.py" --print-config`.
 `gpt-6-sol` is refused everywhere; `gpt-6-astra` is never a default and runs only when the user names it

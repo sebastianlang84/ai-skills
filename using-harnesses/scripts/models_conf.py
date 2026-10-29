@@ -19,7 +19,7 @@ from pathlib import Path
 
 DEFAULTS = {
     "CODEX_MODEL": "gpt-6.1-sol",
-    "CODEX_EFFORTS": "medium,high",
+    "CODEX_EFFORTS": "high,medium",
     "CLAUDE_MODEL": "claude-opus-5-5",
     "CLAUDE_EFFORTS": "medium",
 }

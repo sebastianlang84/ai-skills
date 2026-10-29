@@ -143,7 +143,7 @@ run "$R" codex "$B" "$A"
 check "codex new: exit 0, answer and session id" '[ $RC -eq 0 ] && [ -s "$DIR/out.md" ] && grep -qx "$CID" "$DIR/session"'
 check "codex new: no tools (shell, exec, image, apps, plugins, browsers), no web search" '( for f in shell_tool unified_exec view_image apps plugins browser_use computer_use in_app_browser; do grep -A1 -x -- --disable "$FAKE_LOG/argv" | grep -qx "$f" || exit 1; done ) && arg "web_search=\"disabled\""'
 check "codex new: read-only, rules/config ignored, memories off" 'arg -s && [ "$(after -s)" = read-only ] && arg --ignore-rules && arg --ignore-user-config && [ "$(after --disable)" = memories ] && ! arg --ephemeral'
-check "codex new: default model and effort" '[ "$(after -m)" = gpt-6.1-sol ] && arg model_reasoning_effort=medium'
+check "codex new: default model and effort" '[ "$(after -m)" = gpt-6.1-sol ] && arg model_reasoning_effort=high'
 check "codex new: reviewer home is ~/.codex-review" 'same_path "$(cat $FAKE_LOG/codex_home)" "$CH"'
 check "codex new: HOME is the empty cwd, so ~/.agents/skills is out of reach" 'same_path "$(cat $FAKE_LOG/home)" "$(cat $FAKE_LOG/cwd)"'
 check "codex new: cwd empty and outside git" '[ "$(cat $FAKE_LOG/cwdcount)" = 0 ] && ! git -C "$(cat $FAKE_LOG/cwd)" rev-parse 2>/dev/null'
@@ -282,7 +282,7 @@ for args in "" "pi $B $A" "--resume $CID $B $A" "codex $B" "codex --model gpt-x 
 done
 
 # --- --get and encodings under a non-UTF-8 locale
-run "$R" --get CODEX_EFFORTS; check "--get prints the effective value" '[ $RC -eq 0 ] && [ "$OUT" = medium,high ]'
+run "$R" --get CODEX_EFFORTS; check "--get prints the effective value" '[ $RC -eq 0 ] && [ "$OUT" = high,medium ]'
 run "$R" --get NOPE; check "--get unknown key: exit 2" '[ $RC -eq 2 ]'
 run "$R" --get; check "--get without key: exit 2" '[ $RC -eq 2 ]'
 HDR=$(sed -n '/<!-- BEGIN role-lock -->/{n;p;q}' "$SKILL/references/review-prompt.md")

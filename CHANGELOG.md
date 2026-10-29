@@ -18,6 +18,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- `using-harnesses` (Sebastian, 2026-10-29): Codex reviews default to `gpt-6.1-sol` with effort `high` (`CODEX_EFFORTS=high,medium`).
 - `context-engineering` (Sebastian, 2026-10-29): instruction files stay under 100 lines, at most 150 with a stated reason (previously only the Claude Code guidance of under 200).
 - `tool-update-checker` (Sebastian, 2026-10-29): Hermes and OpenClaw are retired and removed from beelink; their examples and trigger words are gone.
 - `improve-codebase-architecture` (2026-10-27, kb #393, from seb-pc): candidates need evidence (co-changing files, repeated fixes at one seam, tests mocking internals, repeated call sequences; mechanical causes ruled out) and carry Evidence, Cost S/M/L and Strength fields, ranked by benefit against cost; with no evidenced candidate the skill writes the exact line `No warranted deepening found.` and stops. A calling skill sets output format and stopping point. `port` is defined; old unit tests are deleted only after the user confirms the plan and the new tests cover the same and pass; design-it-twice only for several callers or a costly interface.
