@@ -38,15 +38,16 @@ Do not use autoresearch as the main frame when:
 ## Required workflow
 
 1. **State the target system and improvement goal.** Name what should get better and for whom.
-2. **Freeze the evaluation before tuning.** Define benchmark cases, metrics, guardrails, and success criteria before changing the system.
-3. **Establish a baseline.** Record current results, version/commit when relevant, environment, and known misses.
-4. **List levers.** Identify the parts of the system that can plausibly affect the metric.
-5. **Pick one hypothesis.** Change one lever at a time; avoid mixing benchmark edits with implementation/ranking/tuning edits.
-6. **Run the fixed evaluation.** Rebuild/reindex/restart only when the changed lever requires it.
-7. **Compare deltas.** Note improvements, regressions, latency/cost impact, and which cases moved.
-8. **Classify failures.** Use task-specific miss classes instead of guessing blindly.
-9. **Decide keep/discard.** Keep only if metrics and qualitative evidence justify the complexity and regressions.
-10. **Log the experiment.** Preserve enough detail that another agent can resume or reproduce the run.
+2. **Fix the decision point before measuring.** Record the decision question, the evidence already at hand, the decision rule, and the delivery date. On that date deliver a recommendation with its uncertainties, whatever the measurement has reached.
+3. **Freeze the evaluation before tuning.** Fix known, evidenced defects in tools, inputs and environment; a baseline on a broken environment measures the breakage, not the lever, and disputed findings do not block the confirmed fixes. Then define benchmark cases, metrics, guardrails, and success criteria before changing the system. After freezing, change the evaluation, its cases and its harness only for defects that make the comparison unusable, and park improvements to them for a later experiment; the chosen lever stays the one change to the target system.
+4. **Establish a baseline.** Record current results, version/commit when relevant, environment, and the target system's known misses.
+5. **List levers.** Identify the parts of the system that can plausibly affect the metric.
+6. **Pick one hypothesis.** Change one lever at a time; avoid mixing benchmark edits with implementation/ranking/tuning edits.
+7. **Run the fixed evaluation.** Rebuild/reindex/restart only when the changed lever requires it. Keep each run's inputs, prompt, model configuration, code state, and result.
+8. **Compare deltas.** Note improvements, regressions, latency/cost impact, and which cases moved. Before claiming repeatability, check that the compared runs share inputs, prompt, model configuration, and code state; report runs whose conditions differ as separate groups, and the spread of results within each group.
+9. **Classify failures.** Use task-specific miss classes instead of guessing blindly.
+10. **Decide keep/discard.** Keep only if metrics and qualitative evidence justify the complexity and regressions.
+11. **Log the experiment.** Preserve enough detail that another agent can resume or reproduce the run. Delete comparison artifacts only after the evaluation is finished and its evidence is stored durably.
 
 ## Experiment design rules
 
@@ -92,9 +93,7 @@ Next step:
 
 Apply this local default only when the user explicitly names CodeMap or `/home/wasti/dev/autoresearch`:
 
-- `/home/wasti/dev/autoresearch` is the CodeMap retrieval-quality benchmark workspace.
-- It is a small realistic benchmark corpus and experiment-protocol workspace.
-- The goal is to improve CodeMap retrieval quality through quantitative benchmark loops.
+- `/home/wasti/dev/autoresearch` is the CodeMap retrieval-quality benchmark workspace: a small realistic benchmark corpus and experiment protocol for improving CodeMap retrieval quality through quantitative benchmark loops.
 - The CodeMap implementation target is usually the checkout at `/home/wasti/dev/codemap`; read its repo rules before experimenting.
 - Useful CodeMap levers include indexed files/extensions/ignores, chunking, symbol extraction, query planning, ranking, benchmark ground truth, and index-version rebuild behavior.
 - Use fixed retrieval metrics such as MRR@5, recall@5, top-1 accuracy, expected coverage, and latency; classify misses before proposing changes.
