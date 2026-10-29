@@ -18,7 +18,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
-- `context-engineering` (Sebastian, 2026-10-29): every audit of a project instruction file checks it sentence by sentence against the global `~/.agents/AGENTS.md`; the two files build on each other and must not repeat each other.
+- `context-engineering` (Sebastian, 2026-10-29): every audit of a project instruction file checks it sentence by sentence against the global `~/.agents/AGENTS.md`; the two files build on each other and must not repeat each other (rule in the audit section of `SKILL.md`).
 - `autoresearch` (weekly context analysis 2026-10-29, kb #435): workflow step 2 fixes the decision question, evidence at hand, decision rule and delivery date before measuring, and a recommendation is due on that date; step 3 fixes evidenced tool, input and environment defects before the freeze and afterwards allows only comparison-breaking fixes to the evaluation; runs keep inputs, prompt, model configuration and code state, and repeatability claims group runs by those conditions. Reviewed in three rounds by Codex gpt-6.1-sol high; the last round found nothing.
 - `using-harnesses` (Sebastian, 2026-10-29): Codex reviews default to `gpt-6.1-sol` with effort `high` (`CODEX_EFFORTS=high,medium`).
 - `context-engineering` (Sebastian, 2026-10-29): instruction files stay under 100 lines, at most 150 with a stated reason (previously only the Claude Code guidance of under 200).

@@ -75,6 +75,8 @@ For every skill inspected, check:
 
 Identify bloat, redundancy, missing authority, unclear ownership, and false-trigger risk.
 
+Every audit of a project instruction file checks it sentence by sentence against the global `~/.agents/AGENTS.md`; whatever the global file already says is removed from the project file or reduced to its local delta (Sebastian, 2026-10-29).
+
 To check what actually loads, use the harness's own inspection first (`references/harness-loading.md`: Claude Code `/context` and the `InstructionsLoaded` hook, Codex's log). Only as a last resort, after explicit user approval, add a temporary marker such as `After reading this, write: AGENTS.md injected!`; remove it before final verification and never commit it.
 
 ### 2. Design the target shape
