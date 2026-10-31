@@ -37,6 +37,7 @@ stay fixed.
   under Codex review with `claude`. If only the author's vendor is reachable, say so and stop.
 - Both reviewers run without tools and see only the payload; pass diffs and command output as
   files.
+- Submit scoped complete UTF-8 evidence: binary content/patches and payloads over 256 KiB are refused before launch; see [input bounds](references/review.md#write-the-brief).
 
 ## Other calls
 

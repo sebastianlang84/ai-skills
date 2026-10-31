@@ -205,6 +205,192 @@ printf '%s\n' '{"type":"user","message":{"role":"user","content":"why is my buil
 run "$R" claude --resume 5e55eeee-0000-0000-0000-000000000000 "$B" "$A"
 check "claude resume: ordinary session in the review cwd refused" '[ $RC -eq 2 ] && ! called && grep -q "role lock" "$T/stderr"'
 
+# --- bounded text inputs: every refusal must happen before the fake model is invoked
+"$PY" - "$T" <<'PYINPUT'
+import gzip, os, subprocess, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+(p / "fixture.gz").write_bytes(gzip.compress(b"fixture evidence\n"))
+(p / "nul.txt").write_bytes(b"text\0hidden")
+(p / "invalid.txt").write_bytes(b"text\xffhidden")
+(p / "control.txt").write_bytes(b"\x1b[31mFAIL\x1b[0m\nprogress\b\rready\n")
+(p / "page.diff").write_bytes(b"diff --git a/a.c b/a.c\n--- a/a.c\n+++ b/a.c\n@@ -1 +1 @@\n \x0cpage break\n")
+(p / "marker.md").write_bytes(b"Git patch format:\n```text\nGIT binary patch\n```\n")
+(p / "binary.diff").write_bytes(b"diff --git a/a.gz b/a.gz\nGIT binary patch\nliteral 42\nabc\n")
+(p / "binary-crlf.diff").write_bytes(b"diff --git a/a.gz b/a.gz\r\nGIT binary patch\r\nliteral 42\r\nabc\r\n")
+(p / "safe.diff").write_text("diff --git a/a.py b/a.py\n-previous\n+Prüfung ✓\nBinary files a/a.gz and b/a.gz differ\nProse mentions GIT binary patch safely.\nGIT binary patch is a phrase in this sentence.\n+GIT binary patch\n", encoding="utf-8")
+(p / "huge.txt").write_bytes(b"x" * 262145)
+(p / "ninety.txt").write_bytes(b"x" * 90000)
+(p / "small.txt").write_bytes(b"x" * 4096)
+(p / "empty.txt").write_bytes(b"")
+# Real local Git output: modification, new file, rename and coloured metadata/body.
+repo = p / "binary-fixtures"
+repo.mkdir()
+def git(*args):
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE).stdout
+git("init", "-q")
+blob = bytes(range(256)) * 4
+(repo / "old.bin").write_bytes(blob)
+git("add", "old.bin")
+git("-c", "user.name=Offline Test", "-c", "user.email=offline@example.invalid",
+    "-c", "commit.gpgsign=false", "commit", "-qm", "fixture")
+(repo / "old.bin").write_bytes(blob + b"changed")
+(p / "real-index.diff").write_bytes(git("diff", "--binary", "--color=never"))
+(p / "real-colour.diff").write_bytes(git("diff", "--binary", "--color=always"))
+(repo / "old.bin").write_bytes(blob)
+(repo / "new.bin").write_bytes(blob)
+git("add", "new.bin")
+(p / "real-new.diff").write_bytes(git("diff", "--cached", "--binary", "--color=never"))
+git("reset", "-q", "HEAD", "--", "new.bin")
+(repo / "new.bin").unlink()
+git("mv", "old.bin", "renamed.bin")
+(repo / "renamed.bin").write_bytes(blob + b"changed")
+git("add", "renamed.bin")
+(p / "real-rename.diff").write_bytes(git("diff", "--cached", "--binary", "--color=never", "-M"))
+(p / "context.diff").write_bytes(b"diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1,2 +1,2 @@\n GIT binary patch\n-old\n+new\n")
+PYINPUT
+for backend in codex claude; do
+  for file in fixture.gz nul.txt invalid.txt binary.diff binary-crlf.diff real-index.diff real-new.diff real-rename.diff real-colour.diff; do
+    run RS "$backend" "$B" "$T/$file"
+    check "$backend: $file refused before detached launch with source, size and remedy" \
+      '[ $RC -eq 3 ] && ! called && [ -z "$OUT" ] && grep -q "$file" "$T/stderr" && grep -q "bytes" "$T/stderr" && grep -q "review.py: payload refused" "$T/stderr"'
+  done
+  for file in safe.diff control.txt page.diff marker.md context.diff; do
+    run "$R" "$backend" "$B" "$T/$file"
+    check "$backend: $file accepted" '[ $RC -eq 0 ] && called'
+    "$PY" - "$DIR/payload.md" "$T/$file" "$FAKE_LOG/stdin" <<'PYIDENTITY'
+from pathlib import Path
+import sys
+payload, artifact, sent = map(Path, sys.argv[1:])
+label = f"\n\n===== ARTIFACT: {artifact.name} =====\n".encode()
+body = payload.read_bytes().split(label, 1)[1]
+ending = b"\n\n===== END OF ARTIFACTS =====\n"
+assert body.endswith(ending)
+assert body[:-len(ending)] == artifact.read_bytes()
+assert sent.read_bytes() == payload.read_bytes()
+PYIDENTITY
+    IDENTITY_RC=$?
+    check "$backend: $file artifact and transmitted payload are byte-identical" '[ $IDENTITY_RC -eq 0 ]'
+  done
+  run RS "$backend" "$B" "$T/nul.txt"
+  check "$backend: NUL diagnostic names byte and zero-based offset" \
+    '[ $RC -eq 3 ] && ! called && grep -q "byte 0x00 at offset 4" "$T/stderr"'
+  run RS "$backend" "$B" "$T/invalid.txt"
+  check "$backend: encoding diagnostic names byte and zero-based offset" \
+    '[ $RC -eq 3 ] && ! called && grep -q "byte 0xff at offset 4" "$T/stderr"'
+  run RS "$backend" "$B" "$T/huge.txt"
+  check "$backend: single huge artifact refused before launch" '[ $RC -eq 3 ] && ! called && grep -q "262145 bytes" "$T/stderr" && grep -q "262144 bytes" "$T/stderr"'
+done
+for role in brief rules; do
+  if [ "$role" = brief ]; then run RS claude "$T/binary.diff" "$A"
+  else run RS claude --rules "$T/binary.diff" "$B" "$A"; fi
+  check "binary patch also refused in $role" '[ $RC -eq 3 ] && ! called'
+  if [ "$role" = brief ]; then run RS claude "$T/huge.txt" "$A"
+  else run RS claude --rules "$T/huge.txt" "$B" "$A"; fi
+  check "huge $role refused before launch" '[ $RC -eq 3 ] && ! called'
+done
+run RS claude --rules "$T/ninety.txt" "$T/ninety.txt" "$T/ninety.txt"
+check "combined brief, rules and artifact exceed budget even though each fits" \
+  '[ $RC -eq 3 ] && ! called && grep -q "already included: framing" "$T/stderr" && grep -q "ninety.txt" "$T/stderr"'
+SMALL=(); for _ in $(seq 70); do SMALL+=("$T/small.txt"); done
+run RS claude "$B" "${SMALL[@]}"
+check "many small artifacts share one budget" '[ $RC -eq 3 ] && ! called && grep -q "byte budget" "$T/stderr"'
+# Labels alone count, even when all artifact files are empty.
+LONG="$T/$(printf '%180s' '' | tr ' ' x)"; : > "$LONG"
+LABELS=(); for _ in $(seq 1400); do LABELS+=("$LONG"); done
+run RS claude "$B" "${LABELS[@]}"
+check "artifact labels alone can exceed the combined budget" '[ $RC -eq 3 ] && ! called && grep -q "framing including artifact labels" "$T/stderr"'
+# Infer framing size from a real assembled payload, then test the exact inclusive boundary.
+run "$R" claude "$B" "$T/empty.txt"
+BASE=$(wc -c < "$DIR/payload.md")
+"$PY" - "$T/empty.txt" "$BASE" <<'PYINPUT'
+import sys
+size = 262144 - int(sys.argv[2])
+open(sys.argv[1], "wb").write((b"x\n" * ((size + 1) // 2))[:size])
+PYINPUT
+run "$R" claude "$B" "$T/empty.txt"
+check "complete payload exactly 256 KiB passes including all framing" '[ $RC -eq 0 ] && called && [ "$(wc -c < "$DIR/payload.md")" -eq 262144 ]'
+printf x >> "$T/empty.txt"
+run RS claude "$B" "$T/empty.txt"
+check "framing makes one extra byte fail although input files alone fit" '[ $RC -eq 3 ] && ! called'
+# A file that grows after stat is still read with an explicit bound and refused.
+run "$PY" - "$SKILL/scripts" <<'PYINPUT'
+import io, sys
+from types import SimpleNamespace
+sys.path.insert(0, sys.argv[1])
+import review
+class Oversized:
+    def stat(self): return SimpleNamespace(st_size=100)
+    def open(self, mode): raise AssertionError("oversized input must not be opened")
+    def __str__(self): return "oversized.txt"
+try:
+    review.text_input(Oversized(), 10)
+except review.Exit as exc:
+    assert exc.code == 3
+else:
+    raise AssertionError("oversized input passed")
+class Growing:
+    def stat(self): return SimpleNamespace(st_size=1)
+    def open(self, mode):
+        class Bounded(io.BytesIO):
+            def read(self, size=-1):
+                assert size == 11, size
+                return super().read(size)
+        return Bounded(b"x" * 100)
+    def __str__(self): return "growing.txt"
+try:
+    review.text_input(Growing(), 10)
+except review.Exit as exc:
+    sys.exit(exc.code)
+sys.exit(1)
+PYINPUT
+check "growth after stat cannot trigger an unbounded read or pass the guard" '[ $RC -eq 3 ] && ! called && grep -q "while reading" "$T/stderr"'
+
+# Installed prompt faults are configuration errors; all assembly failures clean their call dirs.
+for fault in nul huge overlapping-blocks missing-input invalid-name; do
+  run "$PY" - "$SKILL/scripts" "$T" "$fault" "$B" "$A" <<'PYCLEANUP'
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+import review
+root, fault, brief, artifact = sys.argv[2:]
+refs = Path(root) / "fault-refs"
+refs.mkdir(exist_ok=True)
+prompt = refs / "review-prompt.md"
+before = set(Path(review.tmp_root()).iterdir())
+if fault == "invalid-name":
+    if review.WINDOWS:
+        sys.exit(0)  # Windows paths cannot carry surrogateescaped byte names.
+    artifact = str(Path(root) / "invalid-\udcff.txt")
+    Path(artifact).write_bytes(b"evidence")
+elif fault == "missing-input":
+    original = review.text_input
+    def vanished(path, *args, **kwargs):
+        if str(path) == brief:
+            raise FileNotFoundError("input disappeared after precheck")
+        return original(path, *args, **kwargs)
+    review.text_input = vanished
+else:
+    if fault == "overlapping-blocks":
+        # The file fits, but overlapping installed blocks duplicate rules in the assembled frame.
+        prompt.write_bytes(b"<!-- BEGIN role-lock -->\nhead\n<!-- BEGIN rules -->\n"
+                           + b"x" * 140000 + b"\n<!-- END rules -->\n<!-- END role-lock -->\n"
+                           + b"<!-- BEGIN data-clause -->\ndata\n<!-- END data-clause -->\n")
+    else:
+        prompt.write_bytes(b"bad\0prompt" if fault == "nul" else b"x" * 262145)
+    review.REFS = refs
+try:
+    review.start(["codex", brief, artifact])
+except review.Exit as exc:
+    assert exc.code == 2, exc.code
+else:
+    raise AssertionError("fault passed")
+assert set(Path(review.tmp_root()).iterdir()) == before, "temporary directory leaked"
+PYCLEANUP
+  check "$fault: exit 2 and no temporary directory or model launch" '[ $RC -eq 0 ] && ! called'
+done
+
 # --- secret check, both stages, and checker failure
 printf 'key AKIA%s\n' ABCDEFGHIJKLMNOP > "$T/s1.txt"; run "$R" codex "$B" "$T/s1.txt"
 check "secret stage 1 (regex): exit 3, not sent" '[ $RC -eq 3 ] && ! called'

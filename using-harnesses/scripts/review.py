@@ -56,6 +56,9 @@ REFS = HERE.parent / "references"
 MARKER = "===REVIEW COMPLETE==="
 WAIT_LIMIT = 540
 STILL_RUNNING = 75
+MAX_PAYLOAD_BYTES = 256 * 1024
+SCOPED_REVIEW = ("Submit a smaller scoped complete review with required interfaces and test outcomes; "
+                 "do not truncate or silently drop evidence. No size override is available.")
 USAGE = ("usage: review.py <codex|claude> [--foreground] [--resume <id>] [--effort <level>] [--rules <file>] "
          "<brief-file> <artifact-file>... | wait <dir> [--timeout <s>] | cancel <dir> | "
          "--print-config | --get <KEY>")
@@ -386,11 +389,48 @@ def nonempty(path: Path) -> bool:
 
 # --- the payload ----------------------------------------------------------------------------------
 
+def input_refused(reason: str, remedy: str = SCOPED_REVIEW):
+    die(f"payload refused: {reason}. {remedy}", 3)
+
+
+def text_input(path: Path, available: int, sources: str = "", *, config: bool = False) -> bytes:
+    """Stat before reading, then cap the read as well in case the file grows or lies about size."""
+    def refuse(reason: str, remedy: str = SCOPED_REVIEW):
+        if config:
+            die(f"invalid review-prompt.md configuration: {reason}; repair the installed prompt", 2)
+        input_refused(reason, remedy)
+
+    size = path.stat().st_size
+    detail = f"{path} ({size} bytes); {available} bytes remaining of {MAX_PAYLOAD_BYTES} bytes"
+    if size > available:
+        refuse(f"byte budget exceeded by {detail}{sources}")
+    with path.open("rb") as stream:
+        content = stream.read(available + 1)
+    if len(content) > available:
+        refuse(f"byte budget exceeded while reading {detail}{sources}")
+    detail = f"{path} ({len(content)} bytes)"
+    try:
+        content.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        refuse(f"non-UTF-8 byte 0x{content[exc.start]:02x} at offset {exc.start} in {detail}",
+               "Provide UTF-8 text evidence instead of binary data.")
+    offset = content.find(b"\x00")
+    if offset >= 0:
+        refuse(f"binary indicator byte 0x00 at offset {offset} in {detail}",
+               "Provide textual evidence describing the binary fixture and its test outcomes.")
+    # Match the binary body signature, including SGR colour, without changing sent evidence.
+    sgr = rb"(?:\x1b\[[0-9;]*m)*"
+    if re.search(rb"^" + sgr + rb"GIT binary patch" + sgr + rb"\r?\n"
+                 + sgr + rb"(?:literal|delta) [0-9]+" + sgr + rb"\r?$", content, re.M):
+        refuse(f"embedded GIT binary patch block in {detail}")
+    return content
+
+
 def block(name: str) -> bytes | None:
     """The lines between <!-- BEGIN name --> and <!-- END name --> in review-prompt.md, or None."""
     begin, end = f"<!-- BEGIN {name} -->".encode(), f"<!-- END {name} -->".encode()
     out, on = [], False
-    for line in (REFS / "review-prompt.md").read_bytes().split(b"\n"):
+    for line in text_input(REFS / "review-prompt.md", MAX_PAYLOAD_BYTES, config=True).split(b"\n"):
         line = line.rstrip(b"\r")
         if line == end and on:
             return b"".join(x + b"\n" for x in out)
@@ -516,31 +556,64 @@ def start(argv: list[str]) -> int:
         die(f"cannot create the call directory: {exc}")
     neutral: Path | None = None
 
-    def fail(message: str, code: int):
+    def cleanup():
         remove_tree(outdir)
         if neutral:
             remove_tree(neutral)
+
+    def fail(message: str, code: int):
+        cleanup()
         die(message, code)
 
-    head_block = block("role-lock")
-    head = head_block.decode("utf-8", "replace").split("\n")[0] if head_block else ""
-    if not head:
-        fail("review-prompt.md has no role-lock block", 2)
-    # --rules replaces only the general review rules; role lock and data clause stay fixed.
-    rules, data = block("rules"), block("data-clause")
     payload = outdir / "payload.md"
     try:
+        head_block = block("role-lock")
+        head = head_block.decode("utf-8").split("\n")[0] if head_block else ""
+        if not head:
+            fail("review-prompt.md has no role-lock block", 2)
+        # --rules replaces only the general review rules; role lock and data clause stay fixed.
+        rules, data = block("rules"), block("data-clause")
         if rules is None or data is None:
             raise OSError("block missing")
+        ending = b"\n\n===== END OF ARTIFACTS =====\n"
+        fixed_size = len(head_block) + len(data) + 4 + len(ending)
+        if rules_file is None:
+            fixed_size += len(rules)
+        if fixed_size > MAX_PAYLOAD_BYTES:
+            fail("invalid review-prompt.md configuration: fixed prompt blocks exceed the byte bound; "
+                 "repair the installed prompt", 2)
+        labels = [f"\n\n===== ARTIFACT: {os.path.basename(f)} =====\n".encode() for f in artifacts]
+        used = len(head_block) + len(data) + 4 + sum(map(len, labels)) + len(ending)
+        sources = [f"framing including artifact labels ({used} bytes)"]
+
+        def reserve(content: bytes, source: str) -> bytes:
+            nonlocal used
+            used += len(content)
+            sources.append(f"{source} ({len(content)} bytes)")
+            if used > MAX_PAYLOAD_BYTES:
+                input_refused(f"{used} bytes exceeds {MAX_PAYLOAD_BYTES} bytes; " + "; ".join(sources))
+            return content
+
+        def load(source: str) -> bytes:
+            return text_input(Path(source), MAX_PAYLOAD_BYTES - used, "; already included: " + "; ".join(sources))
+
+        if used > MAX_PAYLOAD_BYTES:
+            input_refused(f"{used} bytes exceeds {MAX_PAYLOAD_BYTES} bytes; " + "; ".join(sources))
         if rules_file is not None:
-            rules = Path(rules_file).read_bytes().rstrip(b"\n") + b"\n"
-        parts = [head_block, b"\n", Path(brief).read_bytes(), b"\n\n", rules, b"\n", data]
-        for f in artifacts:
-            parts += [f"\n\n===== ARTIFACT: {os.path.basename(f)} =====\n".encode(), Path(f).read_bytes()]
-        parts.append(b"\n\n===== END OF ARTIFACTS =====\n")
+            rules = load(rules_file).rstrip(b"\n") + b"\n"
+        reserve(rules, rules_file or "review-prompt.md rules")
+        parts = [head_block, b"\n", reserve(load(brief), brief), b"\n\n", rules, b"\n", data]
+        for f, label in zip(artifacts, labels):
+            parts += [label, reserve(load(f), f)]
+        parts.append(ending)
         payload.write_bytes(b"".join(parts))
+    except UnicodeError:
+        fail("artifact labels must be valid UTF-8; rename the input file", 2)
     except OSError:
         fail("payload could not be assembled (review-prompt.md block or input missing)", 2)
+    except BaseException:
+        cleanup()
+        raise
 
     verdict = secret_check(payload)
     if verdict == "secret":
