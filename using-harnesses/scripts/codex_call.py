@@ -41,6 +41,17 @@ MODEL = os.environ.get("CODEX_CALL_MODEL", "gpt-6.1-sol")
 EFFORT = os.environ.get("CODEX_CALL_EFFORT", "medium")
 ROOT = Path(os.environ.get("CODEX_CALL_ROOT", Path.home() / ".agents/state/codex-call"))
 SANDBOXES = ("read-only", "workspace-write", "danger-full-access")
+#: Appended to every prompt, last so it is read last. Every step resends the whole history, so
+#: what a step prints is paid again on every later step (01.11.2026: ~290M input tokens in a day).
+READING = """\
+Context discipline (from the calling agent):
+- Search before you read: `rg`, `rg -l`, `find`, `ls`, `wc -c` first; then read only the lines you
+  need (`sed -n`, `rg -n -C`). Never `cat` a file over 20 KB or a whole log, JSON or transcript.
+- Keep command output small: pipe through `tail`, `head`, `rg` or a counting script; print counts and
+  the few relevant lines, not data. Do not print a large file after rewriting it.
+- Run tests narrowly (one file or `-k`), with `-q` and `| tail`; the full suite only once at the end.
+- Write large results to files and report their path and a short summary.
+"""
 # Banned on this machine (Sebastian, 2026-10-01); a call naming one fails before anything runs.
 BANNED_MODELS = ("gpt-6-sol",)
 # Never a default, only when Sebastian names it for this call; needs --on-request (Sebastian, 2026-10-24).
@@ -358,7 +369,7 @@ def prepare(args, parent: str | None) -> Path:
             break
         except FileExistsError:
             suffix += 1
-    (call / "prompt.md").write_text(prompt, encoding="utf-8")
+    (call / "prompt.md").write_text(prompt.rstrip() + "\n\n" + READING, encoding="utf-8")
     cwd = str(Path(args.cwd).resolve()) if getattr(args, "cwd", None) else str(call)
     write_meta(call, {"label": label, "started": now(), "model": args.model, "effort": args.effort,
                       "sandbox": args.sandbox, "search": bool(getattr(args, "search", False)),

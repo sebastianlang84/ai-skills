@@ -17,7 +17,7 @@ An agent resends its whole history on every step, so a broad call costs history 
 01.11.2026 a few broad calls (build + fetch + model run + measurement for three firms in one; a
 2 MB file rewritten again and again) reached ~290M input tokens in a day (Sebastian: „hast du eine
 ahnung was du da redest?“). Before starting: cut the call to one firm and one step; tell the
-worker to keep outputs short and to read large files and test logs only in excerpts; state the
+worker the job only (`codex_call.py` appends a fixed context-discipline block to every prompt: search first with rg/find/wc, read excerpts, small outputs, narrow tests); state the
 expected cost to the user; run a series of model calls (one per document) on three items first
 and extrapolate. After the call: report the `usage:` line `codex_call.py` prints and the quota.
 
