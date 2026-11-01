@@ -150,6 +150,21 @@ def outcome(events: str) -> tuple[str | None, str | None]:
     return thread, error
 
 
+def usage(events: str) -> dict:
+    """Token use summed over the call's turns, so every call reports what it cost (01.11.2026:
+    unmeasured worker calls added up to ~290M input tokens in one day)."""
+    total = {"input_tokens": 0, "cached_input_tokens": 0, "output_tokens": 0}
+    for line in events.splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if event.get("type") == "turn.completed":
+            for key in total:
+                total[key] += int((event.get("usage") or {}).get(key) or 0)
+    return total
+
+
 def run(call: Path) -> int:
     """Execute one prepared call synchronously and record its end state in meta.json."""
     meta = read_meta(call)
@@ -166,7 +181,9 @@ def run(call: Path) -> int:
                 (call / "events.jsonl").open("wb") as stdout, \
                 (call / "stderr.log").open("wb") as stderr:
             proc = subprocess.run(argv, stdin=stdin, stdout=stdout, stderr=stderr, cwd=meta["cwd"])
-        found, error = outcome((call / "events.jsonl").read_text(encoding="utf-8", errors="replace"))
+        events = (call / "events.jsonl").read_text(encoding="utf-8", errors="replace")
+        found, error = outcome(events)
+        meta["usage"] = usage(events)
         if error is None and proc.returncode != 0:
             error = f"codex exited {proc.returncode}"
         # Measured: resume reports thread.started with the resumed id, so a missing or different
@@ -194,7 +211,7 @@ def finish(call: Path, meta: dict) -> None:
     with (ROOT / "calls.jsonl").open("a", encoding="utf-8") as log:
         log.write(json.dumps({k: meta.get(k) for k in (
             "started", "finished", "label", "thread_id", "parent_thread", "model", "effort",
-            "sandbox", "cwd", "rc", "error")} | {"dir": str(call)}) + "\n")
+            "sandbox", "cwd", "rc", "error", "usage")} | {"dir": str(call)}) + "\n")
 
 
 def alive(pid: int | None) -> bool:
@@ -283,7 +300,10 @@ def report(call: Path) -> int:
         tail = (call / "stderr.log").read_text(encoding="utf-8", errors="replace")[-1500:] if (call / "stderr.log").exists() else ""
         print(f"FAILED: {meta['error']}\ncall: {call}\n{tail}".rstrip(), file=sys.stderr)
         return 1
-    print(f"thread: {meta['thread_id']}\nresult: {call / 'last.md'}\n")
+    use = meta.get("usage") or {}
+    print(f"thread: {meta['thread_id']}\nresult: {call / 'last.md'}")
+    print(f"usage: {use.get('input_tokens', 0):,} input ({use.get('cached_input_tokens', 0):,} cached), "
+          f"{use.get('output_tokens', 0):,} output; model calls the worker starts itself are not included\n")
     print((call / "last.md").read_text(encoding="utf-8").rstrip())
     return 0
 

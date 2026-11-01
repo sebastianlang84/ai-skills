@@ -11,6 +11,16 @@ description: Calls another agent harness headless — codex (gpt-6.1-sol, scouti
 | Codex: the reviewer home and its flags; questions, scouting, workers through `codex_call.py` | [codex.md](references/codex.md) |
 | `claude -p`: safe mode, review sessions | [claude.md](references/claude.md) |
 
+## Before any Codex worker or research call: size it
+
+An agent resends its whole history on every step, so a broad call costs history × steps: on
+01.11.2026 a few broad calls (build + fetch + model run + measurement for three firms in one; a
+2 MB file rewritten again and again) reached ~290M input tokens in a day (Sebastian: „hast du eine
+ahnung was du da redest?“). Before starting: cut the call to one firm and one step; tell the
+worker to keep outputs short and to read large files and test logs only in excerpts; state the
+expected cost to the user; run a series of model calls (one per document) on three items first
+and extrapolate. After the call: report the `usage:` line `codex_call.py` prints and the quota.
+
 ## Reviews go through one script
 
 ```bash
