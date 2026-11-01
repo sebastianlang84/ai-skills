@@ -71,6 +71,9 @@ or `-` for stdin. Its state is under `~/.agents/state/codex-call/`.
 - `--search` gives Codex its native web search; `--sandbox workspace-write|danger-full-access`
   widens the sandbox for callers that must write (market-digest's fixer, peer-debate sides). Never
   use it for a review: reviews go through `review.py`, which has no such option.
+- `--network` lets commands inside a `workspace-write` sandbox reach the network (curl, Python
+  HTTP, DNS); without it they fail with DNS errors even when `--search` is set. Use it for
+  research or worker calls that must fetch data (Sebastian, 2026-11-01: „codex netzzugang bitte einrichten!!!“).
 - `--model`, `--effort`, `--sandbox` or `CODEX_CALL_MODEL` / `CODEX_CALL_EFFORT` override the pins;
   `gpt-6-sol` is refused; `gpt-6-astra` only with `--on-request`, when the user named it for this call.
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """One pinned way to call Codex: start a thread, ask a follow-up in it, wait for a detached call.
 
-    codex_call.py new    [--cwd DIR] [--label L] [--model M] [--effort E] [--sandbox S] [--search] [--detach] PROMPT|-
-    codex_call.py resume THREAD_ID [--cwd DIR] [--label L] [--model M] [--effort E] [--sandbox S] [--search] [--detach] PROMPT|-
+    codex_call.py new    [--cwd DIR] [--label L] [--model M] [--effort E] [--sandbox S] [--search] [--network] [--detach] PROMPT|-
+    codex_call.py resume THREAD_ID [--cwd DIR] [--label L] [--model M] [--effort E] [--sandbox S] [--search] [--network] [--detach] PROMPT|-
     codex_call.py wait   CALL_DIR [--timeout SECONDS]
     codex_call.py cancel CALL_DIR   (stops a detached call and its codex process)
     codex_call.py list   [-n N]
@@ -116,6 +116,9 @@ def command(meta: dict, prefix: list[str], out: Path) -> list[str]:
             "-c", "features.hooks=false", "--skip-git-repo-check", "--json", "-o", str(out)]
     # `--search` (native web search) is a top-level flag; codex rejects it after `exec`.
     top = [*prefix, "--search"] if meta.get("search") else [*prefix]
+    if meta.get("network"):
+        # workspace-write blocks outbound connections (DNS fails) unless this is set.
+        pins += ["-c", "sandbox_workspace_write.network_access=true"]
     if meta["parent_thread"]:
         return [*top, "exec", "resume", meta["parent_thread"], *pins,
                 "-c", f"sandbox_mode={meta['sandbox']}", "-"]
@@ -338,7 +341,8 @@ def prepare(args, parent: str | None) -> Path:
     (call / "prompt.md").write_text(prompt, encoding="utf-8")
     cwd = str(Path(args.cwd).resolve()) if getattr(args, "cwd", None) else str(call)
     write_meta(call, {"label": label, "started": now(), "model": args.model, "effort": args.effort,
-                      "sandbox": args.sandbox, "search": bool(getattr(args, "search", False)), "cwd": cwd, "parent_thread": parent,
+                      "sandbox": args.sandbox, "search": bool(getattr(args, "search", False)),
+                      "network": bool(getattr(args, "network", False)), "cwd": cwd, "parent_thread": parent,
                       "thread_id": parent, "pid": None})
     return call
 
@@ -505,6 +509,8 @@ def main(argv=None) -> int:
         sp.add_argument("--effort", default=EFFORT)
         sp.add_argument("--sandbox", default="read-only")
         sp.add_argument("--search", action="store_true", help="give Codex its native web search")
+        sp.add_argument("--network", action="store_true",
+                        help="let commands in a workspace-write sandbox reach the network")
         sp.add_argument("--detach", action="store_true")
         sp.add_argument("--on-request", action="store_true",
                         help="the user named this on-request model for this call")
