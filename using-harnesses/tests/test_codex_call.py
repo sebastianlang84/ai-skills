@@ -50,11 +50,17 @@ class CodexCallTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         cc.ROOT = Path(self.tmp.name)
+        self.homes = tempfile.TemporaryDirectory()  # outside ROOT, which must hold only call directories
+        cc.WORKER_HOME, cc.USER_HOME = Path(self.homes.name) / "worker", Path(self.homes.name) / "user"
+        for home in (cc.WORKER_HOME, cc.USER_HOME):
+            home.mkdir()
+            (home / "auth.json").write_text("{}", encoding="utf-8")
         self.prompt = cc.ROOT / "p.md"
         self.prompt.write_text("review this", encoding="utf-8")
 
     def tearDown(self):
         self.tmp.cleanup()
+        self.homes.cleanup()
 
     def args(self, **kw):
         base = dict(prompt=str(self.prompt), label="t", model="gpt-6.1-sol", effort="medium",
@@ -90,6 +96,80 @@ class CodexCallTests(unittest.TestCase):
         self.assertIn("--json", cmd)
         self.assertNotIn("--ephemeral", cmd)
         self.assertEqual((meta["rc"], meta["thread_id"], meta["codex_version"]), (0, "t-1", "codex-cli 9.9.9"))
+
+    def test_new_runs_in_the_worker_home_without_instruction_files(self):
+        envs = []
+        real = self.fake_codex(events("turn.completed"))
+        def run(cmd, **kw):
+            envs.append((kw.get("env") or {}).get("CODEX_HOME"))
+            return real(cmd, **kw)
+        call = cc.prepare(self.args(), None)
+        with mock.patch.object(cc.shutil, "which", return_value="/usr/bin/codex"), \
+                mock.patch.object(cc.subprocess, "run", side_effect=run):
+            cc.run(call)
+        self.assertEqual(envs[-1], str(cc.WORKER_HOME))
+        self.assertIn("project_doc_max_bytes=0", self.calls[0])
+        self.assertIn("background_terminal_max_timeout=900000", self.calls[0])
+        self.assertEqual(cc.read_meta(cc.prepare(self.args(user_home=True), None))["home"], str(cc.USER_HOME))
+
+    def test_resume_without_allow_resume_is_refused_before_anything_runs(self):
+        err = io.StringIO()
+        with redirect_stderr(err):
+            rc = cc.main(["resume", "t-9", str(self.prompt)])
+        self.assertEqual(rc, 2)
+        self.assertIn("--allow-resume", err.getvalue())
+        self.assertFalse((cc.ROOT / "calls.jsonl").exists())
+
+    def test_missing_login_in_the_home_fails_the_call(self):
+        (cc.WORKER_HOME / "auth.json").unlink()
+        _, meta = self.call()
+        self.assertEqual(meta["rc"], 1)
+        self.assertIn("no Codex login", meta["error"])
+
+    def test_rollout_steps_count_requests_context_and_empty_waits(self):
+        day = cc.WORKER_HOME / "sessions/2026/11/03"
+        day.mkdir(parents=True)
+        def tc(ts, total, last):
+            return {"timestamp": ts, "payload": {"type": "token_count", "info": {
+                "total_token_usage": {"input_tokens": total, "cached_input_tokens": total // 2},
+                "last_token_usage": {"input_tokens": last}}}}
+        wait = {"timestamp": "2026-11-03T10:00:03Z", "payload": {"type": "custom_tool_call", "name": "exec",
+                "input": 'text(await tools.write_stdin({session_id:1,chars:"","yield_time_ms":600000}));'}}
+        work = {"timestamp": "2026-11-03T10:00:04Z", "payload": {"type": "custom_tool_call", "name": "exec",
+                "input": 'text(await tools.write_stdin({session_id:1,chars:"y"}));'}}
+        ctrl_c = {"timestamp": "2026-11-03T10:00:04Z", "payload": {"type": "custom_tool_call", "name": "exec",
+                  "input": "text(await tools.write_stdin({session_id:1,chars:'\\u0003',yield_time_ms:600000}));"}}
+        cell = {"timestamp": "2026-11-03T10:00:04Z", "payload": {"type": "function_call", "name": "wait",
+                "arguments": json.dumps({"cell_id": "2", "yield_time_ms": 30000})}}
+        nap = {"timestamp": "2026-11-03T10:00:04Z", "payload": {"type": "function_call", "name": "sleep",
+               "arguments": json.dumps({"duration_ms": 370000})}}
+        rows = [tc("2026-11-03T09:00:00Z", 100, 100),          # earlier call: not counted
+                tc("2026-11-03T10:00:01Z", 300, 200), wait, work, ctrl_c, cell, nap, tc("2026-11-03T10:00:05Z", 550, 250)]
+        (day / "rollout-2026-11-03T10-00-00-t-5.jsonl").write_text("\n".join(json.dumps(r) for r in rows))
+        st = cc.rollout_steps(cc.WORKER_HOME, "t-5", {str(day / "rollout-2026-11-03T10-00-00-t-5.jsonl"): 1})
+        self.assertEqual((st["requests"], st["input_tokens"], st["first_context"], st["last_context"],
+                          st["empty_waits"], st["wait_ms"]), (2, 450, 200, 250, 3, 1000000))
+        self.assertEqual(cc.thread_home("t-5"), cc.WORKER_HOME)
+        self.assertEqual(cc.rollout_mark(cc.WORKER_HOME, "t-5"), {str(day / "rollout-2026-11-03T10-00-00-t-5.jsonl"): len(rows)})
+
+    def test_measure_without_a_mark_never_charges_a_resume_with_the_thread(self):
+        day = cc.WORKER_HOME / "sessions/2026/11/03"
+        day.mkdir(parents=True)
+        (day / "rollout-x-t-7.jsonl").write_text(json.dumps({"payload": {"type": "token_count", "info": {
+            "total_token_usage": {"input_tokens": 500}, "last_token_usage": {"input_tokens": 500}}}}))
+        resumed = {"home": str(cc.WORKER_HOME), "thread_id": "t-7", "parent_thread": "t-7"}
+        cc.measure(cc.ROOT, resumed)
+        self.assertIsNone(resumed["steps"])
+        fresh = {"home": str(cc.WORKER_HOME), "thread_id": "t-7", "parent_thread": None}
+        cc.measure(cc.ROOT, fresh)
+        self.assertEqual(fresh["steps"]["requests"], 1)
+
+    def test_user_home_ignores_an_inherited_codex_home(self):
+        with mock.patch.dict(os.environ, {"CODEX_HOME": "/somewhere/worker"}):
+            spec = importlib.util.spec_from_file_location("codex_call_nested", SCRIPT)
+            nested = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(nested)
+        self.assertNotEqual(str(nested.USER_HOME), "/somewhere/worker")
 
     def test_resume_repeats_model_and_sets_sandbox_by_config(self):
         _, meta = self.call(parent="t-9", stream=events("turn.completed", thread="t-9"))

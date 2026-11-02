@@ -20,8 +20,10 @@ icacls "$(cygpath -w ~/.codex-review/auth.json)" //inheritance:r //grant:r "$(wh
 ```
 
 Never copy the everyday `auth.json` there: codex rotates the refresh token on renewal, and the copy
-that renews second is logged out. Use this home for nothing but reviews; `--resume` trusts the
-sessions stored in it.
+that renews second is logged out. `codex_call.py` runs its workers in this home too (since
+03.11.2026, for the same reason: no global `AGENTS.md`, plugins, MCP servers or memories). Workers
+put nothing into `AGENTS.md` or `skills/`, so `review.py`'s home checks still hold, and
+`review.py --resume` accepts only sessions that open with its role lock.
 
 ## Flags review.py passes
 
@@ -54,16 +56,21 @@ opens with the role lock, so a mistyped id or an ordinary session is refused.
 ## Other calls: codex_call.py
 
 `C=~/.agents/skills/using-harnesses/scripts/codex_call.py` pins model `gpt-6.1-sol`, effort
-`medium`, read-only sandbox, hooks off, thread kept, and runs in the everyday `CODEX_HOME` (with
-`AGENTS.md` and skills, which a worker needs and a reviewer must not have). Prompts go in as a file
-or `-` for stdin. Its state is under `~/.agents/state/codex-call/`.
+`medium`, read-only sandbox, hooks off, thread kept. A new thread runs in the worker home
+(`CODEX_CALL_HOME`, default `~/.codex-review`), with repository `AGENTS.md` off
+(`project_doc_max_bytes=0`) and every tool kept: the job prompt names what the worker must read
+(measured 03.11.2026: start context 25,300 → 16,700 tokens). `--user-home` runs a job that needs the
+plugins or MCP servers of `~/.codex/config.toml` in `~/.codex`. Prompts go in as a file or `-` for
+stdin. Its state is under `~/.agents/state/codex-call/`; each line in `calls.jsonl` carries `steps`:
+model requests, input, context at start and end, and empty waits, read from the thread's rollout.
 
 - Start: `python3 $C new --cwd <dir> --label <name> --detach <prompt-file>` prints a call dir.
 - Collect: `python3 $C wait <call-dir>` prints `thread:`, `result:` and the answer. Exit 3 means
   still running, so call `wait` again. Exit 1 is a failure with its reason.
-- Follow up in the same thread: `python3 $C resume <thread-id> --detach <prompt-file>`, then `wait`.
-  Every resumed step resends the thread's whole history, so a new job gets a fresh `new` call with a
-  written handoff instead (SKILL.md, "size it").
+- Follow up in the same thread: `python3 $C resume <thread-id> --allow-resume --detach <prompt-file>`,
+  then `wait`. Without `--allow-resume` the script refuses: every resumed step resends the thread's
+  whole history (02.11.2026: 28 % of all Codex input), so a new job gets a fresh `new` call with a
+  written handoff instead (SKILL.md, "size it"). The resume runs in the home that holds the thread.
   A resume does not inherit the first call's `--cwd`: without it the worker runs in its call
   directory, and `workspace-write` then covers only that directory (measured 2026-10-21, kb #286:
   the target worktrees were read-only). Pass `--cwd` and `--sandbox` again on every resume of a

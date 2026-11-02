@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """One pinned way to call Codex: start a thread, ask a follow-up in it, wait for a detached call.
 
-    codex_call.py new    [--cwd DIR] [--label L] [--model M] [--effort E] [--sandbox S] [--search] [--network] [--detach] PROMPT|-
-    codex_call.py resume THREAD_ID [--cwd DIR] [--label L] [--model M] [--effort E] [--sandbox S] [--search] [--network] [--detach] PROMPT|-
+    codex_call.py new    [--cwd DIR] [--label L] [--model M] [--effort E] [--sandbox S] [--search] [--network] [--user-home] [--detach] PROMPT|-
+    codex_call.py resume THREAD_ID --allow-resume [--cwd DIR] [--label L] [--model M] [--effort E] [--sandbox S] [--search] [--network] [--detach] PROMPT|-
     codex_call.py wait   CALL_DIR [--timeout SECONDS]
     codex_call.py cancel CALL_DIR   (stops a detached call and its codex process)
     codex_call.py list   [-n N]
@@ -10,6 +10,11 @@
 
 PROMPT is a file path, or `-` for stdin. Without --detach the call blocks and prints its result;
 with --detach it prints the call directory at once, and `wait` collects it.
+
+A new thread runs in the worker home (WORKER_HOME): its own login, no global AGENTS.md, and none
+of the plugins, MCP servers or memories in ~/.codex/config.toml. `--user-home` runs it in
+~/.codex instead, for a job that needs those. A resume runs in the home that holds its thread.
+Repository AGENTS.md files are off in both (`project_doc_max_bytes=0`): the job names what to read.
 
 Every flag below was measured against codex-cli 0.155.1 (2026-09-22):
 - no `--ephemeral`: an ephemeral thread is not saved, so it cannot be resumed;
@@ -51,6 +56,11 @@ Context discipline (from the calling agent):
   the few relevant lines, not data. Do not print a large file after rewriting it.
 - Run tests narrowly (one file or `-k`), with `-q` and `| tail`; the full suite only once at the end.
 - Write large results to files and report their path and a short summary.
+- Wait for a long command in as few model requests as possible: start it, then make ONE `sleep`
+  call for the whole expected remaining time (it accepts several minutes, e.g. `duration_ms: 300000`
+  for a 5 min run; do not split it into 60 s pieces), then read the result. Never poll with short
+  `yield_time_ms`, repeated `wait` calls or empty `write_stdin`: each poll resends the whole history
+  (03.11.2026: a 240 s run polled in 30-60 s steps took 7-11 requests; one 370 s `sleep` took 3).
 - You are a sub-call, not a session: the calling agent owns the ticket, the board and coordination.
   Do not run `kb`, do not load skills or the Brain, and do not read instruction files beyond those
   Codex loads for you, unless the job above names them (02.11.2026: one worker spent ~120k
@@ -62,6 +72,12 @@ BANNED_MODELS = ("gpt-6-sol",)
 ON_REQUEST_MODELS = ("gpt-6-astra",)
 # One Bash tool call is capped at 600 s; a wait must return before that.
 WAIT_TIMEOUT = 540
+#: Measured 2026-11-03 (codex-cli 0.166): this home plus project_doc_max_bytes=0 cut a worker's start
+#: context from 25,300 to 16,700 tokens. It is review.py's reviewer home, which holds its own login
+#: (never a copy of ~/.codex/auth.json: codex rotates the refresh token on renewal).
+WORKER_HOME = Path(os.environ.get("CODEX_CALL_HOME", Path.home() / ".codex-review"))
+# Not $CODEX_HOME: inside a worker that names the worker home, and `--user-home` must still reach ~/.codex.
+USER_HOME = Path(os.environ.get("CODEX_CALL_USER_HOME", Path.home() / ".codex"))
 STILL_RUNNING = 3
 WINDOWS = os.name == "nt"
 
@@ -128,7 +144,10 @@ def codex_version(prefix: list[str]) -> str:
 
 def command(meta: dict, prefix: list[str], out: Path) -> list[str]:
     pins = ["-m", meta["model"], "-c", f"model_reasoning_effort={meta['effort']}",
-            "-c", "features.hooks=false", "--skip-git-repo-check", "--json", "-o", str(out)]
+            "-c", "features.hooks=false", "-c", "project_doc_max_bytes=0",
+            # lets one write_stdin wait up to 15 min (READING asks for long waits; measured 03.11.2026)
+            "-c", "background_terminal_max_timeout=900000",
+            "--skip-git-repo-check", "--json", "-o", str(out)]
     # `--search` (native web search) is a top-level flag; codex rejects it after `exec`.
     top = [*prefix, "--search"] if meta.get("search") else [*prefix]
     if meta.get("network"):
@@ -180,6 +199,94 @@ def usage(events: str) -> dict:
     return total
 
 
+WAIT_CALL = re.compile(r"tools\.(\w+)\(")
+
+
+def is_empty_wait(item: dict) -> tuple[bool, int]:
+    """(True, ms) for a tool call that only waits: an empty write_stdin poll, a `wait` on a running
+    exec cell, or a `sleep`. Codex 0.166 returns an exec cell after ~30 s, so a model that does not
+    sleep polls in `wait` calls (measured 03.11.2026)."""
+    if item.get("type") == "function_call" and item.get("name") in ("write_stdin", "wait", "sleep"):
+        try:
+            args = json.loads(item.get("arguments") or "{}")
+        except json.JSONDecodeError:
+            return False, 0
+        ms = int(args.get("yield_time_ms") or args.get("duration_ms") or 0)
+        return item["name"] != "write_stdin" or not args.get("chars"), ms
+    if item.get("type") == "custom_tool_call" and item.get("name") == "exec":
+        code = item.get("input") or ""
+        names = WAIT_CALL.findall(code)
+        chars = re.findall(r'chars["\']?\s*:\s*(\S{0,2})', code)
+        if names and set(names) == {"write_stdin"} and all(c[:2] in ('""', "''") for c in chars):
+            return True, sum(int(x) for x in re.findall(r'yield_time_ms"?\s*:\s*(\d+)', code))
+    return False, 0
+
+
+def rollout_files(home: Path, thread: str | None) -> list[Path]:
+    return sorted((home / "sessions").glob(f"*/*/*/rollout-*-{thread}.jsonl")) if thread else []
+
+
+def rollout_mark(home: Path, thread: str | None) -> dict:
+    """Lines per rollout file before this call: what follows is this call's (a timestamp boundary
+    would recount the last request of an immediately preceding call)."""
+    marks = {}
+    for path in rollout_files(home, thread):
+        with path.open("rb") as fh:
+            marks[str(path)] = sum(1 for _ in fh)
+    return marks
+
+
+def rollout_steps(home: Path, thread: str | None, mark: dict) -> dict | None:
+    """Per-request figures for the part of the thread's rollout this call wrote.
+
+    turn.completed gives one sum per turn; what drives cost is requests × context, and a poll loop
+    or a failed turn without turn.completed is invisible in that sum (Codex review, 03.11.2026)."""
+    files = rollout_files(home, thread)
+    if not files:
+        return None
+    out = {"requests": 0, "input_tokens": 0, "cached_input_tokens": 0, "first_context": None,
+           "last_context": 0, "empty_waits": 0, "wait_ms": 0}
+    prev = {"input_tokens": 0, "cached_input_tokens": 0}
+    for path in files:
+        skip = mark.get(str(path), 0)
+        with path.open(encoding="utf-8", errors="replace") as fh:
+            for number, line in enumerate(fh):
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                ours = number >= skip
+                item = (event.get("payload") if isinstance(event, dict) else None) or {}
+                if item.get("type") == "token_count" and item.get("info"):
+                    total = item["info"].get("total_token_usage") or {}
+                    delta = {k: int(total.get(k) or 0) - prev[k] for k in prev}
+                    if delta["input_tokens"] <= 0:
+                        continue
+                    prev = {k: int(total.get(k) or 0) for k in prev}
+                    if not ours:
+                        continue
+                    context = int((item["info"].get("last_token_usage") or {}).get("input_tokens") or 0)
+                    out["requests"] += 1
+                    out["input_tokens"] += delta["input_tokens"]
+                    out["cached_input_tokens"] += delta["cached_input_tokens"]
+                    out["first_context"] = out["first_context"] or context
+                    out["last_context"] = context
+                elif ours:
+                    empty, ms = is_empty_wait(item)
+                    if empty:
+                        out["empty_waits"] += 1
+                        out["wait_ms"] += ms
+    return out
+
+
+def thread_home(thread: str) -> Path:
+    """The Codex home whose sessions hold this thread; new threads live in the worker home."""
+    for home in (WORKER_HOME, USER_HOME):
+        if any((home / "sessions").glob(f"*/*/*/rollout-*-{thread}.jsonl")):
+            return home
+    return WORKER_HOME
+
+
 def thread_total(thread: str) -> dict | None:
     """The thread's cumulative usage after its last successful logged call, or None.
 
@@ -223,15 +330,22 @@ def run(call: Path) -> int:
             raise Failed("codex CLI not found on PATH")
         argv = command(meta, prefix, call / "last.md")
         check_batch(argv)
+        home = Path(meta.get("home") or USER_HOME)
+        if not (home / "auth.json").is_file():
+            raise Failed(f"no Codex login in {home}: run `CODEX_HOME={home} codex login --device-auth` "
+                         "or pass --user-home")
         meta["codex_version"] = codex_version(prefix)
+        meta["rollout_mark"] = rollout_mark(home, thread)
         write_meta(call, meta)
         with (call / "prompt.md").open("rb") as stdin, \
                 (call / "events.jsonl").open("wb") as stdout, \
                 (call / "stderr.log").open("wb") as stderr:
-            proc = subprocess.run(argv, stdin=stdin, stdout=stdout, stderr=stderr, cwd=meta["cwd"])
+            proc = subprocess.run(argv, stdin=stdin, stdout=stdout, stderr=stderr, cwd=meta["cwd"],
+                                  env=os.environ | {"CODEX_HOME": str(home)})
         events = (call / "events.jsonl").read_text(encoding="utf-8", errors="replace")
         found, error = outcome(events)
         split_usage(meta, usage(events))
+        measure(call, meta)
         if error is None and proc.returncode != 0:
             error = f"codex exited {proc.returncode}"
         # Measured: resume reports thread.started with the resumed id, so a missing or different
@@ -253,13 +367,27 @@ def run(call: Path) -> int:
     return rc
 
 
+def measure(call: Path, meta: dict) -> None:
+    """Fill meta["steps"] from the rollout; also for a failed or cancelled call. Never raises."""
+    try:
+        thread = meta.get("thread_id")
+        if not thread and (call / "events.jsonl").exists():
+            thread, _ = outcome((call / "events.jsonl").read_text(encoding="utf-8", errors="replace"))
+        if "rollout_mark" not in meta and meta.get("parent_thread"):
+            meta["steps"] = None  # stopped before the mark: the thread's earlier requests are not this call's
+            return
+        meta["steps"] = rollout_steps(Path(meta.get("home") or USER_HOME), thread, meta.get("rollout_mark") or {})
+    except Exception:  # a measurement, never a reason to fail the call
+        meta["steps"] = None
+
+
 def finish(call: Path, meta: dict) -> None:
     """Record a call's end state in meta.json and its one line in calls.jsonl."""
     write_meta(call, meta)
     with (ROOT / "calls.jsonl").open("a", encoding="utf-8") as log:
         log.write(json.dumps({k: meta.get(k) for k in (
             "started", "finished", "label", "thread_id", "parent_thread", "model", "effort",
-            "sandbox", "cwd", "rc", "error", "usage", "thread_usage")} | {"dir": str(call)}) + "\n")
+            "sandbox", "cwd", "home", "rc", "error", "usage", "thread_usage", "steps")} | {"dir": str(call)}) + "\n")
 
 
 def alive(pid: int | None) -> bool:
@@ -342,11 +470,20 @@ def win_argv(pid: int) -> list[str]:
         k32.LocalFree(argv)
 
 
+def steps_line(meta: dict) -> str:
+    st = meta.get("steps")
+    if not st:
+        return "steps: unknown (no rollout found)"
+    return (f"steps: {st['requests']} model requests, {st['input_tokens']:,} input, context "
+            f"{st['first_context'] or 0:,} -> {st['last_context']:,}; {st['empty_waits']} wait calls "
+            f"({st['wait_ms'] / 1000:.0f} s asked)")
+
+
 def report(call: Path) -> int:
     meta = read_meta(call)
     if meta["rc"] != 0:
         tail = (call / "stderr.log").read_text(encoding="utf-8", errors="replace")[-1500:] if (call / "stderr.log").exists() else ""
-        print(f"FAILED: {meta['error']}\ncall: {call}\n{tail}".rstrip(), file=sys.stderr)
+        print(f"FAILED: {meta['error']}\ncall: {call}\n{steps_line(meta)}\n{tail}".rstrip(), file=sys.stderr)
         return 1
     use, whole = meta.get("usage"), meta.get("thread_usage")
     print(f"thread: {meta['thread_id']}\nresult: {call / 'last.md'}")
@@ -358,6 +495,7 @@ def report(call: Path) -> int:
               f"{use.get('output_tokens', 0):,} output; model calls the worker starts itself are not included")
     if whole:
         print(f"thread so far: {whole.get('input_tokens', 0):,} input; every resumed step resends it")
+    print(steps_line(meta))
     print()
     print((call / "last.md").read_text(encoding="utf-8").rstrip())
     return 0
@@ -415,7 +553,8 @@ def prepare(args, parent: str | None) -> Path:
             suffix += 1
     (call / "prompt.md").write_text(prompt.rstrip() + "\n\n" + READING, encoding="utf-8")
     cwd = str(Path(args.cwd).resolve()) if getattr(args, "cwd", None) else str(call)
-    write_meta(call, {"label": label, "started": now(), "model": args.model, "effort": args.effort,
+    home = thread_home(parent) if parent else USER_HOME if getattr(args, "user_home", False) else WORKER_HOME
+    write_meta(call, {"label": label, "started": now(), "home": str(home), "model": args.model, "effort": args.effort,
                       "sandbox": args.sandbox, "search": bool(getattr(args, "search", False)),
                       "network": bool(getattr(args, "network", False)), "cwd": cwd, "parent_thread": parent,
                       "thread_id": parent, "pid": None})
@@ -451,6 +590,7 @@ def cancel(call: Path) -> int:
         raise Failed(f"{call} has no detached runner to cancel")
     if not is_runner_of(pid, call):
         # The runner is gone and its pid may belong to someone else now: signal nothing.
+        measure(call, meta)
         meta.update(rc=1, error="cancelled; runner already gone", finished=now())
         finish(call, meta)
         print(f"cancelled (runner already gone): {call}", file=sys.stderr)
@@ -461,6 +601,7 @@ def cancel(call: Path) -> int:
         kill_group(pid)
     meta = read_meta(call)
     if "rc" not in meta:
+        measure(call, meta)
         meta.update(rc=1, error="cancelled", finished=now())
         finish(call, meta)
     print(f"cancelled: {call}", file=sys.stderr)
@@ -593,9 +734,13 @@ def main(argv=None) -> int:
 
     new = sub.add_parser("new")
     new.add_argument("--cwd")
+    new.add_argument("--user-home", action="store_true",
+                     help="run in ~/.codex with its plugins, MCP servers and global AGENTS.md")
     common(new)
     resume = sub.add_parser("resume")
     resume.add_argument("thread")
+    resume.add_argument("--allow-resume", action="store_true",
+                        help="the caller means to resend the thread's whole history on every step")
     # resume rejects -C; --cwd here only sets the process directory the resumed turn runs in
     resume.add_argument("--cwd")
     common(resume)
@@ -619,6 +764,10 @@ def main(argv=None) -> int:
         if args.cmd == "new":
             return start(args, None)
         if args.cmd == "resume":
+            if not args.allow_resume:
+                raise Failed("resume resends the thread's whole history on every step (02.11.2026: 28% of "
+                             "all Codex input). Start a fresh `new` call with a short written handoff, or "
+                             "pass --allow-resume for a short question about the thread's own work.")
             return start(args, args.thread)
         if args.cmd == "wait":
             return wait(Path(args.call), args.timeout)

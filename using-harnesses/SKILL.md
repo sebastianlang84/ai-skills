@@ -25,7 +25,13 @@ A `resume` carries the thread's whole earlier history into every new step: on 02
 resumed a finished worker thread (5.3M input) and needed 10.5M input for fewer steps than the
 original. For a new job, even a follow-up, start a fresh `new` call with a short written handoff
 (paths, commit, state, the findings to fix); resume only for a short question about the thread's
-own work.
+own work. `codex_call.py resume` refuses without `--allow-resume`.
+
+Workers start clean: their own Codex home without global or repository `AGENTS.md`, all tools kept.
+So the brief carries what the worker needs: goal, end point, the paths and known places (run `rg`
+yourself for known names and pass the hits), and how to report. The prompt tail tells the worker
+to wait for long commands in one long poll. The `steps:` line after each call shows requests,
+context growth and empty waits; check it against the expected size.
 
 ## Reviews go through one script
 

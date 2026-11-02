@@ -342,7 +342,8 @@ def codex_command(exe: str, work: Path, msg_file: Path, model: str, effort: str,
     # thread's writer lock and break the next resume), model repeated on resume, thread kept,
     # one record per turn under ~/.agents/state/codex-call. `exe` only proves codex is installed.
     cmd = [sys.executable, str(CODEX_CALL)]
-    cmd.extend(["new"] if thread is None else ["resume", thread])
+    # a debate turn answers the other side inside its own thread: resuming is the point here
+    cmd.extend(["new"] if thread is None else ["resume", thread, "--allow-resume"])
     cmd.extend([
         "--cwd", str(work),
         "--label", f"peer-debate-{work.name}",
