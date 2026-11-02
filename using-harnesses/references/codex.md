@@ -62,6 +62,8 @@ or `-` for stdin. Its state is under `~/.agents/state/codex-call/`.
 - Collect: `python3 $C wait <call-dir>` prints `thread:`, `result:` and the answer. Exit 3 means
   still running, so call `wait` again. Exit 1 is a failure with its reason.
 - Follow up in the same thread: `python3 $C resume <thread-id> --detach <prompt-file>`, then `wait`.
+  Every resumed step resends the thread's whole history, so a new job gets a fresh `new` call with a
+  written handoff instead (SKILL.md, "size it").
   A resume does not inherit the first call's `--cwd`: without it the worker runs in its call
   directory, and `workspace-write` then covers only that directory (measured 2026-10-21, kb #286:
   the target worktrees were read-only). Pass `--cwd` and `--sandbox` again on every resume of a

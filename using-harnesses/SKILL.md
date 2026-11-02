@@ -21,6 +21,12 @@ worker the job only (`codex_call.py` appends a fixed context-discipline block to
 expected cost to the user; run a series of model calls (one per document) on three items first
 and extrapolate. After the call: report the `usage:` line `codex_call.py` prints and the quota.
 
+A `resume` carries the thread's whole earlier history into every new step: on 02.11.2026 a fix
+resumed a finished worker thread (5.3M input) and needed 10.5M input for fewer steps than the
+original. For a new job, even a follow-up, start a fresh `new` call with a short written handoff
+(paths, commit, state, the findings to fix); resume only for a short question about the thread's
+own work.
+
 ## Reviews go through one script
 
 ```bash
