@@ -51,6 +51,10 @@ Context discipline (from the calling agent):
   the few relevant lines, not data. Do not print a large file after rewriting it.
 - Run tests narrowly (one file or `-k`), with `-q` and `| tail`; the full suite only once at the end.
 - Write large results to files and report their path and a short summary.
+- You are a sub-call, not a session: the calling agent owns the ticket, the board and coordination.
+  Do not run `kb`, do not load skills or the Brain, and do not read instruction files beyond those
+  Codex loads for you, unless the job above names them (02.11.2026: one worker spent ~120k
+  characters on skills and board output before its task).
 """
 # Banned on this machine (Sebastian, 2026-10-01); a call naming one fails before anything runs.
 BANNED_MODELS = ("gpt-6-sol",)
@@ -176,6 +180,39 @@ def usage(events: str) -> dict:
     return total
 
 
+def thread_total(thread: str) -> dict | None:
+    """The thread's cumulative usage after its last successful logged call, or None.
+
+    Measured 2026-11-02: on `exec resume`, turn.completed reports the whole thread's usage, not the
+    new turn's (a resumed call logged 19,082,312 input = 6,709,250 earlier + 12,373,062 new, per the
+    rollout's per-step token counts). Older log lines hold that cumulative figure in `usage`."""
+    log, last = ROOT / "calls.jsonl", None
+    if not log.exists():
+        return None
+    for line in log.read_text(encoding="utf-8").splitlines():
+        try:
+            rec = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if rec.get("thread_id") == thread and rec.get("rc") == 0:
+            last = rec.get("thread_usage") or rec.get("usage")
+    return last
+
+
+def split_usage(meta: dict, reported: dict) -> None:
+    """Store this call's own usage in `usage` and, on a resume, the thread's in `thread_usage`."""
+    parent = meta.get("parent_thread")
+    if not parent:
+        meta["usage"] = reported
+        return
+    meta["thread_usage"] = reported
+    prior = thread_total(parent)
+    if prior is None:
+        meta["usage"] = None  # earlier turns unknown: never report the thread total as this call's
+        return
+    meta["usage"] = {k: max(0, reported[k] - int(prior.get(k) or 0)) for k in reported}
+
+
 def run(call: Path) -> int:
     """Execute one prepared call synchronously and record its end state in meta.json."""
     meta = read_meta(call)
@@ -194,7 +231,7 @@ def run(call: Path) -> int:
             proc = subprocess.run(argv, stdin=stdin, stdout=stdout, stderr=stderr, cwd=meta["cwd"])
         events = (call / "events.jsonl").read_text(encoding="utf-8", errors="replace")
         found, error = outcome(events)
-        meta["usage"] = usage(events)
+        split_usage(meta, usage(events))
         if error is None and proc.returncode != 0:
             error = f"codex exited {proc.returncode}"
         # Measured: resume reports thread.started with the resumed id, so a missing or different
@@ -222,7 +259,7 @@ def finish(call: Path, meta: dict) -> None:
     with (ROOT / "calls.jsonl").open("a", encoding="utf-8") as log:
         log.write(json.dumps({k: meta.get(k) for k in (
             "started", "finished", "label", "thread_id", "parent_thread", "model", "effort",
-            "sandbox", "cwd", "rc", "error", "usage")} | {"dir": str(call)}) + "\n")
+            "sandbox", "cwd", "rc", "error", "usage", "thread_usage")} | {"dir": str(call)}) + "\n")
 
 
 def alive(pid: int | None) -> bool:
@@ -311,10 +348,17 @@ def report(call: Path) -> int:
         tail = (call / "stderr.log").read_text(encoding="utf-8", errors="replace")[-1500:] if (call / "stderr.log").exists() else ""
         print(f"FAILED: {meta['error']}\ncall: {call}\n{tail}".rstrip(), file=sys.stderr)
         return 1
-    use = meta.get("usage") or {}
+    use, whole = meta.get("usage"), meta.get("thread_usage")
     print(f"thread: {meta['thread_id']}\nresult: {call / 'last.md'}")
-    print(f"usage: {use.get('input_tokens', 0):,} input ({use.get('cached_input_tokens', 0):,} cached), "
-          f"{use.get('output_tokens', 0):,} output; model calls the worker starts itself are not included\n")
+    if use is None and whole:
+        print("usage: unknown for this call (the thread's earlier calls are not logged)")
+    else:
+        use = use or {}
+        print(f"usage: {use.get('input_tokens', 0):,} input ({use.get('cached_input_tokens', 0):,} cached), "
+              f"{use.get('output_tokens', 0):,} output; model calls the worker starts itself are not included")
+    if whole:
+        print(f"thread so far: {whole.get('input_tokens', 0):,} input; every resumed step resends it")
+    print()
     print((call / "last.md").read_text(encoding="utf-8").rstrip())
     return 0
 

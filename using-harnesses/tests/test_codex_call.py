@@ -161,7 +161,7 @@ class CodexCallTests(unittest.TestCase):
                              capture_output=True, env=env, timeout=60)
         self.assertEqual(new.returncode, 1, new.stderr)
         (call,) = [d for d in cc.ROOT.iterdir() if d.is_dir()]
-        self.assertEqual((call / "prompt.md").read_text(encoding="utf-8"), text)
+        self.assertTrue((call / "prompt.md").read_text(encoding="utf-8").startswith(text + "\n"))
         (call / "last.md").write_text(text, encoding="utf-8")
         cc.write_meta(call, cc.read_meta(call) | {"rc": 0, "thread_id": "t-1", "error": None})
         done = subprocess.run([sys.executable, str(SCRIPT), "wait", str(call)], capture_output=True,
@@ -296,6 +296,26 @@ class CodexCallTests(unittest.TestCase):
         lines = (cc.ROOT / "calls.jsonl").read_text().splitlines()
         self.assertEqual(len(lines), 2)
         self.assertEqual(json.loads(lines[1])["parent_thread"], "t-1")
+
+    def test_resume_logs_its_own_usage_not_the_threads(self):
+        def done(i, c, o, thread):
+            return events({"type": "turn.completed", "usage": {
+                "input_tokens": i, "cached_input_tokens": c, "output_tokens": o}}, thread=thread)
+        _, first = self.call(stream=done(100, 90, 5, "t-1"))
+        self.assertEqual(first["usage"]["input_tokens"], 100)
+        self.assertNotIn("thread_usage", first)
+        _, second = self.call(parent="t-1", stream=done(300, 270, 12, "t-1"))
+        self.assertEqual(second["usage"], {"input_tokens": 200, "cached_input_tokens": 180, "output_tokens": 7})
+        self.assertEqual(second["thread_usage"]["input_tokens"], 300)
+        _, third = self.call(parent="t-1", stream=done(450, 400, 20, "t-1"))
+        self.assertEqual(third["usage"]["input_tokens"], 150)
+        foreign_call, foreign = self.call(parent="t-x", stream=done(80, 0, 1, "t-x"))
+        self.assertIsNone(foreign["usage"])
+        self.assertEqual(foreign["thread_usage"]["input_tokens"], 80)
+        out = io.StringIO()
+        with redirect_stdout(out):
+            cc.report(foreign_call)
+        self.assertIn("usage: unknown for this call", out.getvalue())
 
     def test_wait_distinguishes_running_gone_and_done(self):
         call = cc.prepare(self.args(), None)
