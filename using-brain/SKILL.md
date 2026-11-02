@@ -31,10 +31,8 @@ touches the Brain itself or will write to it.
 1. Open `~/.agents/brain/index.md`. Use its titles and descriptions to choose the smallest relevant
    subtree.
 2. Follow the relevant subtree index, then open only the concepts needed for the task. If routing is
-   unclear, use `rg` first for exact names, paths, commands, or one discriminative keyword. For a
-   ranked second pass, use `codemap search` with short terms matching the Brain's vocabulary and
-   language. Do not pass a free-form German question to the mostly English corpus and treat its
-   ranking as semantic retrieval. Do not bulk-load the bundle.
+   unclear, use `rg` for exact names, paths, commands, or one discriminative keyword.
+   Do not bulk-load the bundle.
 3. Distinguish the Brain's synthesis from the current authority. For drift-prone or consequential
    claims, inspect the cited source or the owning repo before treating the claim as current. When
    freshness itself is in scope or a local source appears to have moved, run

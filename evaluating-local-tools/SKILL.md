@@ -73,7 +73,7 @@ Return:
 ## Good outputs
 
 - “Standalone works, but integration should be disabled-by-default and consume JSON from local cache only.”
-- “Skip for now: install is heavy, no stable CLI, duplicates existing CodeMap capability.”
+- “Skip for now: install is heavy, no stable CLI, duplicates existing rg and ast-grep capability.”
 - “Needs more evidence: cannot evaluate live-read quality without an export or explicit OAuth approval.”
 
 ## Boundary with other skills

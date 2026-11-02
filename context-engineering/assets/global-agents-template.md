@@ -24,6 +24,6 @@
 <!-- List stable capabilities the agent can rely on. Update when tooling changes. -->
 memory: <!-- e.g. pi-memory | file-based MEMORY.md | none -->
 subagents: <!-- e.g. planner, worker, scout, reviewer | none -->
-extensions: <!-- e.g. codemap, ast-grep | none -->
+extensions: <!-- e.g. ast-grep | none -->
 global skills: <!-- path or package source -->
 infra: <!-- stable local services/repos, if any -->

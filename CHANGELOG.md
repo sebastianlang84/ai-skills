@@ -25,6 +25,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- CodeMap references dropped from `using-brain` (retrieval is `rg`), `autoresearch` (CodeMap local default), `releasing-pi-packages`, `peer-debate` tool probe, `context-engineering` template and `evaluating-local-tools` example: CodeMap is retired and uninstalled (Sebastian, 2026-11-02). Reviewed in one round by Codex gpt-6.1-sol, no findings.
 - `using-harnesses`: reviews now reject payloads over 256 KiB, non-UTF-8/NUL input and Git binary bodies before launch; ANSI text and literal marker prose stay byte-identical. Invalid installed prompts or artifact labels exit 2 with cleanup; payload refusals exit 3. Offline tests cover real binary diffs, coloured output, byte identity and failure cleanup.
 
 - `context-engineering` (Sebastian, 2026-10-29): every audit of a project instruction file checks it sentence by sentence against the global `~/.agents/AGENTS.md`; the two files build on each other and must not repeat each other (rule in the audit section of `SKILL.md`).

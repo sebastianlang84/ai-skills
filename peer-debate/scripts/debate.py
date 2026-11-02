@@ -503,7 +503,7 @@ def turn(run: str, side: str, message: str) -> str:
 # Tools a debater is likely to reach for. What is absent shapes what it can honestly claim, so
 # the answer belongs in the run rather than in the operator's head.
 PROBED = ["agy", "codex", "claude", "python3", "git", "docker", "rg", "grep", "curl", "gnuplot", "sqlite3",
-          "codemap", "ast-grep", "pandoc", "latexmk"]
+          "ast-grep", "pandoc", "latexmk"]
 
 
 def _local_ip() -> str:

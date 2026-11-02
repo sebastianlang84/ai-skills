@@ -74,7 +74,6 @@ After explicit approval and successful verification:
 After push/tag:
 
 - confirm branch is synced and worktree clean except pre-existing unrelated changes;
-- if CodeMap is approved for the repo and Git state changed, refresh the index before relying on CodeMap state;
 - record durable release memory only when the release matters for future sessions;
 - report version, commit, tag, pushed state, verification, and any deferred publication step.
 

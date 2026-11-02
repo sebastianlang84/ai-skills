@@ -16,8 +16,7 @@ failures, not whether prose remains true.
 Use the `autoresearch` workflow for retrieval or ranking changes and the Brain's
 [measured improvement loop](/home/wasti/.agents/brain/methods/measured-improvement-loop.md): freeze
 representative questions, expected concepts, and context cost; change one lever; keep or discard.
-Record durable results in the Brain and keep raw runs outside it. The current measured routing
-boundary is the [CodeMap-vs-rg Brain check](/home/wasti/.agents/brain/checks/brain-retrieval-codemap-vs-rg.md).
+Record durable results in the Brain and keep raw runs outside it.
 Real-use cases are accumulating in
 `~/dev/wasti-research/programs/brain-real-use-retrieval/`; retrieval audits append only consecutive,
 qualifying observed questions there and must not tune against the partial set before it is frozen.

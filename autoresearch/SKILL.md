@@ -20,7 +20,7 @@ Use autoresearch only for systems with:
 
 Good fits include:
 
-- search, retrieval, ranking, RAG, CodeMap, chunking, indexing, symbol extraction, and context selection
+- search, retrieval, ranking, RAG, chunking, indexing, symbol extraction, and context selection
 - agent prompts, skill descriptions, extension/tool prompt injections, workflows, orchestration, tool-routing, and review processes
 - benchmarks, eval suites, golden cases, trigger tests, regression tests, and quality gates
 - performance/cost tuning when latency, memory, throughput, or spend can be measured
@@ -88,12 +88,3 @@ Regressions:
 Decision: keep|discard|rerun
 Next step:
 ```
-
-## Local default: CodeMap retrieval-quality work
-
-Apply this local default only when the user explicitly names CodeMap or `/home/wasti/dev/autoresearch`:
-
-- `/home/wasti/dev/autoresearch` is the CodeMap retrieval-quality benchmark workspace: a small realistic benchmark corpus and experiment protocol for improving CodeMap retrieval quality through quantitative benchmark loops.
-- The CodeMap implementation target is usually the checkout at `/home/wasti/dev/codemap`; read its repo rules before experimenting.
-- Useful CodeMap levers include indexed files/extensions/ignores, chunking, symbol extraction, query planning, ranking, benchmark ground truth, and index-version rebuild behavior.
-- Use fixed retrieval metrics such as MRR@5, recall@5, top-1 accuracy, expected coverage, and latency; classify misses before proposing changes.
