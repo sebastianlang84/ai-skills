@@ -12,6 +12,11 @@ it. Your job is to find what is WRONG, not to summarise or praise.
 WHAT THE WORK MUST ESTABLISH:
 <one or two sentences; a finding outside this is the weakest kind>
 
+INTENDED USE:
+<Who uses the result and for what; reach: product (merged code, prompts, rules, skills, analyses
+Sebastian reads) or internal (plan, experiment setup, intermediate state); and which decision this
+review feeds. A finding the intended use does not realistically reach is not a finding.>
+
 ARTIFACTS:
 - `<basename>` — <what it is, and which parts carry the decision>
 
@@ -24,7 +29,7 @@ everything you get back.>
 
 OPERATING CONTEXT:
 <Who this is for and what is not a constraint. On a private single-user machine: no team, no
-compliance, no other developer; the owner wants maximum autonomy; token cost is not a limit.>
+compliance, no other developer; the owner wants maximum autonomy and no wasted time or tokens.>
 Raise only objections that survive here: real data loss, silent degradation of future behaviour,
 feedback loops that cannot converge, security exposure that actually matters, or designs that
 will not work as described. Not objections whose only force is organisational process.

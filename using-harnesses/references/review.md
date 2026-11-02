@@ -18,7 +18,8 @@ the how.
 The reviewer shares no context with you. Put the brief in its own file, in a private directory
 outside any repository (`umask 077; W=$(mktemp -d)`), and pass every artifact as a separate file:
 the script places the data clause directly before the artifacts and labels each by basename.
-Fill in [prompt-scaffold.md](prompt-scaffold.md): what the work must establish, the design in your
+Fill in [prompt-scaffold.md](prompt-scaffold.md): what the work must establish, its intended use
+and reach (the reviewer reports only what that use realistically reaches), the design in your
 own words (including what exists only in the conversation), the operating context, a named attack
 list, and the one change the reviewer would make first. A finding outside what the work must
 establish is the weakest kind.
@@ -79,7 +80,9 @@ a capped number of findings; role lock and data clause stay as they are.
 
 Exit 0 is a screen, not an acceptance. Read the answer: a question, a consent request, a plan or a
 status note is a failed round, not "no findings". Verify every finding against the source before
-acting. Fix the confirmed ones; reject the others with the reason. Severity is the reviewer's; lower
+acting. Fix the confirmed ones; reject the others with the reason. Reject also a technically
+correct finding whose scenario the intended use does not realistically produce, with the reason "not
+reached in this use"; the global rule to fix what you notice does not cover such findings. Severity is the reviewer's; lower
 it only with a reason you verified. A BLOCKER or MAJOR you can neither confirm nor refute counts as
 confirmed. For a durable lesson, follow `using-brain`'s write workflow.
 
@@ -102,10 +105,18 @@ After verifying a round's findings, append one line to the outcome log, so the v
 can be counted later:
 
 ```bash
-round=1 reach=internal confirmed=0 adopted=0   # this round's verified values; reach: product or internal
-printf '{"at":"%s","dir":"%s","round":%d,"reach":"%s","confirmed":%d,"adopted":%d}\n' \
-  "$(date -Is)" "$D" "$round" "$reach" "$confirmed" "$adopted" >> ~/.agents/state/review-outcomes.jsonl
+round=1 reach=internal reported=0 confirmed=0 irrelevant=0 adopted=0 why=""   # this round's verified values
+printf '{"at":"%s","dir":"%s","round":%d,"reach":"%s","reported":%d,"confirmed":%d,"irrelevant":%d,"adopted":%d,"why":"%s"}\n' \
+  "$(date -Is)" "$D" "$round" "$reach" "$reported" "$confirmed" "$irrelevant" "$adopted" "$why" >> ~/.agents/state/review-outcomes.jsonl
 ```
+
+`reach` is `product` or `internal`; `reported` counts the reviewer's findings, `confirmed` those that
+are true, `irrelevant` the true ones rejected as not reached in this use, `adopted` those
+changed. `why` lists a short slug per rejected finding, comma-separated and without quotes
+(`edge-case,style,speculation,wrong`), so recurring low-value kinds can be banned from the review
+rules. The noise share of a round is `(reported - confirmed + irrelevant) / reported`: wrong and
+unreached findings together. Entries before 2026-11-03 lack `reported`, `irrelevant` and `why`. What the counts teach is
+collected in the [Brain method](/home/wasti/.agents/brain/methods/efficient-reviews.md).
 
 Report how many rounds ran, what was fixed, what was rejected and why, what is open, and which
 version the last review saw. If the other vendor is unreachable, say so.
