@@ -98,6 +98,15 @@ the stop rule; the cap and the narrowing are
    the latest. If round 3 still confirms a BLOCKER or MAJOR, do not close the work: no review has
    seen that fix, so report it and ask.
 
+After verifying a round's findings, append one line to the outcome log, so the value of each round
+can be counted later:
+
+```bash
+round=1 reach=internal confirmed=0 adopted=0   # this round's verified values; reach: product or internal
+printf '{"at":"%s","dir":"%s","round":%d,"reach":"%s","confirmed":%d,"adopted":%d}\n' \
+  "$(date -Is)" "$D" "$round" "$reach" "$confirmed" "$adopted" >> ~/.agents/state/review-outcomes.jsonl
+```
+
 Report how many rounds ran, what was fixed, what was rejected and why, what is open, and which
 version the last review saw. If the other vendor is unreachable, say so.
 
