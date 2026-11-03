@@ -34,14 +34,7 @@ NUL and encoding errors report the byte value and zero-based offset. UTF-8 text,
 ordinary code diffs and `Binary files ... differ` summaries remain valid. Use a textual diff without
 `--binary`, and describe binary fixtures through their purpose, interfaces and relevant test outcomes.
 
-The fixed total safety bound is **256 KiB (262144 bytes)** for the complete assembled payload:
-brief, rules, fixed framing, artifact labels and every artifact together. Inputs are size-checked
-before bounded reads, and the assembled size is checked before launch. This measures bytes, not
-estimated tokens or model context capacity; it does not predict billing. There is no CLI or
-environment override. Exit 3 reports source names and byte sizes: prepare a smaller coherent,
-complete review slice with the required interfaces and test outcomes. Never silently truncate or
-drop evidence to fit. This bound covers the new payload, not previous turns retained by `--resume`. Encoded binary dumps and dense text can still pass;
-the guard does not estimate tokens. Invalid installed prompt content exits 2, not 3.
+There is no size bound: send the evidence the review needs, not run bookkeeping or bulk data the reviewer cannot use. Invalid installed prompt content exits 2, not 3.
 
 ## Run one round
 
@@ -69,7 +62,7 @@ a capped number of findings; role lock and data clause stay as they are.
 |---|---|---|
 | 0 | the answer ends with `===REVIEW COMPLETE===` | read it |
 | 2 | usage, config, unclean reviewer home, cwd inside git, resume of a session review.py did not start | fix the cause; never bypass the script |
-| 3 | payload refused: secret, `.env`, binary content/patch or total byte budget | remove secrets; for binary/size refusals prepare a scoped complete review as above |
+| 3 | payload refused: secret, `.env` or binary content/patch | remove secrets; send binary evidence as a textual description as above |
 | 4 | no answer, no session id, a runner that died, or a status 0 without answer, session and log | read `err.txt` |
 | 5 | closing line missing: truncated, refused or hijacked | failed round; do not report partial findings |
 | 75 | `wait` only: the round still runs | call `wait` again |

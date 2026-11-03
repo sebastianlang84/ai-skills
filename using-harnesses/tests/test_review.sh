@@ -219,10 +219,7 @@ p = Path(sys.argv[1])
 (p / "binary.diff").write_bytes(b"diff --git a/a.gz b/a.gz\nGIT binary patch\nliteral 42\nabc\n")
 (p / "binary-crlf.diff").write_bytes(b"diff --git a/a.gz b/a.gz\r\nGIT binary patch\r\nliteral 42\r\nabc\r\n")
 (p / "safe.diff").write_text("diff --git a/a.py b/a.py\n-previous\n+Prüfung ✓\nBinary files a/a.gz and b/a.gz differ\nProse mentions GIT binary patch safely.\nGIT binary patch is a phrase in this sentence.\n+GIT binary patch\n", encoding="utf-8")
-(p / "huge.txt").write_bytes(b"x" * 262145)
-(p / "ninety.txt").write_bytes(b"x" * 90000)
-(p / "small.txt").write_bytes(b"x" * 4096)
-(p / "empty.txt").write_bytes(b"")
+(p / "large.txt").write_bytes(b"x\n" * 450000)
 # Real local Git output: modification, new file, rename and coloured metadata/body.
 repo = p / "binary-fixtures"
 repo.mkdir()
@@ -279,76 +276,18 @@ PYIDENTITY
   run RS "$backend" "$B" "$T/invalid.txt"
   check "$backend: encoding diagnostic names byte and zero-based offset" \
     '[ $RC -eq 3 ] && ! called && grep -q "byte 0xff at offset 4" "$T/stderr"'
-  run RS "$backend" "$B" "$T/huge.txt"
-  check "$backend: single huge artifact refused before launch" '[ $RC -eq 3 ] && ! called && grep -q "262145 bytes" "$T/stderr" && grep -q "262144 bytes" "$T/stderr"'
 done
 for role in brief rules; do
   if [ "$role" = brief ]; then run RS claude "$T/binary.diff" "$A"
   else run RS claude --rules "$T/binary.diff" "$B" "$A"; fi
   check "binary patch also refused in $role" '[ $RC -eq 3 ] && ! called'
-  if [ "$role" = brief ]; then run RS claude "$T/huge.txt" "$A"
-  else run RS claude --rules "$T/huge.txt" "$B" "$A"; fi
-  check "huge $role refused before launch" '[ $RC -eq 3 ] && ! called'
 done
-run RS claude --rules "$T/ninety.txt" "$T/ninety.txt" "$T/ninety.txt"
-check "combined brief, rules and artifact exceed budget even though each fits" \
-  '[ $RC -eq 3 ] && ! called && grep -q "already included: framing" "$T/stderr" && grep -q "ninety.txt" "$T/stderr"'
-SMALL=(); for _ in $(seq 70); do SMALL+=("$T/small.txt"); done
-run RS claude "$B" "${SMALL[@]}"
-check "many small artifacts share one budget" '[ $RC -eq 3 ] && ! called && grep -q "byte budget" "$T/stderr"'
-# Labels alone count, even when all artifact files are empty.
-LONG="$T/$(printf '%180s' '' | tr ' ' x)"; : > "$LONG"
-LABELS=(); for _ in $(seq 1400); do LABELS+=("$LONG"); done
-run RS claude "$B" "${LABELS[@]}"
-check "artifact labels alone can exceed the combined budget" '[ $RC -eq 3 ] && ! called && grep -q "framing including artifact labels" "$T/stderr"'
-# Infer framing size from a real assembled payload, then test the exact inclusive boundary.
-run "$R" claude "$B" "$T/empty.txt"
-BASE=$(wc -c < "$DIR/payload.md")
-"$PY" - "$T/empty.txt" "$BASE" <<'PYINPUT'
-import sys
-size = 262144 - int(sys.argv[2])
-open(sys.argv[1], "wb").write((b"x\n" * ((size + 1) // 2))[:size])
-PYINPUT
-run "$R" claude "$B" "$T/empty.txt"
-check "complete payload exactly 256 KiB passes including all framing" '[ $RC -eq 0 ] && called && [ "$(wc -c < "$DIR/payload.md")" -eq 262144 ]'
-printf x >> "$T/empty.txt"
-run RS claude "$B" "$T/empty.txt"
-check "framing makes one extra byte fail although input files alone fit" '[ $RC -eq 3 ] && ! called'
-# A file that grows after stat is still read with an explicit bound and refused.
-run "$PY" - "$SKILL/scripts" <<'PYINPUT'
-import io, sys
-from types import SimpleNamespace
-sys.path.insert(0, sys.argv[1])
-import review
-class Oversized:
-    def stat(self): return SimpleNamespace(st_size=100)
-    def open(self, mode): raise AssertionError("oversized input must not be opened")
-    def __str__(self): return "oversized.txt"
-try:
-    review.text_input(Oversized(), 10)
-except review.Exit as exc:
-    assert exc.code == 3
-else:
-    raise AssertionError("oversized input passed")
-class Growing:
-    def stat(self): return SimpleNamespace(st_size=1)
-    def open(self, mode):
-        class Bounded(io.BytesIO):
-            def read(self, size=-1):
-                assert size == 11, size
-                return super().read(size)
-        return Bounded(b"x" * 100)
-    def __str__(self): return "growing.txt"
-try:
-    review.text_input(Growing(), 10)
-except review.Exit as exc:
-    sys.exit(exc.code)
-sys.exit(1)
-PYINPUT
-check "growth after stat cannot trigger an unbounded read or pass the guard" '[ $RC -eq 3 ] && ! called && grep -q "while reading" "$T/stderr"'
+# No size bound: a 900 KB reading is sent whole.
+run "$R" claude --rules "$T/rules.md" "$B" "$T/large.txt"
+check "900 KB artifact passes and is sent whole" '[ $RC -eq 0 ] && called && [ "$(wc -c < "$DIR/payload.md")" -gt 900000 ]'
 
 # Installed prompt faults are configuration errors; all assembly failures clean their call dirs.
-for fault in nul huge overlapping-blocks missing-input invalid-name; do
+for fault in nul missing-input invalid-name; do
   run "$PY" - "$SKILL/scripts" "$T" "$fault" "$B" "$A" <<'PYCLEANUP'
 import sys
 from pathlib import Path
@@ -372,13 +311,7 @@ elif fault == "missing-input":
         return original(path, *args, **kwargs)
     review.text_input = vanished
 else:
-    if fault == "overlapping-blocks":
-        # The file fits, but overlapping installed blocks duplicate rules in the assembled frame.
-        prompt.write_bytes(b"<!-- BEGIN role-lock -->\nhead\n<!-- BEGIN rules -->\n"
-                           + b"x" * 140000 + b"\n<!-- END rules -->\n<!-- END role-lock -->\n"
-                           + b"<!-- BEGIN data-clause -->\ndata\n<!-- END data-clause -->\n")
-    else:
-        prompt.write_bytes(b"bad\0prompt" if fault == "nul" else b"x" * 262145)
+    prompt.write_bytes(b"bad\0prompt")
     review.REFS = refs
 try:
     review.start(["codex", brief, artifact])

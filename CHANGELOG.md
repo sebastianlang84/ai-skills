@@ -28,6 +28,7 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ### Changed
 
+- `using-harnesses`: `review.py` no longer limits payload size; it refuses only input that is not readable text (invalid UTF-8, NUL bytes, Git binary patches) (Sebastian, 2026-11-03, kb #576: the 256 KiB bound from 01.11. stopped Market Digest's counter-reads of 640–712 KB; the cause is oversized caller input, which Market Digest trims itself). Offline tests: a 900 KB reading passes whole. Reviewed in one round by Codex gpt-6.1-sol, no findings.
 - CodeMap references dropped from `using-brain` (retrieval is `rg`), `autoresearch` (CodeMap local default), `releasing-pi-packages`, `peer-debate` tool probe, `context-engineering` template and `evaluating-local-tools` example: CodeMap is retired and uninstalled (Sebastian, 2026-11-02). Reviewed in one round by Codex gpt-6.1-sol, no findings.
 - `using-harnesses`: reviews now reject payloads over 256 KiB, non-UTF-8/NUL input and Git binary bodies before launch; ANSI text and literal marker prose stay byte-identical. Invalid installed prompts or artifact labels exit 2 with cleanup; payload refusals exit 3. Offline tests cover real binary diffs, coloured output, byte identity and failure cleanup.
 
