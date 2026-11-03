@@ -1,6 +1,6 @@
 ---
 name: diagnosing-bugs
-description: Disciplined diagnosis loop for hard bugs, flaky failures, and performance regressions — build a tight failing feedback loop before forming any hypothesis. Use when the user says "debug this"/"diagnose", or reports something broken, throwing, failing, hanging, or slow.
+description: Disciplined diagnosis loop for hard bugs, flaky failures, and performance regressions — build a tight failing feedback loop before forming any hypothesis. Use when the user says "debug this"/"diagnose", when a bug survived a first fix attempt or its cause is unclear after reading the code, for intermittent failures, or for performance regressions. Not for an ordinary bug with a clear reproduction: a direct fix with a regression test does as well there at lower cost.
 ---
 
 # Diagnosing Bugs
