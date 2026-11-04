@@ -195,7 +195,7 @@ class DebateTests(unittest.TestCase):
         self.assertEqual(debate.parse_model("codex:gpt-5.6-terra"), ("codex", "gpt-5.6-terra"))
         self.assertEqual(debate.parse_model("claude:claude-opus-5-5"), ("claude", "claude-opus-5-5"))
         with self.assertRaisesRegex(debate.Failed, "unknown cli"):
-            debate.parse_model("pi:glm")
+            debate.parse_model("unsupported:glm")
         with self.assertRaisesRegex(debate.Failed, "no model id"):
             debate.parse_model("codex:")
 

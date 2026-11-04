@@ -6,6 +6,8 @@ This repo does not version individual skills with SemVer. Use this changelog to 
 
 ## [Unreleased]
 
+- Remove the retired Pi packaging and release skills and active Pi guidance from shared skills, examples and templates (Sebastian, 2026-10-29); keep historical changelog entries as provenance.
+
 ### Added
 
 - `using-harnesses`: `codex_call.py` workers start clean and are measured (Sebastian, 2026-11-03, after 466M Codex input tokens on 01.–02.11.: 50 % context growth inside long calls, 28 % resumed history, 22 % start context). New threads run in the worker home `~/.codex-review` (own login, no global `AGENTS.md`, plugins, MCP servers or memories; `--user-home` keeps `~/.codex`) with `project_doc_max_bytes=0`; `resume` needs `--allow-resume` (peer-debate passes it); the prompt tail asks for one `sleep` over the expected remaining time instead of polling (measured: a 240 s wait fell from 11 requests/205k input to 4/73k); each call logs `steps` from the rollout (requests, input, context start and end, wait calls), also for failed and cancelled calls. Reviewed in three rounds by Codex gpt-6.1-sol; rounds 1 and 2 found 4 and 2 counting and cancel-path defects, fixed; round 3 no findings.

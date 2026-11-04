@@ -111,7 +111,7 @@ Frontmatter and naming requirements:
 - Keep naming patterns consistent within a skill collection; avoid vague names such as `helper`, `utils`, or `tools`
 - `description`: non-empty; max 1024 characters; no XML tags
 
-For Pi skills, use `SKILL.md` as the canonical file name even when imported references mention `skill.md`.
+Use `SKILL.md` as the canonical file name even when imported references mention `skill.md`.
 
 The description should say what the skill does and when to use it, using concrete trigger terms without becoming a catalog of every example.
 
@@ -132,7 +132,7 @@ Full pass and the failure modes it catches: `references/skill-design-theory.md`.
 
 ### 7. Keep the core portable
 
-Default to agent-agnostic guidance. If the user targets Claude, Codex, Cursor, Pi, or another runtime, add adapter notes without making them the universal workflow.
+Default to agent-agnostic guidance. If the user targets Claude, Codex, Cursor, or another runtime, add adapter notes without making them the universal workflow.
 
 A skill is standalone: everything it needs lives inside its own directory. No links or paths outside it, no project vocabulary, and no names of tools, harnesses or models in the core. It is instruction for the model that loads it, not a chronicle: no who-said-what, dates, quotes, ticket numbers or the history of a decision, and no project process rules that do not change how the task is done. Keep a reason only where it explains the matter itself; history belongs in the project's decision records.
 
@@ -168,7 +168,7 @@ For substantial changes, identify real failures, choose realistic scenarios, com
 Read extra resources only when the task needs them. Do not load the large best-practice references for routine skill creation or light edits. For `skill-creator` self-edits, the first two references are mandatory:
 
 - `references/anthropic_skill_best_practices.md`: structure, descriptions, progressive disclosure, scripts, evaluation loops
-- `references/progressive_skill_best_practices_supabase_workshop.md`: Skill vs MCP/CLI boundaries, production/security-sensitive skills, progressive context strategy, eval-driven improvement; translate examples to Pi conventions
+- `references/progressive_skill_best_practices_supabase_workshop.md`: Skill vs MCP/CLI boundaries, production/security-sensitive skills, progressive context strategy, eval-driven improvement; adapt examples to the target runtime
 - `references/skill-design-theory.md`: why a skill works — invocation trade-offs, information hierarchy, completion criteria, leading words, and the failure modes (no-op, negation, premature completion, sediment, sprawl). Read it when writing a new skill, when one fires unreliably, or when one has grown and needs cutting.
 - `references/agent_adapters.md`: adapter policy and portability trade-offs
 - `references/schemas.md`: JSON shapes used by bundled evaluation tools

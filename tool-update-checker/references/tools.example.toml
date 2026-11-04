@@ -1,24 +1,24 @@
 # Example config for ~/.config/tool-update-checker/tools.toml
 #
 # Optional per-tool fields:
-# groups = ["pi", "core", "extensions"]
+# groups = ["core", "core", "extensions"]
 # current = "<known installed source SHA/tag>"
 # Then run:
-#   python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --group pi
+#   python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --group core
 #   python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --actionable-only --exit-code
 #   python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --actionable-only --notify
 
 [[tool]]
-name = "pi-coding-agent"
+name = "ast-grep"
 kind = "npm-global"
-package = "@earendil-works/pi-coding-agent"
-groups = ["pi", "core"]
+package = "@ast-grep/cli"
+groups = ["core"]
 
 [[tool]]
-name = "pi-bash-live-view"
+name = "bun"
 kind = "npm-global"
-package = "pi-bash-live-view"
-groups = ["pi", "extensions"]
+package = "bun"
+groups = ["core", "extensions"]
 
 [[tool]]
 name = "some-local-clone"
@@ -54,7 +54,7 @@ remote = "origin"
 branch = "main"
 groups = ["skills"]
 
-# Track a whole skills root such as the global Pi skills checkout or a repo's
+# Track a whole skills root such as the global skills checkout or a repo's
 # .agents/skills directory. This validates all direct child SKILL.md files.
 [[tool]]
 name = "global-ai-skills"

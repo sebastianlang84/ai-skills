@@ -1,6 +1,6 @@
 ---
 name: tool-update-checker
-description: Check whether locally installed tools, pi packages/extensions, npm globals, Git repositories, and GitHub-hosted tools have upstream updates available. Use this skill when the user asks to check for updates, newer versions, releases, tags, or remote changes for tools such as pi-coding-agent, pi packages, GitHub-based extensions, or similar local utilities.
+description: Check whether locally installed tools, npm globals, Git repositories, and GitHub-hosted tools have upstream updates available. Use this skill when the user asks to check for updates, newer versions, releases, tags, or remote changes for GitHub-based extensions or similar local utilities.
 ---
 
 # Tool Update Checker
@@ -20,7 +20,7 @@ Useful flags:
 
 ```bash
 python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --format json
-python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --group pi
+python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --group core
 python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --actionable-only
 python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --actionable-only --exit-code
 python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --actionable-only --notify
@@ -43,12 +43,8 @@ python3 ~/.agents/skills/tool-update-checker/scripts/check_updates.py --config /
 Kinds: `npm-global`, `git-repo`, `github-release`, `skill-local`, `skill-git`, `skills-root-git`, `skills-sh`.
 Read [references/tool-kinds.md](references/tool-kinds.md) for required and optional fields only when adding or changing a config entry.
 
-## Pi-specific guidance
-
-- For pi packages installed via `pi install`, inspect `~/.pi/agent/settings.json` first.
-- Use `npm-global` for an npm-based pi package only after confirming a global install (`npm -g ls <package> --depth=0`). `pi install npm:<package>` installs into `~/.pi/agent/npm/`, which `npm-global` does not read; a Pi-local package needs a checker for that install prefix, otherwise it is reported `missing` or compared against an unrelated global copy.
-- Skills are not auto-discovered today; add explicit `skill-git`, `skills-root-git`, or `skills-sh` entries for every managed skill source.
-- Auto-discovered local extensions in `~/.pi/agent/extensions/` only become update-checkable when you know their package name or upstream repository.
+Skills are not auto-discovered; add explicit `skill-git`, `skills-root-git`, or
+`skills-sh` entries for every managed skill source.
 
 ## Editing policy
 

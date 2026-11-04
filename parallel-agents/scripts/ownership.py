@@ -2,7 +2,7 @@
 """Who holds which worktree and branch right now — derived, never stored.
 
 Coverage is limited to Claude session records. Absence is UNKNOWN, never proof that a
-worktree is free: Codex, Pi and sessions without records are not observed. Combine this
+worktree is free: Codex and sessions without records are not observed. Combine this
 positive evidence with runtime-local agent lists and direct coordination.
 
 Usage: ownership.py [PATH] [--json] [--all]
@@ -143,7 +143,7 @@ def _age(session: dict) -> str:
 
 
 def main(argv: list[str]) -> int:
-    print("Coverage: Claude records only; Codex/Pi are not observed. Missing owner = unknown, not free.", file=sys.stderr)
+    print("Coverage: Claude records only; Codex is not observed. Missing owner = unknown, not free.", file=sys.stderr)
     as_json = "--json" in argv
     show_all = "--all" in argv
     rest = [a for a in argv if not a.startswith("--")]

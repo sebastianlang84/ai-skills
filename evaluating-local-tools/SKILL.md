@@ -1,11 +1,11 @@
 ---
 name: evaluating-local-tools
-description: "Evaluate an external repo, CLI, Pi extension, or local utility for possible use on this machine. Use when the user asks whether a tool has value, how heavy/risky it is, or to test it standalone before integrating. Emphasizes read-only research first, isolated installs/smoke tests, credential safety, and a clear adopt/skip verdict. Do not use for ordinary version update checks."
+description: "Evaluate an external repo, CLI, extension, or local utility for possible use on this machine. Use when the user asks whether a tool has value, how heavy/risky it is, or to test it standalone before integrating. Emphasizes read-only research first, isolated installs/smoke tests, credential safety, and a clear adopt/skip verdict. Do not use for ordinary version update checks."
 ---
 
 # Evaluating Local Tools
 
-Use this skill to assess a third-party repo, CLI, Pi extension, or local utility before adding it to a project or workflow.
+Use this skill to assess a third-party repo, CLI, extension, or local utility before adding it to a project or workflow.
 
 ## Goal
 
@@ -79,6 +79,5 @@ Return:
 ## Boundary with other skills
 
 - Use `tool-update-checker` for update/version checks of known installed tools.
-- Use `pi-extension-packaging` when the tool is a Pi package/extension and the task is repo structure or package manifest design.
 - Use `handling-secrets` when evaluation changes credential or environment handling.
 - Use `git-workflow` before committing, tagging, or pushing any resulting local changes.

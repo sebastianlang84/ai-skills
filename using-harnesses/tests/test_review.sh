@@ -394,7 +394,7 @@ FAKE_MODE=sleep REVIEW_TIMEOUT=1 run "$R" codex "$B" "$A"; check "deadline: exit
 for t in abc 1801 0; do REVIEW_TIMEOUT=$t run "$R" codex "$B" "$A"; check "REVIEW_TIMEOUT=$t refused" '[ $RC -eq 2 ] && ! called'; done
 
 # --- arguments: backend and option rejection
-for args in "" "pi $B $A" "--resume $CID $B $A" "codex $B" "codex --model gpt-x $B $A" "claude --model x $B $A" \
+for args in "" "unsupported $B $A" "--resume $CID $B $A" "codex $B" "codex --model gpt-x $B $A" "claude --model x $B $A" \
   "codex --sandbox workspace-write $B $A" "codex -s danger-full-access $B $A" "claude --tools Bash $B $A" \
   "codex -C / $B $A" "codex $B $A --sandbox" "--print-config extra" "codex --resume x;rm $B $A"; do
   run "$R" $args; check "rejects '${args//$T/\$T}'" '[ $RC -eq 2 ] && ! called'

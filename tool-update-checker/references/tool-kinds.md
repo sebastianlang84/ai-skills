@@ -13,8 +13,7 @@ Required fields:
 - `package`
 
 Good for:
-- `@earendil-works/pi-coding-agent`
-- pi packages confirmed as installed globally (`npm -g ls`); `pi install` puts packages under `~/.pi/agent/npm/`, which this kind does not read
+- npm packages confirmed as installed globally (`npm -g ls`), such as `@ast-grep/cli`
 
 ## `git-repo`
 Checks a local Git repository against a remote branch head using `git ls-remote`.

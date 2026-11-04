@@ -16,11 +16,11 @@ python3 ~/.agents/skills/parallel-agents/scripts/ownership.py --all --json
 ```
 
 `ownership.py` observes **Claude session records only**, checked against live process IDs and
-recorded start times when available. A missing owner means **unknown**, including for Codex and Pi.
+recorded start times when available. A missing owner means **unknown**, including for Codex.
 It cannot establish that a worktree is free. Its JSON rows expose coverage and ownership status;
 `--all` lists only observed Claude sessions.
 
-Combine it with `kb board --repo <repo>` (claims from Claude, Codex and Pi sessions), the current
+Combine it with `kb board --repo <repo>` (claims from Claude and Codex sessions), the current
 harness's agent list, worktree changes, and direct coordination.
 An agent list may cover only the current team, not independent sessions or other harnesses.
 Do not mutate a live owner's branch. If relevant ownership remains unresolved, isolate your work
@@ -66,7 +66,7 @@ holds that path; inspect `status` and coordinate. `using-brain` owns content rou
 ## Claude duplicate-write hook
 
 `warn-duplicate-write.py` is a Claude `PreToolUse/Write` and `PostToolUse/Read` adapter. It must be
-registered in that harness; it does not enforce Codex/Pi writes. A repository opts in with:
+registered in that harness; it does not enforce Codex writes. A repository opts in with:
 
 ```bash
 git config --local agents.duplicate-write-guard true

@@ -20,7 +20,7 @@
 - [13. Produktionsregeln für Skills](#13-produktionsregeln-für-skills)
 - [14. Best Practices für Skill-Inhalte](#14-best-practices-für-skill-inhalte)
 - [15. Anti-Patterns](#15-anti-patterns)
-- [16. Ableitung für Pi / pi-coding-agent](#16-ableitung-für-pi--pi-coding-agent)
+- [16. Ableitung für lokale Agenten](#16-ableitung-für-lokale-agenten)
 - [17. Skill + Subagent-Strategie](#17-skill--subagent-strategie)
 - [18. Minimal-MCP-Variante](#18-minimal-mcp-variante)
 - [19. Konkrete Skill-Templates](#19-konkrete-skill-templates)
@@ -646,9 +646,9 @@ LLM-as-judge nur ergänzend.
 
 ---
 
-## 16. Ableitung für Pi / pi-coding-agent
+## 16. Ableitung für lokale Agenten
 
-Für Pi passt das sehr gut zur bestehenden Linie:
+Für lokale Agenten passt das sehr gut zur bestehenden Linie:
 
 ```text
 Minimaler Systemprompt
@@ -668,7 +668,7 @@ Minimaler Systemprompt
 | CLI | `rg`, `ast-grep`, Tests, Linter, Build, Scripts |
 | MCP | Remote APIs, Auth, Datenbankzugriff, externe Systeme |
 
-### Gute Pi-Skills
+### Gute Skills
 
 ```text
 codebase-investigation
