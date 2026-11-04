@@ -33,6 +33,12 @@ yourself for known names and pass the hits), and how to report. The prompt tail 
 to wait for long commands in one long poll. The `steps:` line after each call shows requests,
 context growth and empty waits; check it against the expected size.
 
+## Unattended board adapter
+
+Before dispatching unattended board work, use the [worker setup](references/unattended-workers.md):
+record per-ticket input, request and time budgets; keep board coordination in the caller and send
+the worker one bounded step. Prompt limits are instructions until an external guard is verified.
+
 ## Reviews go through one script
 
 ```bash
@@ -55,8 +61,10 @@ checks the closing marker, and resumes only sessions it started. Never hand-writ
 that is not a code review (for example checking a document for errors); role lock and data clause
 stay fixed.
 
-- **The reviewer's vendor must differ from the author's.** Under Claude Code review with `codex`;
-  under Codex review with `claude`. If only the author's vendor is reachable, say so and stop.
+- Follow the active global review rules: unattended board runs review Codex work in a separate
+  `codex` call and never call Claude/Opus. Outside that exception, the reviewer's vendor must differ
+  from the author's: Claude Code authors use `codex`, Codex authors use `claude`. If the required
+  reviewer is unreachable, say so and stop.
 - Both reviewers run without tools and see only the payload; pass diffs and command output as
   files.
 - Submit scoped complete UTF-8 evidence: binary content and binary patches are refused before launch; see [input bounds](references/review.md#write-the-brief).

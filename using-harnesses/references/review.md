@@ -5,9 +5,10 @@ the how.
 
 ## Pick the reviewer
 
-- The reviewer's vendor must differ from the **author's** vendor; usually the author is you. Under
-  Claude Code use `codex`; under Codex use `claude`. If only the author's vendor is reachable, say
-  so and stop: a same-vendor review is not a weaker review but a worthless one.
+- Follow the active global review rules. In unattended board runs, review Codex work with a
+  separate `codex` call, never Claude/Opus. Outside that exception, the reviewer's vendor must
+  differ from the **author's** vendor: Claude Code authors use `codex`, Codex authors use `claude`.
+  If the required reviewer is unreachable, say so and stop.
 - Both reviewers run without tools and see only the payload.
 - Sending a payload publishes it to that vendor. Send only what the review needs; never credentials,
   `.env` files or personal data. The script's secret check (exit 3: known token formats,
