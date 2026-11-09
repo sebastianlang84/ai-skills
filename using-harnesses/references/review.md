@@ -24,6 +24,11 @@ own words (including what exists only in the conversation), the operating contex
 list, and the one change the reviewer would make first. A finding outside what the work must
 establish is the weakest kind.
 
+Give the reviewer the task, the evidence and the intended use, never your own verdict or the
+answer you expect: a model told who wrote a text judges it more kindly (Sharma et al. 2023,
+arXiv:2310.13548), and a reviewer handed your hypothesis tends to return it confirmed (adopted
+2026-11-10).
+
 Neither reviewer can run `git diff` or read a path you name; write diffs and command output to
 files (`git diff --cached > "$W/review.diff"`) and pass them as artifacts.
 
@@ -131,6 +136,8 @@ fehlern?!“).
    conclusion.
 4. Check the proposed approach against the observed defects before building it (did it prevent
    them, which real calls would it block?).
+
+Evidence and sources: Brain `methods/root-cause-over-instances.md`.
 
 ## Failure modes
 
