@@ -114,6 +114,24 @@ collected in the [Brain method](/home/wasti/.agents/brain/methods/efficient-revi
 Report how many rounds ran, what was fixed, what was rejected and why, what is open, and which
 version the last review saw. If the other vendor is unreachable, say so.
 
+## When rounds keep finding the same kind of defect
+
+When two rounds in a row confirm new findings of the same kind (another spelling that slips through,
+another false alarm from the last fix), the approach is the defect, not the next instance. Stop
+fixing instances and change the angle instead of the reviewer. On 09.11.2026 three rounds on a
+formula guard each found new bypasses; three different models then asked "why does this not
+converge?" all named the same cause (Sebastian: „wie erklärst du dir diese riesige menge an
+fehlern?!“).
+
+1. Ask for the root cause, not for defects: why do the fixes not converge?
+2. Separate what real runs showed from what the reviewer constructed; a constructed attack blocks
+   only if a real use can reach it.
+3. Give independent reviewers different contexts or viewpoints on the same problem, for example
+   the code alone, the run history alone, or the product goal; anchor none of them on your own
+   conclusion.
+4. Check the proposed approach against the observed defects before building it (did it prevent
+   them, which real calls would it block?).
+
 ## Failure modes
 
 | Symptom | Cause | Action |

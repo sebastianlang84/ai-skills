@@ -65,6 +65,10 @@ stdin. Its state is under `~/.agents/state/codex-call/`; each line in `calls.jso
 model requests, input, context at start and end, and empty waits, read from the thread's rollout.
 
 - Start: `python3 $C new --cwd <dir> --label <name> --detach <prompt-file>` prints a call dir.
+- A writing worker in a git worktree cannot commit: the `workspace-write` sandbox blocks the
+  repository's git metadata outside the worktree. Tell it to leave changes uncommitted, and name
+  known failing tests in the brief; on 03.11.2026 a commit attempt with workaround and two
+  pre-existing failures cost 8 of 31 requests (finanzdb-phase1).
 - Collect: `python3 $C wait <call-dir>` prints `thread:`, `result:` and the answer. Exit 3 means
   still running, so call `wait` again. Exit 1 is a failure with its reason.
 - Follow up in the same thread: `python3 $C resume <thread-id> --allow-resume --detach <prompt-file>`,
