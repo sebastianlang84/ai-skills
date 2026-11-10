@@ -110,6 +110,76 @@ B="$T/brief.md" A="$T/art.sh"
 printf 'Review this tiny file.\n' > "$B"; printf 'echo hello\n' > "$A"
 CONF="$HOME/.config/using-harnesses/models.conf"
 
+# --- assembled input size boundaries (offline backends, actual prompt wrappers)
+SIZE="$T/size"; mkdir -p "$SIZE"
+size_inputs() {
+  "$PY" - "$SIZE" "${1:-artifact}" "${2:-0}" <<'PYSIZEINPUT'
+from pathlib import Path
+import sys
+p, role, extra = Path(sys.argv[1]), sys.argv[2], int(sys.argv[3])
+for name, text in [("brief.md", "Review sizes.\r\n"), ("rules.md", "Review carefully.\n"),
+                   ("first.md", "First evidence.\n"), ("証拠.txt", "😀\r\n")]:
+    if name == {"brief": "brief.md", "rules": "rules.md", "artifact": "証拠.txt"}[role]:
+        text = text[:-1] + "😀" * extra + "\n" if role == "rules" else text + "😀" * extra
+    (p / name).write_bytes(text.encode("utf-8"))
+PYSIZEINPUT
+}
+size_run() { run "$R" "$1" --rules "$SIZE/rules.md" "$SIZE/brief.md" "$SIZE/first.md" "$SIZE/証拠.txt"; }
+size_inputs
+size_run codex
+BASE=$("$PY" - "$DIR/payload.md" <<'PYSIZEBASE'
+from pathlib import Path
+import sys
+print(len(Path(sys.argv[1]).read_bytes().decode("utf-8")))
+PYSIZEBASE
+)
+check "size: small assembled input accepted unchanged" '[ $RC -eq 0 ] && called && cmp -s "$DIR/payload.md" "$FAKE_LOG/stdin"'
+for target in 1048575 1048576; do
+  size_inputs artifact "$((target - BASE))"
+  size_run codex
+  check "size: $target Unicode characters accepted whole despite larger UTF-8 bytes" \
+    '[ $RC -eq 0 ] && called && cmp -s "$DIR/payload.md" "$FAKE_LOG/stdin" && [ "$(wc -c < "$FAKE_LOG/stdin")" -gt 1048576 ]'
+  "$PY" - "$DIR/payload.md" "$target" <<'PYSIZEEXACT'
+from pathlib import Path
+import sys
+assert len(Path(sys.argv[1]).read_bytes().decode("utf-8")) == int(sys.argv[2])
+PYSIZEEXACT
+  check "size: exact assembled character count $target verified" '[ $? -eq 0 ]'
+done
+for role in artifact brief rules; do
+  size_inputs "$role" "$((1048577 - BASE))"
+  size_run codex
+  check "size: oversized $role refused before any backend launch, bounded diagnostic" \
+    '[ $RC -eq 3 ] && ! called && [ -z "$OUT" ] && grep -q "1048577.*1048576" "$T/stderr" && [ "$(wc -c < "$T/stderr")" -lt 2048 ]'
+  "$PY" - "$TMPDIR" "$role" "$SIZE" <<'PYSIZERECORD'
+from pathlib import Path
+import json, os, sys
+records = sorted(Path(sys.argv[1]).glob("review.*/input-size.json"), key=lambda p: p.stat().st_mtime_ns)
+assert records, "missing size record"
+p = records[-1]
+s = json.loads(p.read_text(encoding="utf-8"))
+assert s["backend"] == "codex" and s["payload_chars"] == 1048577 and s["limit_chars"] == 1048576
+assert s["token_budget"] is None  # Unknown; no tokenizer or arbitrary token gate.
+assert len(s["artifacts"]) == 2
+assert sum(a["chars"] for a in s["artifacts"]) + s["brief_chars"] + s["rules_chars"] + s["wrapper_chars"] == s["payload_chars"]
+root = Path(sys.argv[3])
+assert s["brief_chars"] == len((root / "brief.md").read_bytes().decode("utf-8"))
+assert s["rules_chars"] == len((root / "rules.md").read_bytes().decode("utf-8"))
+for a, name in zip(s["artifacts"], ["first.md", "証拠.txt"]):
+    assert a["chars"] == len((root / name).read_bytes().decode("utf-8"))
+assert s["wrapper_chars"] > 0
+assert [q.name for q in p.parent.iterdir()] == ["input-size.json"], "payload or runner state retained"
+if os.name != "nt":
+    assert p.stat().st_mode & 0o077 == 0 and p.parent.stat().st_mode & 0o077 == 0
+PYSIZERECORD
+  check "size: $role refusal retains only private complete size accounting" '[ $? -eq 0 ]'
+done
+# The same oversized input is allowed for Claude; no established bound is invented.
+size_run claude
+check "size: Claude unaffected above Codex limit and input sent whole" \
+  '[ $RC -eq 0 ] && called && cmp -s "$DIR/payload.md" "$FAKE_LOG/stdin"'
+# --- end assembled input size boundaries
+
 # --- config file
 run "$R" --print-config
 check "config: missing file gives defaults" '[ $RC -eq 0 ] && grep -q "^CODEX_MODEL=gpt-6.1-sol	(default)" <<<"$OUT" && grep -q "^CLAUDE_EFFORTS=medium	(default)" <<<"$OUT"'

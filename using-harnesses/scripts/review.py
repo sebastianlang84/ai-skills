@@ -56,6 +56,7 @@ REFS = HERE.parent / "references"
 MARKER = "===REVIEW COMPLETE==="
 WAIT_LIMIT = 540
 STILL_RUNNING = 75
+CODEX_INPUT_CHAR_LIMIT = 1048576  # Observed turn-start limit, Unicode characters, not bytes.
 USAGE = ("usage: review.py <codex|claude> [--foreground] [--resume <id>] [--effort <level>] [--rules <file>] "
          "<brief-file> <artifact-file>... | wait <dir> [--timeout <s>] | cancel <dir> | "
          "--print-config | --get <KEY>")
@@ -565,8 +566,11 @@ def start(argv: list[str]) -> int:
         if rules_file is not None:
             rules = text_input(Path(rules_file)).rstrip(b"\n") + b"\n"
         parts = [head_block, b"\n", text_input(Path(brief)), b"\n\n", rules, b"\n", data]
+        artifact_sizes = []
         for f in artifacts:
             parts += [f"\n\n===== ARTIFACT: {os.path.basename(f)} =====\n".encode(), text_input(Path(f))]
+            artifact_sizes.append({"index": len(artifact_sizes) + 1,
+                                   "chars": len(parts[-1].decode("utf-8"))})
         parts.append(ending)
         payload.write_bytes(b"".join(parts))
     except UnicodeError:
@@ -582,6 +586,36 @@ def start(argv: list[str]) -> int:
         fail("payload refused: it matches a secret pattern; redact or exclude it", 3)
     if verdict != "clean":
         fail("payload refused: the secret check failed to run", 3)
+
+    # Codex receives these exact UTF-8 bytes on stdin (no runner-added prompt framing).
+    # Count the final assembly, including installed blocks, separators and artifact labels.
+    # A character bound says nothing about the target model's unknown token budget.
+    if backend == "codex":
+        try:
+            chars = len(payload.read_bytes().decode("utf-8"))
+            brief_chars = len(parts[2].decode("utf-8"))
+            rules_chars = len(rules.decode("utf-8"))
+            sizes = {"backend": backend, "payload_chars": chars,
+                     "limit_chars": CODEX_INPUT_CHAR_LIMIT, "token_budget": None,
+                     "brief_chars": brief_chars, "rules_chars": rules_chars,
+                     "artifacts": artifact_sizes,
+                     "wrapper_chars": chars - brief_chars - rules_chars
+                     - sum(a["chars"] for a in artifact_sizes)}
+            record = outdir / "input-size.json"
+            record.write_text(json.dumps(sizes) + "\n", encoding="utf-8")
+            if chars > CODEX_INPUT_CHAR_LIMIT:
+                # Keep only content-free counts, never the refused evidence or a runnable job.
+                payload.unlink()
+        except OSError:
+            fail("payload size preflight could not complete", 2)
+        if chars > CODEX_INPUT_CHAR_LIMIT:
+            breakdown = ", ".join(f"artifact[{a['index']}]={a['chars']}" for a in artifact_sizes[:10])
+            if len(artifact_sizes) > 10:
+                breakdown += f", {len(artifact_sizes) - 10} more in record"
+            die(f"payload refused: codex assembled input has {chars} characters; "
+                f"limit {CODEX_INPUT_CHAR_LIMIT}. brief={brief_chars}, rules={rules_chars}, "
+                f"wrappers={sizes['wrapper_chars']}; {breakdown}. "
+                f"Full size record: {shown(record)}; token budget unknown. Reduce scoped evidence.", 3)
 
     stored = None
     if backend == "codex":

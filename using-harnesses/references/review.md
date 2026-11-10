@@ -39,7 +39,19 @@ NUL and encoding errors report the byte value and zero-based offset. UTF-8 text,
 ordinary code diffs and `Binary files ... differ` summaries remain valid. Use a textual diff without
 `--binary`, and describe binary fixtures through their purpose, interfaces and relevant test outcomes.
 
-There is no size bound: send the evidence the review needs, not run bookkeeping or bulk data the reviewer cannot use. Invalid installed prompt content exits 2, not 3.
+Codex has an observed turn-start limit of **1,048,576 Unicode characters** (not UTF-8 bytes).
+After assembling the brief, effective rules, installed role/data blocks, artifact labels, separators
+and ending, the runner counts the exact payload sent on stdin, with no added prompt framing.
+Above that limit it exits 3 before launching any backend process, without retry or truncation;
+exactly the limit is accepted. The bounded error gives totals and the first ten artifact counts.
+The private call directory retains only `input-size.json`: total, limit, brief, rules, wrapper and
+all per-artifact character counts by input index, without evidence text or filenames. Accepted
+Codex calls also retain this record. Other preflight failures keep their existing cleanup behavior.
+Reduce the scoped evidence before resubmitting. No corresponding Claude limit is established,
+so this guard applies only to Codex. Target-model token capacity and tokenizer counts cannot be
+inferred here: the record marks the token budget unknown (`null`), and passing this character check does
+not establish that the model has enough context, especially on resume. There is no token estimate
+or token gate. Invalid installed prompt content exits 2, not 3.
 
 ## Frame the question
 
@@ -95,7 +107,7 @@ a capped number of findings; role lock and data clause stay as they are.
 |---|---|---|
 | 0 | the answer ends with `===REVIEW COMPLETE===` | read it |
 | 2 | usage, config, unclean reviewer home, cwd inside git, resume of a session review.py did not start | fix the cause; never bypass the script |
-| 3 | payload refused: secret, `.env` or binary content/patch | remove secrets; send binary evidence as a textual description as above |
+| 3 | payload refused: secret, `.env`, binary content/patch, or Codex assembled character limit | remove secrets; describe binary evidence as text; for size refusal inspect `input-size.json` and reduce scoped evidence |
 | 4 | no answer, no session id, a runner that died, or a status 0 without answer, session and log | read `err.txt` |
 | 5 | closing line missing: truncated, refused or hijacked | failed round; do not report partial findings |
 | 75 | `wait` only: the round still runs | call `wait` again |
