@@ -41,6 +41,34 @@ ordinary code diffs and `Binary files ... differ` summaries remain valid. Use a 
 
 There is no size bound: send the evidence the review needs, not run bookkeeping or bulk data the reviewer cannot use. Invalid installed prompt content exits 2, not 3.
 
+## Frame the question
+
+Measured once, on 10.11.2026: 16 planted defects of 9 kinds in two stored Market Digest analyses,
+correct but suspicious sentences beside them, one reviewer model (gpt-6.1-sol high), scored without
+knowing which brief produced a report, plus a check on three real first drafts
+([Brain method](/home/wasti/.agents/brain/methods/review-question-over-repetition.md)). These are
+observations from that test, not general laws; weigh them, do not apply them blindly.
+
+1. Naming observed defect kinds in the brief (kinds, not instances) and closing with "does every
+   sentence still fit the verdict and the numbers?" found more planted defects (12.3 against 10 of
+   16 per review) and more real ones in the first drafts (15 against 13 of 17, plus 4 further
+   errors). It also produced about one false or unresolvable finding per text where the plain error
+   search produced almost none, and twice the output. Use it where missed defects cost more than
+   checking extra findings.
+2. Repeating a brief helps only if its results vary: the plain error search found the same 10
+   defects in all three runs; the framed brief found 12, 13 and 12, together 14.
+3. Splitting one review into viewpoints that each get all the evidence did not beat one framed
+   review at the same number of calls: three calls found 12 planted defects against 14, with fewer
+   false or unresolvable findings (12 against 28, not deduplicated) and some real errors no other
+   brief named. A numbers-only pass found as many
+   planted defects as the plain search and nothing else.
+4. A second call asked to refute the findings removed true findings along with false ones; verify
+   findings yourself against the source instead.
+5. To choose between briefs, measure them like this: plant real defect kinds that only the evidence
+   reveals (a planted sentence that contradicts another sentence is always found), add correct but
+   suspicious sentences, repeat each brief, score blind. One review call cost under 1 % of the
+   weekly Codex quota.
+
 ## Run one round
 
 ```bash
